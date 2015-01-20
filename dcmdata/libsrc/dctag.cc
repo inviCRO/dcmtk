@@ -127,6 +127,12 @@ void DcmTag::lookupVRinDictionary()
 {
     const DcmDataDictionary& globalDataDict = dcmDataDict.rdlock();
     const DcmDictEntry *dictRef = globalDataDict.findEntry(*this, privateCreator);
+	if (!privateCreator) {
+		if (!dictRef)
+			dictRef = globalDataDict.findEntry(*this, "SCIVIS-1");
+		if (!dictRef)
+			dictRef = globalDataDict.findEntry(*this, "MEDISO-1");
+	}
     if (dictRef)
     {
         vr = dictRef->getVR();
@@ -158,6 +164,12 @@ const char *DcmTag::getTagName()
   const char *newTagName = NULL;
   const DcmDataDictionary& globalDataDict = dcmDataDict.rdlock();
   const DcmDictEntry *dictRef = globalDataDict.findEntry(*this, privateCreator);
+  if (!privateCreator) {
+	  if (!dictRef)
+		  dictRef = globalDataDict.findEntry(*this, "SCIVIS-1");
+	  if (!dictRef)
+		  dictRef = globalDataDict.findEntry(*this, "MEDISO-1");
+  }
   if (dictRef) newTagName=dictRef->getTagName();
   if (newTagName == NULL) newTagName = DcmTag_ERROR_TagName;
   updateTagName(newTagName);

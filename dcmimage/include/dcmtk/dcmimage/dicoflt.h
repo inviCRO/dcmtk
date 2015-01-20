@@ -72,7 +72,7 @@ class DiColorFlipTemplate
         if ((pixel != NULL) && (pixel->getCount() > 0))
         {
             if (pixel->getCount() == OFstatic_cast(unsigned long, columns) * OFstatic_cast(unsigned long, rows) * frames)
-                flip(OFstatic_cast(const T **, OFconst_cast(void *, pixel->getData())), horz, vert);
+                this->flip(OFstatic_cast(const T **, OFconst_cast(void *, pixel->getData())), horz, vert);
             else {
                 DCMIMAGE_WARN("could not flip image ... corrupted data");
             }
@@ -98,14 +98,14 @@ class DiColorFlipTemplate
                      const int horz,
                      const int vert)
     {
-        if (Init(pixel))
+        if (this->Init(pixel))
         {
             if (horz && vert)
-                flipHorzVert(pixel, this->Data);
+                this->flipHorzVert(pixel, this->Data);
             else if (horz)
-                flipHorz(pixel, this->Data);
+                this->flipHorz(pixel, this->Data);
             else if (vert)
-                flipVert(pixel, this->Data);
+                this->flipVert(pixel, this->Data);
         }
     }
 };

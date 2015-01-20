@@ -74,7 +74,7 @@ class DiColorRotateTemplate
         if ((pixel != NULL) && (pixel->getCount() > 0))
         {
             if (pixel->getCount() == OFstatic_cast(unsigned long, src_cols) * OFstatic_cast(unsigned long, src_rows) * frames)
-                rotate(OFstatic_cast(const T **, OFconst_cast(void *, pixel->getData())), degree);
+                this->rotate(OFstatic_cast(const T **, OFconst_cast(void *, pixel->getData())), degree);
             else {
                 DCMIMAGE_WARN("could not rotate image ... corrupted data");
             }
@@ -98,14 +98,14 @@ class DiColorRotateTemplate
     inline void rotate(const T *pixel[3],
                        const int degree)
     {
-        if (Init(pixel))
+        if (this->Init(pixel))
         {
             if (degree == 90)
-                rotateRight(pixel, this->Data);
+                this->rotateRight(pixel, this->Data);
             else if (degree == 180)
-                rotateTopDown(pixel, this->Data);
+                this->rotateTopDown(pixel, this->Data);
             else  if (degree == 270)
-                rotateLeft(pixel, this->Data);
+                this->rotateLeft(pixel, this->Data);
         }
     }
 };

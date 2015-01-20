@@ -95,7 +95,7 @@ class DiYBR422PixelTemplate
                  const int bits,
                  const OFBool rgb)
     {
-        if (Init(pixel))
+        if (this->Init(pixel))
         {
             const T1 offset = OFstatic_cast(T1, DicomImageClass::maxval(bits - 1));
             register unsigned long i;

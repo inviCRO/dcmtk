@@ -132,7 +132,7 @@ getUserName(char* userString, int /* maxLen */)
 static char*
 getUserName(char* userString, int maxLen)
 {
-#if defined(_REENTRANT) && !defined(_WIN32) && !defined(__CYGWIN__)
+#if 0 && defined(_REENTRANT) && !defined(_WIN32) && !defined(__CYGWIN__)
     // use getlogin_r instead of getlogin
     if (getlogin_r(userString, maxLen) != 0)
         strncpy(userString, "<no-utmp-entry>", maxLen);

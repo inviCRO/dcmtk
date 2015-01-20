@@ -149,7 +149,7 @@ getUserName(char* userString, int /* maxLen */)
 static char*
 getUserName(char* userString, int maxLen)
 {
-#if defined(_REENTRANT) && !defined(_WIN32) && !defined(__CYGWIN__)
+#if 0 && defined(_REENTRANT) && !defined(_WIN32) && !defined(__CYGWIN__)
     // use getlogin_r instead of getlogin
     if (getlogin_r(userString, maxLen) != 0)
         strncpy(userString, "<no-utmp-entry>", maxLen);
@@ -294,7 +294,8 @@ int main(int argc, char* argv[])
     DcmHashDictIterator end(globalDataDict.normalEnd());
     for (; iter != end; ++iter)
     {
-        if ((*iter)->getPrivateCreator() == NULL) // exclude private tags
+		const char *creator = (*iter)->getPrivateCreator();
+        if (creator == NULL || strcmp(creator, "MEDISO-1") == 0 || strcmp(creator,"SCIVIS-1") == 0 || strcmp(creator, "IVS") == 0) // exclude private tags
         {
           e = new DcmDictEntry(*(*iter));
           list.insertAndReplace(e);

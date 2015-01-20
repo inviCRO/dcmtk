@@ -78,11 +78,11 @@ class DiRotateTemplate
                 (pixel->getCount() == OFstatic_cast(unsigned long, src_cols) * OFstatic_cast(unsigned long, src_rows) * frames))
             {
                 if (degree == 90)
-                    rotateRight(OFstatic_cast(T **, pixel->getDataArrayPtr()));
+                    this->rotateRight(OFstatic_cast(T **, pixel->getDataArrayPtr()));
                 else if (degree == 180)
-                    rotateTopDown(OFstatic_cast(T **, pixel->getDataArrayPtr()));
+                    this->rotateTopDown(OFstatic_cast(T **, pixel->getDataArrayPtr()));
                 else if (degree == 270)
-                    rotateLeft(OFstatic_cast(T **, pixel->getDataArrayPtr()));
+                    this->rotateLeft(OFstatic_cast(T **, pixel->getDataArrayPtr()));
             } else {
                 DCMIMGLE_WARN("could not rotate image ... corrupted data");
             }
@@ -126,13 +126,13 @@ class DiRotateTemplate
                            const int degree)
     {
         if (degree == 90)
-            rotateRight(src, dest);
+            this->rotateRight(src, dest);
         else if (degree == 180)
-            rotateTopDown(src, dest);
+            this->rotateTopDown(src, dest);
         else if (degree == 270)
-            rotateLeft(src, dest);
+            this->rotateLeft(src, dest);
         else
-            copyPixel(src, dest);
+            this->copyPixel(src, dest);
     }
 
 

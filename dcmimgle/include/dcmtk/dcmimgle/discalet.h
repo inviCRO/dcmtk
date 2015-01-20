@@ -179,7 +179,8 @@ class DiScaleTemplate
      */
     inline int isSigned() const
     {
-        const DiPixelRepresentationTemplate<T> rep;
+        //const DiPixelRepresentationTemplate<T> rep;
+        DiPixelRepresentationTemplate<T> rep;
         return rep.isSigned();
     }
 
@@ -219,7 +220,7 @@ class DiScaleTemplate
                     clipBorderPixel(src, dest, value);                                // clipping (with border)
             }
             else if ((interpolate == 1) && (this->Bits <= MAX_INTERPOLATION_BITS))
-                interpolatePixel(src, dest);                                          // interpolation (pbmplus)
+                this->interpolatePixel(src, dest);                                          // interpolation (pbmplus)
             else if ((interpolate == 4) && (this->Dest_X >= this->Src_X) && (this->Dest_Y >= this->Src_Y) &&
                      (this->Src_X >= 3) && (this->Src_Y >= 3))
                 bicubicPixel(src, dest);                                              // bicubic magnification
@@ -231,7 +232,7 @@ class DiScaleTemplate
             else if ((interpolate >= 1) && (this->Src_X >= this->Dest_X) && (this->Src_Y >= this->Dest_Y))
                 reducePixel(src, dest);                                               // interpolated reduction (c't)
             else if ((interpolate >= 1) && (this->Bits <= MAX_INTERPOLATION_BITS))
-                interpolatePixel(src, dest);                                          // interpolation (pbmplus), fallback
+                this->interpolatePixel(src, dest);                                          // interpolation (pbmplus), fallback
             else if ((this->Dest_X % this->Src_X == 0) && (this->Dest_Y % this->Src_Y == 0))
                 replicatePixel(src, dest);                                            // replication
             else if ((this->Src_X % this->Dest_X == 0) && (this->Src_Y % this->Dest_Y == 0))

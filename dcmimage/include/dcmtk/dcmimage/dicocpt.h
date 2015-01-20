@@ -86,7 +86,7 @@ class DiColorCopyTemplate
     inline void copy(const T *pixel[3],
                      const unsigned long offset)
     {
-        if (Init(pixel))
+        if (this->Init(pixel))
         {
             for (int j = 0; j < 3; j++)
                 OFBitmanipTemplate<T>::copyMem(pixel[j] + offset, this->Data[j], this->getCount());

@@ -75,11 +75,11 @@ class DiFlipTemplate
                 (pixel->getCount() == OFstatic_cast(unsigned long, columns) * OFstatic_cast(unsigned long, rows) * frames))
             {
                 if (horz && vert)
-                    flipHorzVert(OFstatic_cast(T **, pixel->getDataArrayPtr()));
+                    this->flipHorzVert(OFstatic_cast(T **, pixel->getDataArrayPtr()));
                 else if (horz)
-                    flipHorz(OFstatic_cast(T **, pixel->getDataArrayPtr()));
+                    this->flipHorz(OFstatic_cast(T **, pixel->getDataArrayPtr()));
                 else if (vert)
-                    flipVert(OFstatic_cast(T **, pixel->getDataArrayPtr()));
+                    this->flipVert(OFstatic_cast(T **, pixel->getDataArrayPtr()));
             } else {
                 DCMIMGLE_WARN("could not flip image ... corrupted data");
             }
@@ -123,13 +123,13 @@ class DiFlipTemplate
         if ((src != NULL) && (dest != NULL))
         {
             if (horz && vert)
-                flipHorzVert(src, dest);
+                this->flipHorzVert(src, dest);
             else if (horz)
-                flipHorz(src, dest);
+                this->flipHorz(src, dest);
             else if (vert)
-                flipVert(src, dest);
+                this->flipVert(src, dest);
             else
-                copyPixel(src, dest);
+                this->copyPixel(src, dest);
         }
     }
 
