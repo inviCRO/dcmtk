@@ -237,7 +237,7 @@
 (0008,9458)	SQ	FrameDisplaySequence	1	DICOM_2009
 (0008,9459)	FL	RecommendedDisplayFrameRateInFloat	1	DICOM_2009
 (0008,9460)	CS	SkipFrameRangeFlag	1	DICOM_2009
-(0010,0010)	PN	PatientName	1	DICOM_2009
+(0010,0010)	PN	PatientsName	1	DICOM_2009
 (0010,0020)	LO	PatientID	1	DICOM_2009
 (0010,0021)	LO	IssuerOfPatientID	1	DICOM_2009
 (0010,0022)	CS	TypeOfPatientID	1	DICOM_2009
@@ -613,7 +613,7 @@
 (0018,7026)	DS	DetectorActiveDimensions	1-2	DICOM_2009
 (0018,7028)	DS	DetectorActiveOrigin	2	DICOM_2009
 (0018,702A)	LO	DetectorManufacturerName	1	DICOM_2009
-(0018,702B)	LO	DetectorManufacturerModelName	1	DICOM_2009
+(0018,702B)	LO	DetectorManufacturersModelName	1	DICOM_2009
 (0018,7030)	DS	FieldOfViewOrigin	2	DICOM_2009
 (0018,7032)	DS	FieldOfViewRotation	1	DICOM_2009
 (0018,7034)	CS	FieldOfViewHorizontalFlip	1	DICOM_2009
