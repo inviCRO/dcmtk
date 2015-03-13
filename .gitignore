@@ -1,0 +1,6 @@
+*.o
+Makefile
+config.log
+lib*.a
+config.status
+Makefile.def
