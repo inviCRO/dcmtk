@@ -550,15 +550,15 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0008, 0x0090, 0x0008, 0x0090,
-      EVR_PN, "ReferringPhysicianName", 1, 1, "DICOM_2009",
+      EVR_PN, "ReferringPhysiciansName", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0008, 0x0092, 0x0008, 0x0092,
-      EVR_ST, "ReferringPhysicianAddress", 1, 1, "DICOM_2009",
+      EVR_ST, "ReferringPhysiciansAddress", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0008, 0x0094, 0x0008, 0x0094,
-      EVR_SH, "ReferringPhysicianTelephoneNumbers", 1, -1, "DICOM_2009",
+      EVR_SH, "ReferringPhysiciansTelephoneNumbers", 1, -1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0008, 0x0096, 0x0008, 0x0096,
@@ -674,7 +674,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0008, 0x1050, 0x0008, 0x1050,
-      EVR_PN, "PerformingPhysicianName", 1, -1, "DICOM_2009",
+      EVR_PN, "PerformingPhysiciansName", 1, -1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0008, 0x1052, 0x0008, 0x1052,
@@ -706,7 +706,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0008, 0x1090, 0x0008, 0x1090,
-      EVR_LO, "ManufacturerModelName", 1, 1, "DICOM_2009",
+      EVR_LO, "ManufacturersModelName", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0008, 0x1100, 0x0008, 0x1100,
@@ -1038,7 +1038,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0008, 0x9237, 0x0008, 0x9237,
-      EVR_SQ, "ReferencedPresentationStateSequence", 1, 1, "DICOM_2009",
+      EVR_SQ, "ReferencedGrayscalePresentationStateSequence", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0008, 0x9410, 0x0008, 0x9410,
@@ -1852,7 +1852,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       "GEMS_ACQU_01" }
 #endif
   , { 0x0010, 0x0010, 0x0010, 0x0010,
-      EVR_PN, "PatientName", 1, 1, "DICOM_2009",
+      EVR_PN, "PatientsName", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x0020, 0x0010, 0x0020,
@@ -1872,27 +1872,27 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x0030, 0x0010, 0x0030,
-      EVR_DA, "PatientBirthDate", 1, 1, "DICOM_2009",
+      EVR_DA, "PatientsBirthDate", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x0032, 0x0010, 0x0032,
-      EVR_TM, "PatientBirthTime", 1, 1, "DICOM_2009",
+      EVR_TM, "PatientsBirthTime", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x0040, 0x0010, 0x0040,
-      EVR_CS, "PatientSex", 1, 1, "DICOM_2009",
+      EVR_CS, "PatientsSex", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x0050, 0x0010, 0x0050,
-      EVR_SQ, "PatientInsurancePlanCodeSequence", 1, 1, "DICOM_2009",
+      EVR_SQ, "PatientsInsurancePlanCodeSequence", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x0101, 0x0010, 0x0101,
-      EVR_SQ, "PatientPrimaryLanguageCodeSequence", 1, 1, "DICOM_2009",
+      EVR_SQ, "PatientsPrimaryLanguageCodeSequence", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x0102, 0x0010, 0x0102,
-      EVR_SQ, "PatientPrimaryLanguageModifierCodeSequence", 1, 1, "DICOM_2009",
+      EVR_SQ, "PatientsPrimaryLanguageModifierCodeSequence", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x1000, 0x0010, 0x1000,
@@ -1908,15 +1908,15 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x1005, 0x0010, 0x1005,
-      EVR_PN, "PatientBirthName", 1, 1, "DICOM_2009",
+      EVR_PN, "PatientsBirthName", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x1010, 0x0010, 0x1010,
-      EVR_AS, "PatientAge", 1, 1, "DICOM_2009",
+      EVR_AS, "PatientsAge", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x1020, 0x0010, 0x1020,
-      EVR_DS, "PatientSize", 1, 1, "DICOM_2009",
+      EVR_DS, "PatientsSize", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x1021, 0x0010, 0x1021,
@@ -1924,11 +1924,11 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x1030, 0x0010, 0x1030,
-      EVR_DS, "PatientWeight", 1, 1, "DICOM_2009",
+      EVR_DS, "PatientsWeight", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x1040, 0x0010, 0x1040,
-      EVR_LO, "PatientAddress", 1, 1, "DICOM_2009",
+      EVR_LO, "PatientsAddress", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x1050, 0x0010, 0x1050,
@@ -1936,7 +1936,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x1060, 0x0010, 0x1060,
-      EVR_PN, "PatientMotherBirthName", 1, 1, "DICOM_2009",
+      EVR_PN, "PatientsMotherBirthName", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x1080, 0x0010, 0x1080,
@@ -1968,7 +1968,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x2154, 0x0010, 0x2154,
-      EVR_SH, "PatientTelephoneNumbers", 1, -1, "DICOM_2009",
+      EVR_SH, "PatientsTelephoneNumbers", 1, -1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x2160, 0x0010, 0x2160,
@@ -1996,7 +1996,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x21f0, 0x0010, 0x21f0,
-      EVR_LO, "PatientReligiousPreference", 1, 1, "DICOM_2009",
+      EVR_LO, "PatientsReligiousPreference", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x2201, 0x0010, 0x2201,
@@ -2008,7 +2008,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x2203, 0x0010, 0x2203,
-      EVR_CS, "PatientSexNeutered", 1, 1, "DICOM_2009",
+      EVR_CS, "PatientsSexNeutered", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0010, 0x2210, 0x0010, 0x2210,
@@ -2530,11 +2530,11 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0012, 0x0063, 0x0012, 0x0063,
-      EVR_LO, "DeidentificationMethod", 1, -1, "DICOM_2009",
+      EVR_LO, "DeIdentificationMethod", 1, -1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0012, 0x0064, 0x0012, 0x0064,
-      EVR_SQ, "DeidentificationMethodCodeSequence", 1, 1, "DICOM_2009",
+      EVR_SQ, "DeIdentificationMethodCodeSequence", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0012, 0x0071, 0x0012, 0x0071,
@@ -2623,7 +2623,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "GEMS_GENIE_1" }
   , { 0x0013, 0x0020, 0x0013, 0x0020,
-      EVR_LO, "PatientName", 1, 1, "DICOM",
+      EVR_LO, "PatientsName", 1, 1, "DICOM",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "SIEMENS CM VA0  CMS" }
   , { 0x0013, 0x0022, 0x0013, 0x0022,
@@ -2635,11 +2635,11 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "GEMS_GENIE_1" }
   , { 0x0013, 0x0030, 0x0013, 0x0030,
-      EVR_DA, "PatientBirthdate", 1, 1, "DICOM",
+      EVR_DA, "PatientsBirthDate", 1, 1, "DICOM",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "SIEMENS CM VA0  CMS" }
   , { 0x0013, 0x0031, 0x0013, 0x0031,
-      EVR_DS, "PatientWeight", 1, 1, "DICOM",
+      EVR_DS, "PatientsWeight", 1, 1, "DICOM",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "SIEMENS CM VA0  CMS" }
   , { 0x0013, 0x0032, 0x0013, 0x0032,
@@ -2780,7 +2780,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x0029, 0x0018, 0x0029,
-      EVR_SQ, "InterventionDrugCodeSequence", 1, 1, "DICOM_2009",
+      EVR_SQ, "InterventionDrugSequence", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x002a, 0x0018, 0x002a,
@@ -2980,7 +2980,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x1016, 0x0018, 0x1016,
-      EVR_LO, "SecondaryCaptureDeviceManufacturer", 1, 1, "DICOM_2009",
+      EVR_LO, "SecondaryCaptureDeviceManufacturers", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x1017, 0x0018, 0x1017,
@@ -2988,7 +2988,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x1018, 0x0018, 0x1018,
-      EVR_LO, "SecondaryCaptureDeviceManufacturerModelName", 1, 1, "DICOM_2009",
+      EVR_LO, "SecondaryCaptureDeviceManufacturersModelName", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x1019, 0x0018, 0x1019,
@@ -3300,7 +3300,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x1153, 0x0018, 0x1153,
-      EVR_IS, "ExposureInuAs", 1, 1, "DICOM_2009",
+      EVR_IS, "ExposureInMicroAs", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x1154, 0x0018, 0x1154,
@@ -3460,7 +3460,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x1318, 0x0018, 0x1318,
-      EVR_DS, "dBdt", 1, 1, "DICOM_2009",
+      EVR_DS, "DBDt", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x1400, 0x0018, 0x1400,
@@ -4144,11 +4144,11 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x8150, 0x0018, 0x8150,
-      EVR_DS, "ExposureTimeInuS", 1, 1, "DICOM_2009",
+      EVR_DS, "ExposureTimeInMicroS", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x8151, 0x0018, 0x8151,
-      EVR_DS, "XRayTubeCurrentInuA", 1, 1, "DICOM_2009",
+      EVR_DS, "XRayTubeCurrentInMicroA", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x9004, 0x0018, 0x9004,
@@ -4232,7 +4232,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x9027, 0x0018, 0x9027,
-      EVR_CS, "SpatialPresaturation", 1, 1, "DICOM_2009",
+      EVR_CS, "SpatialPreSaturation", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x9028, 0x0018, 0x9028,
@@ -4332,23 +4332,23 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x9059, 0x0018, 0x9059,
-      EVR_CS, "Decoupling", 1, 1, "DICOM_2009",
+      EVR_CS, "DeCoupling", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x9060, 0x0018, 0x9060,
-      EVR_CS, "DecoupledNucleus", 1, 2, "DICOM_2009",
+      EVR_CS, "DeCoupledNucleus", 1, 2, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x9061, 0x0018, 0x9061,
-      EVR_FD, "DecouplingFrequency", 1, 2, "DICOM_2009",
+      EVR_FD, "DeCouplingFrequency", 1, 2, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x9062, 0x0018, 0x9062,
-      EVR_CS, "DecouplingMethod", 1, 1, "DICOM_2009",
+      EVR_CS, "DeCouplingMethod", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x9063, 0x0018, 0x9063,
-      EVR_FD, "DecouplingChemicalShiftReference", 1, 2, "DICOM_2009",
+      EVR_FD, "DeCouplingChemicalShiftReference", 1, 2, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x9064, 0x0018, 0x9064,
@@ -4712,11 +4712,11 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x9295, 0x0018, 0x9295,
-      EVR_FD, "ChemicalShiftMinimumIntegrationLimitInppm", 1, 1, "DICOM_2009",
+      EVR_FD, "ChemicalShiftsMinimumIntegrationLimitInPpm", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x9296, 0x0018, 0x9296,
-      EVR_FD, "ChemicalShiftMaximumIntegrationLimitInppm", 1, 1, "DICOM_2009",
+      EVR_FD, "ChemicalShiftsMaximumIntegrationLimitInPpm", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x9301, 0x0018, 0x9301,
@@ -4828,7 +4828,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x9328, 0x0018, 0x9328,
-      EVR_FD, "ExposureTimeInms", 1, 1, "DICOM_2009",
+      EVR_FD, "ExposureTimeInMs", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x9329, 0x0018, 0x9329,
@@ -4836,11 +4836,11 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x9330, 0x0018, 0x9330,
-      EVR_FD, "XRayTubeCurrentInmA", 1, 1, "DICOM_2009",
+      EVR_FD, "XRayTubeCurrentInMA", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x9332, 0x0018, 0x9332,
-      EVR_FD, "ExposureInmAs", 1, 1, "DICOM_2009",
+      EVR_FD, "ExposureInMAs", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0018, 0x9333, 0x0018, 0x9333,
@@ -13528,7 +13528,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0028, 0x1300, 0x0028, 0x1300,
-      EVR_CS, "BreastImplantPresent", 1, 1, "DICOM_2009",
+      EVR_CS, "ImplantPresent", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0028, 0x1350, 0x0028, 0x1350,
@@ -13660,11 +13660,11 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0028, 0x6020, 0x0028, 0x6020,
-      EVR_US, "FrameNumbersOfInterest", 1, -1, "DICOM_2009",
+      EVR_US, "FrameNumbersOfInterestFOI", 1, -1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0028, 0x6022, 0x0028, 0x6022,
-      EVR_LO, "FrameOfInterestDescription", 1, -1, "DICOM_2009",
+      EVR_LO, "FramesOfInterestDescription", 1, -1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0028, 0x6023, 0x0028, 0x6023,
@@ -15496,7 +15496,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0038, 0x0014, 0x0038, 0x0014,
-      EVR_SQ, "IssuerOfAdmissionIDSequence", 1, 1, "DICOM_2009",
+      EVR_SQ, "IssuerOfAdmissionID", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0038, 0x0016, 0x0038, 0x0016,
@@ -15576,7 +15576,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0038, 0x0400, 0x0038, 0x0400,
-      EVR_LO, "PatientInstitutionResidence", 1, 1, "DICOM_2009",
+      EVR_LO, "PatientsInstitutionResidence", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0038, 0x0500, 0x0038, 0x0500,
@@ -15786,7 +15786,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0040, 0x0006, 0x0040, 0x0006,
-      EVR_PN, "ScheduledPerformingPhysicianName", 1, 1, "DICOM_2009",
+      EVR_PN, "ScheduledPerformingPhysiciansName", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0040, 0x0007, 0x0040, 0x0007,
@@ -16218,11 +16218,11 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0040, 0x1102, 0x0040, 0x1102,
-      EVR_ST, "PersonAddress", 1, 1, "DICOM_2009",
+      EVR_ST, "PersonsAddress", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0040, 0x1103, 0x0040, 0x1103,
-      EVR_LO, "PersonTelephoneNumbers", 1, -1, "DICOM_2009",
+      EVR_LO, "PersonsTelephoneNumbers", 1, -1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0040, 0x1400, 0x0040, 0x1400,
@@ -16254,7 +16254,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0040, 0x2009, 0x0040, 0x2009,
-      EVR_SH, "OrderEntererLocation", 1, 1, "DICOM_2009",
+      EVR_SH, "OrderEnterersLocation", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0040, 0x2010, 0x0040, 0x2010,
@@ -16294,7 +16294,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0040, 0x4005, 0x0040, 0x4005,
-      EVR_DT, "ScheduledProcedureStepStartDateTime", 1, 1, "DICOM_2009",
+      EVR_DT, "ScheduledProcedureStepStartDateAndTime", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0040, 0x4006, 0x0040, 0x4006,
@@ -16310,11 +16310,11 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0040, 0x4010, 0x0040, 0x4010,
-      EVR_DT, "ScheduledProcedureStepModificationDateTime", 1, 1, "DICOM_2009",
+      EVR_DT, "ScheduledProcedureStepModificationDateAndTime", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0040, 0x4011, 0x0040, 0x4011,
-      EVR_DT, "ExpectedCompletionDateTime", 1, 1, "DICOM_2009",
+      EVR_DT, "ExpectedCompletionDateAndTime", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0040, 0x4015, 0x0040, 0x4015,
@@ -16394,11 +16394,11 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0040, 0x4036, 0x0040, 0x4036,
-      EVR_LO, "HumanPerformerOrganization", 1, 1, "DICOM_2009",
+      EVR_LO, "HumanPerformersOrganization", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0040, 0x4037, 0x0040, 0x4037,
-      EVR_PN, "HumanPerformerName", 1, 1, "DICOM_2009",
+      EVR_PN, "HumanPerformersName", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0040, 0x4040, 0x0040, 0x4040,
@@ -16406,7 +16406,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0040, 0x8302, 0x0040, 0x8302,
-      EVR_DS, "EntranceDoseInmGy", 1, 1, "DICOM_2009",
+      EVR_DS, "EntranceDoseInMGy", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0040, 0x9094, 0x0040, 0x9094,
@@ -17966,7 +17966,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0050, 0x0019, 0x0050, 0x0019,
-      EVR_DS, "InterMarkerDistance", 1, 1, "DICOM_2009",
+      EVR_DS, "IntermarkerDistance", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0050, 0x001a, 0x0050, 0x001a,
@@ -19042,11 +19042,11 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0070, 0x0084, 0x0070, 0x0084,
-      EVR_PN, "ContentCreatorName", 1, 1, "DICOM_2009",
+      EVR_PN, "ContentCreatorsName", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0070, 0x0086, 0x0070, 0x0086,
-      EVR_SQ, "ContentCreatorIdentificationCodeSequence", 1, 1, "DICOM_2009",
+      EVR_SQ, "ContentCreatorsIdentificationCodeSequence", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0070, 0x0087, 0x0070, 0x0087,
@@ -19694,7 +19694,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0072, 0x0520, 0x0072, 0x0520,
-      EVR_CS, "ThreeDRenderingType", 1, -1, "DICOM_2009",
+      EVR_CS, "3DRenderingType", 1, -1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0072, 0x0600, 0x0072, 0x0600,
@@ -19754,7 +19754,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0074, 0x1002, 0x0074, 0x1002,
-      EVR_SQ, "UnifiedProcedureStepProgressInformationSequence", 1, 1, "DICOM_2009",
+      EVR_SQ, "UPSProgressInformationSequence", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0074, 0x1004, 0x0074, 0x1004,
@@ -19922,7 +19922,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0074, 0x1246, 0x0074, 0x1246,
-      EVR_CS, "UnifiedProcedureStepListStatus", 1, 1, "DICOM_2009",
+      EVR_CS, "UPSListStatus", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0076, 0x0001, 0x0076, 0x0001,
@@ -20190,7 +20190,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0100, 0x0420, 0x0100, 0x0420,
-      EVR_DT, "SOPAuthorizationDateTime", 1, 1, "DICOM_2009",
+      EVR_DT, "SOPAuthorizationDateAndTime", 1, 1, "DICOM_2009",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       NULL }
   , { 0x0100, 0x0424, 0x0100, 0x0424,
