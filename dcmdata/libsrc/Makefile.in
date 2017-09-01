@@ -81,18 +81,18 @@ mkvrscan:
 
 # Generate a new include file of defined tags
 
-gendeftag: mkdeftag $(dicomdic) $(privatedic) $(IVSDIR)/extern/dicom-ns.dic
-	`pwd`/mkdeftag $(dicomdic) $(privatedic) $(IVSDIR)/extern/dicom-ns.dic > $(top_srcdir)/include/dcmtk/dcmdata/dcdeftag.h
+gendeftag: mkdeftag $(dicomdic) $(privatedic) $(VQPATH)/extern/dicom-ns.dic
+	`pwd`/mkdeftag $(dicomdic) $(privatedic) $(VQPATH)/extern/dicom-ns.dic > $(top_srcdir)/include/dcmtk/dcmdata/dcdeftag.h
 
 # Generate a file which can be used as a builtin dictionary
 
-dcdictzz.cc: mkdictbi $(dicomdic) $(privatedic) $(IVSDIR)/extern/dicom-ns.dic
-	`pwd`/mkdictbi $(dicomdic) $(privatedic) $(IVSDIR)/extern/dicom-ns.dic > dcdictzz.cc
+dcdictzz.cc: mkdictbi $(dicomdic) $(privatedic) $(VQPATH)/extern/dicom-ns.dic
+	`pwd`/mkdictbi $(dicomdic) $(privatedic) $(VQPATH)/extern/dicom-ns.dic > dcdictzz.cc
 
 # Generate a builtin data dictionary from $(dicomdic) and $(privatedic)
 
-builtindict: nobuiltindict mkdictbi $(dicomdic) $(privatedic) $(IVSDIR)/extern/dicom-ns.dic
-	`pwd`/mkdictbi $(dicomdic) $(privatedic) $(IVSDIR)/extern/dicom-ns.dic > dcdictbi.cc
+builtindict: nobuiltindict mkdictbi $(dicomdic) $(privatedic) $(VQPATH)/extern/dicom-ns.dic
+	`pwd`/mkdictbi $(dicomdic) $(privatedic) $(VQPATH)/extern/dicom-ns.dic > dcdictbi.cc
 
 # Generate an empty builtin data dictionary
 
