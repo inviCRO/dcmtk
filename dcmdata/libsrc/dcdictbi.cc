@@ -2012,7 +2012,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "MEDISO-1" }
   , { 0x0009, 0x1038, 0x0009, 0x1038,
-      EVR_SQ, "EventTriggerSequence", 1, -1, "DICOM",
+      EVR_SQ, "EventTriggerSequence", 0, -1, "DICOM",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "MEDISO-1" }
   , { 0x0009, 0x1039, 0x0009, 0x1039,
@@ -2020,7 +2020,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "MEDISO-1" }
   , { 0x0009, 0x103a, 0x0009, 0x103a,
-      EVR_SQ, "FailedInstanceSequence", 1, 1, "DICOM",
+      EVR_SQ, "FailedInstanceSequence", 0, 1, "DICOM",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "MEDISO-1" }
   , { 0x0009, 0x103b, 0x0009, 0x103b,
@@ -2524,7 +2524,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "MEDISO-1" }
   , { 0x0009, 0x10bb, 0x0009, 0x10bb,
-      EVR_SQ, "PrivateCalibrationDataSequence", 1, 1, "DICOM",
+      EVR_SQ, "PrivateCalibrationDataSequence", 0, 1, "DICOM",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "MEDISO-1" }
   , { 0x0009, 0x10bc, 0x0009, 0x10bc,
@@ -2656,7 +2656,7 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "MEDISO-1" }
   , { 0x0009, 0x10dc, 0x0009, 0x10dc,
-      EVR_SQ, "CoarseEnergyWindowRangeSequence", 1, 1, "DICOM",
+      EVR_SQ, "CoarseEnergyWindowRangeSequence", 0, 1, "DICOM",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "MEDISO-1" }
   , { 0x0009, 0x10dd, 0x0009, 0x10dd,
