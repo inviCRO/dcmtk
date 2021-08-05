@@ -49,7 +49,7 @@ IF(WIN32)
     IF(WITH_LIBPNGINC)
       SET(LIBPNG_INCDIR ${WITH_LIBPNGINC}/include)
       SET(LIBPNG_LIBDIR ${WITH_LIBPNGINC}/lib)
-      SET(LIBPNG_LIBS debug libpng15 optimized libpng15_static)
+      SET(LIBPNG_LIBS debug libpng15_staticd optimized libpng15_static)
       MESSAGE(STATUS "Info: DCMTK PNG support will be enabled")
       SET(WITH_LIBPNG 1)
     ELSE(WITH_LIBPNGINC) # turn off library if library path not set
