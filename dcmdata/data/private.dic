@@ -1048,6 +1048,11 @@
 (0033,"GEMS_YMHD_01",05)	UN	Unknown	1	PrivateTag
 (0033,"GEMS_YMHD_01",06)	UN	Unknown	1	PrivateTag
 
+(0009,"GEMS_PETD_01",1038)	FL	TracerActivity	1	PrivateTag
+(0009,"GEMS_PETD_01",103a)	FL	PreInjVolume	1	PrivateTag
+(0009,"GEMS_PETD_01",10bb)	FL	PosFiltParam	1	PrivateTag
+(0009,"GEMS_PETD_01",10dc)	FL	IRZFilterRatio	1	PrivateTag
+
 (0019,"GE_GENESIS_REV3.0",39)	SS	AxialType	1	PrivateTag
 (0019,"GE_GENESIS_REV3.0",8f)	SS	SwapPhaseFrequency	1	PrivateTag
 (0019,"GE_GENESIS_REV3.0",9c)	SS	PulseSequenceName	1	PrivateTag
