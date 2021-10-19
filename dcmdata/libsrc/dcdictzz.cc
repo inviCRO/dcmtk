@@ -12111,6 +12111,34 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       EVR_IS, "SliceGap", 1, 1, "PrivateTag",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "PHILIPS MR/PART" }
+   , { 0x7053, 0x0000, 0x7053, 0x0000,
+      EVR_DS, "SUVScaleFactor", 1, 1, "PrivateTag",
+      DcmDictRange_Unspecified, DcmDictRange_Unspecified,
+      "Philips PET Private Group" }
+  , { 0x7053, 0x0001, 0x7053, 0x0001,
+      EVR_OB, "Unknown", 1, 1, "PrivateTag",
+      DcmDictRange_Unspecified, DcmDictRange_Unspecified,
+      "Philips PET Private Group" }
+  , { 0x7053, 0x0002, 0x7053, 0x0002,
+      EVR_OB, "Unknown", 1, 1, "PrivateTag",
+      DcmDictRange_Unspecified, DcmDictRange_Unspecified,
+      "Philips PET Private Group" }
+  , { 0x7053, 0x0003, 0x7053, 0x0003,
+      EVR_ST, "OriginalImageFilename", 1, 1, "PrivateTag",
+      DcmDictRange_Unspecified, DcmDictRange_Unspecified,
+      "Philips PET Private Group" }
+  , { 0x7053, 0x0005, 0x7053, 0x0005,
+      EVR_LO, "Filename", 1, 1, "PrivateTag",
+      DcmDictRange_Unspecified, DcmDictRange_Unspecified,
+      "Philips PET Private Group" }
+  , { 0x7053, 0x0006, 0x7053, 0x0006,
+      EVR_OB, "Unknown", 1, 1, "PrivateTag",
+      DcmDictRange_Unspecified, DcmDictRange_Unspecified,
+      "Philips PET Private Group" }
+  , { 0x7053, 0x0009, 0x7053, 0x0009,
+      EVR_DS, "ActivityConcentrationScaleFactor", 1, 1, "PrivateTag",
+      DcmDictRange_Unspecified, DcmDictRange_Unspecified,
+      "Philips PET Private Group" }
 #endif
   , { 0x0022, 0x0001, 0x0022, 0x0001,
       EVR_US, "LightPathFilterPassThroughWavelength", 1, 1, "DICOM_2009",
