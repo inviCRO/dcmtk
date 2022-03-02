@@ -132,6 +132,8 @@ void DcmTag::lookupVRinDictionary()
 			dictRef = globalDataDict.findEntry(*this, "SCIVIS-1");
 		if (!dictRef)
 			dictRef = globalDataDict.findEntry(*this, "MEDISO-1");
+		if (!dictRef)
+			dictRef = globalDataDict.findEntry(*this, "Philips PET Private Group");
 	}
     if (dictRef)
     {
@@ -169,6 +171,8 @@ const char *DcmTag::getTagName()
 		  dictRef = globalDataDict.findEntry(*this, "SCIVIS-1");
 	  if (!dictRef)
 		  dictRef = globalDataDict.findEntry(*this, "MEDISO-1");
+	  if (!dictRef)
+		  dictRef = globalDataDict.findEntry(*this, "Philips PET Private Group");
   }
   if (dictRef) newTagName=dictRef->getTagName();
   if (newTagName == NULL) newTagName = DcmTag_ERROR_TagName;
