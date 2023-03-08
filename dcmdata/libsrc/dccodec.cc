@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2010, OFFIS e.V.
+ *  Copyright (C) 1997-2020, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Andreas Barth
  *
  *  Purpose: abstract class DcmCodec and the class DcmCodecStruct
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:07 $
- *  CVS/RCS Revision: $Revision: 1.22 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -237,8 +230,9 @@ OFCondition DcmCodec::determineStartFragment(
   DcmPixelSequence * fromPixSeq,
   Uint32& currentItem)
 {
-  Uint32 numberOfFragments = fromPixSeq->card();
-  if (numberOfFrames < 1 || numberOfFragments <= OFstatic_cast(Uint32, numberOfFrames) || frameNo >= OFstatic_cast(Uint32, numberOfFrames)) return EC_IllegalCall;
+  Uint32 numberOfFragments = OFstatic_cast(Uint32, fromPixSeq->card());
+  if (numberOfFrames < 1 || numberOfFragments <= OFstatic_cast(Uint32, numberOfFrames) || frameNo >= OFstatic_cast(Uint32, numberOfFrames))
+    return EC_IllegalCall;
 
   if (frameNo == 0)
   {
@@ -257,7 +251,7 @@ OFCondition DcmCodec::determineStartFragment(
   // non-standard case: multiple fragments per frame.
   // We now try to consult the offset table.
   DcmPixelItem *pixItem = NULL;
-  Uint8 * rawOffsetTable = NULL;
+  Uint8 *rawOffsetTable = NULL;
 
   // get first pixel item, i.e. the fragment containing the offset table
   OFCondition result = fromPixSeq->getItem(pixItem, 0);
@@ -267,45 +261,54 @@ OFCondition DcmCodec::determineStartFragment(
     result = pixItem->getUint8Array(rawOffsetTable);
     if (result.good())
     {
+      // check if the offset table is empty
+      if (tableLength == 0)
+        result = makeOFCondition(OFM_dcmdata, EC_CODE_CannotDetermineStartFragment, OF_error, "Cannot determine start fragment: basic offset table is empty");
       // check if the offset table has the right size: 4 bytes for each frame (not fragment!)
-      if (tableLength != 4* OFstatic_cast(Uint32, numberOfFrames)) return EC_IllegalCall;
+      else if (tableLength != 4 * OFstatic_cast(Uint32, numberOfFrames))
+        result = makeOFCondition(OFM_dcmdata, EC_CODE_CannotDetermineStartFragment, OF_error, "Cannot determine start fragment: basic offset table has wrong size");
+      else {
 
-      // byte swap offset table into local byte order. In file, the offset table is always in little endian
-      swapIfNecessary(gLocalByteOrder, EBO_LittleEndian, rawOffsetTable, tableLength, sizeof(Uint32));
+        // byte swap offset table into local byte order. In file, the offset table is always in little endian
+        swapIfNecessary(gLocalByteOrder, EBO_LittleEndian, rawOffsetTable, tableLength, sizeof(Uint32));
 
-      // cast offset table to Uint32.
-      Uint32 *offsetTable = OFreinterpret_cast(Uint32 *, rawOffsetTable);
+        // cast offset table to Uint32.
+        Uint32 *offsetTable = OFreinterpret_cast(Uint32 *, rawOffsetTable);
 
-      // now access offset of the frame we're looking for
-      Uint32 offset = offsetTable[frameNo];
+        // now access offset of the frame we're looking for
+        Uint32 offset = offsetTable[frameNo];
 
-      // OK, now let's look if we can find a fragment that actually corresponds to that offset.
-      // In counter we compute the offset for each frame by adding all fragment lenghts
-      Uint32 counter = 0;
-      // now iterate over all fragments except the index table. The start of the first fragment
-      // is defined as zero.
-      for (Uint32 idx = 1; idx < numberOfFragments; ++idx)
-      {
-        if (counter == offset)
+        // OK, now let's look if we can find a fragment that actually corresponds to that offset.
+        // In counter we compute the offset for each frame by adding all fragment lengths
+        Uint32 counter = 0;
+        // now iterate over all fragments except the index table. The start of the first fragment
+        // is defined as zero.
+        for (Uint32 idx = 1; idx < numberOfFragments; ++idx)
         {
-          // hooray, we are lucky. We have found the fragment we're looking for
-          currentItem = idx;
-          return EC_Normal;
+          if (counter == offset)
+          {
+            // hooray, we are lucky. We have found the fragment we're looking for
+            currentItem = idx;
+            return EC_Normal;
+          }
+
+          // access pixel item in order to determine its length
+          result = fromPixSeq->getItem(pixItem, idx);
+          if (result.bad())
+            return makeOFCondition(OFM_dcmdata, EC_CODE_CannotDetermineStartFragment, OF_error, "Cannot determine start fragment: cannot access referenced pixel item");
+
+          // add pixel item length plus 8 bytes overhead for the item tag and length field
+          counter += pixItem->getLength() + 8;
         }
 
-        // access pixel item in order to determine its length
-        result = fromPixSeq->getItem(pixItem, idx);
-        if (result.bad()) return result;
-
-        // add pixel item length plus 8 bytes overhead for the item tag and length field
-        counter += pixItem->getLength() + 8;
+        // bad luck. We have not found a fragment corresponding to the offset in the offset table.
+        // Either we cannot correctly add numbers, or they cannot :-)
+        result = makeOFCondition(OFM_dcmdata, EC_CODE_CannotDetermineStartFragment, OF_error, "Cannot determine start fragment: possibly wrong value in basic offset table");
       }
-
-      // bad luck. We have not found a fragment corresponding to the offset in the offset table.
-      // Either we cannot correctly add numbers, or they cannot :-)
-      return EC_TagNotFound;
-    }
-  }
+    } else
+      result = makeOFCondition(OFM_dcmdata, EC_CODE_CannotDetermineStartFragment, OF_error, "Cannot determine start fragment: cannot access content of basic offset table");
+  } else
+    result = makeOFCondition(OFM_dcmdata, EC_CODE_CannotDetermineStartFragment, OF_error, "Cannot determine start fragment: cannot access basic offset table (first item)");
   return result;
 }
 
@@ -431,7 +434,8 @@ OFCondition DcmCodecList::decode(
   const DcmRepresentationParameter * fromParam,
   DcmPixelSequence * fromPixSeq,
   DcmPolymorphOBOW& uncompressedPixelData,
-  DcmStack & pixelStack)
+  DcmStack & pixelStack,
+  OFBool& removeOldRep)
 {
 #ifdef WITH_THREADS
   if (! codecLock.initialized()) return EC_IllegalCall; // should never happen
@@ -451,7 +455,7 @@ OFCondition DcmCodecList::decode(
     {
       if ((*first)->codec->canChangeCoding(fromXfer, EXS_LittleEndianExplicit))
       {
-        result = (*first)->codec->decode(fromParam, fromPixSeq, uncompressedPixelData, (*first)->codecParameter, pixelStack);
+        result = (*first)->codec->decode(fromParam, fromPixSeq, uncompressedPixelData, (*first)->codecParameter, pixelStack, removeOldRep);
         first = last;
       } else ++first;
     }
@@ -510,7 +514,8 @@ OFCondition DcmCodecList::encode(
   const E_TransferSyntax toRepType,
   const DcmRepresentationParameter * toRepParam,
   DcmPixelSequence * & toPixSeq,
-  DcmStack & pixelStack)
+  DcmStack & pixelStack,
+  OFBool& removeOldRep)
 {
   toPixSeq = NULL;
 #ifdef WITH_THREADS
@@ -532,7 +537,7 @@ OFCondition DcmCodecList::encode(
       {
         if (!toRepParam) toRepParam = (*first)->defaultRepParam;
         result = (*first)->codec->encode(fromRepType, fromParam, fromPixSeq,
-                 toRepParam, toPixSeq, (*first)->codecParameter, pixelStack);
+                 toRepParam, toPixSeq, (*first)->codecParameter, pixelStack, removeOldRep);
         first = last;
       } else ++first;
     }
@@ -550,7 +555,8 @@ OFCondition DcmCodecList::encode(
   const E_TransferSyntax toRepType,
   const DcmRepresentationParameter * toRepParam,
   DcmPixelSequence * & toPixSeq,
-  DcmStack & pixelStack)
+  DcmStack & pixelStack,
+  OFBool& removeOldRep)
 {
   toPixSeq = NULL;
 #ifdef WITH_THREADS
@@ -572,7 +578,7 @@ OFCondition DcmCodecList::encode(
       {
         if (!toRepParam) toRepParam = (*first)->defaultRepParam;
         result = (*first)->codec->encode(pixelData, length, toRepParam, toPixSeq,
-                 (*first)->codecParameter, pixelStack);
+                 (*first)->codecParameter, pixelStack, removeOldRep);
         first = last;
       } else ++first;
     }
@@ -650,97 +656,3 @@ OFCondition DcmCodecList::determineDecompressedColorModel(
 #endif
   return result;
 }
-
-
-/*
-** CVS/RCS Log:
-** $Log: dccodec.cc,v $
-** Revision 1.22  2010-10-14 13:14:07  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.21  2010-10-04 14:26:19  joergr
-** Fixed issue with codec registry when compiled on Linux x86_64 with "configure
-** --disable-threads" (replaced "#ifdef _REENTRANT" by "#ifdef WITH_THREADS").
-**
-** Revision 1.20  2010-08-09 13:01:22  joergr
-** Updated data dictionary to 2009 edition of the DICOM standard. From now on,
-** the official "keyword" is used for the attribute name which results in a
-** number of minor changes (e.g. "PatientsName" is now called "PatientName").
-**
-** Revision 1.19  2010-06-04 14:22:39  uli
-** Use new OFReadWriteLocker to avoid dead locks when we return from a codec
-** via an exception.
-**
-** Revision 1.18  2010-03-01 09:08:45  uli
-** Removed some unnecessary include directives in the headers.
-**
-** Revision 1.17  2009-11-17 16:41:26  joergr
-** Added new method that allows for determining the color model of the
-** decompressed image.
-**
-** Revision 1.16  2008-11-03 14:34:10  joergr
-** Fixed typo.
-**
-** Revision 1.15  2008-05-29 10:46:16  meichel
-** Implemented new method DcmPixelData::getUncompressedFrame
-**   that permits frame-wise access to compressed and uncompressed
-**   objects without ever loading the complete object into main memory.
-**   For this new method to work with compressed images, all classes derived from
-**   DcmCodec need to implement a new method decodeFrame(). For now, only
-**   dummy implementations returning an error code have been defined.
-**
-** Revision 1.14  2005/12/08 15:40:58  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.13  2004/08/24 14:54:20  meichel
-**  Updated compression helper methods. Image type is not set to SECONDARY
-**   any more, support for the purpose of reference code sequence added.
-**
-** Revision 1.12  2004/02/04 16:11:42  joergr
-** Adapted type casts to new-style typecast operators defined in ofcast.h.
-**
-** Revision 1.11  2002/06/27 15:15:53  meichel
-** Now adding empty Patient Orientation when converting to
-**   Secondary Capture.
-**
-** Revision 1.10  2002/05/24 14:51:50  meichel
-** Moved helper methods that are useful for different compression techniques
-**   from module dcmjpeg to module dcmdata
-**
-** Revision 1.9  2002/02/27 14:21:35  meichel
-** Declare dcmdata read/write locks only when compiled in multi-thread mode
-**
-** Revision 1.8  2001/11/08 16:19:42  meichel
-** Changed interface for codec registration. Now everything is thread-safe
-**   and multiple codecs can be registered for a single transfer syntax (e.g.
-**   one encoder and one decoder).
-**
-** Revision 1.7  2001/09/25 17:19:09  meichel
-** Updated abstract class DcmCodecParameter for use with dcmjpeg.
-**   Added new function deregisterGlobalCodec().
-**
-** Revision 1.6  2001/06/01 15:48:59  meichel
-** Updated copyright header
-**
-** Revision 1.5  2000/09/27 08:19:57  meichel
-** Minor changes in DcmCodec interface, required for future dcmjpeg module.
-**
-** Revision 1.4  2000/04/14 16:09:16  meichel
-** Made function DcmCodec and related functions thread safe.
-**   registerGlobalCodec() should not be called anymore from the constructor
-**   of global objects.
-**
-** Revision 1.3  2000/03/08 16:26:30  meichel
-** Updated copyright header.
-**
-** Revision 1.2  1999/03/31 09:25:18  meichel
-** Updated copyright header in module dcmdata
-**
-** Revision 1.1  1997/07/21 07:55:04  andreas
-** - New environment for encapsulated pixel representations. DcmPixelData
-**   can contain different representations and uses codecs to convert
-**   between them. Codecs are derived from the DcmCodec class. New error
-**   codes are introduced for handling of representations. New internal
-**   value representation (only for ident()) for PixelData
-**
-*/

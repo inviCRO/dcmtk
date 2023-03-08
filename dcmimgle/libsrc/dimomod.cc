@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1996-2010, OFFIS e.V.
+ *  Copyright (C) 1996-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Joerg Riesmeier
  *
  *  Purpose: DicomMonochromeModality (Source)
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:18 $
- *  CVS/RCS Revision: $Revision: 1.30 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -57,16 +50,34 @@ DiMonoModality::DiMonoModality(const DiDocument *docu,
 {
     if (Init(docu, pixel))
     {
-        if (!(docu->getFlags() & CIF_UsePresentationState) &&           // ignore modality LUT and rescaling
-            !(docu->getFlags() & CIF_IgnoreModalityTransformation))
+        if (docu->getFlags() & CIF_IgnoreModalityTransformation)        // ignore modality LUT and rescaling
+        {
+            DCMIMGLE_INFO("configuration flag set ... ignoring possible modality transform");
+        }
+        else if (!(docu->getFlags() & CIF_UsePresentationState))        // ignore modality LUT and rescaling
         {
             const char *sopClassUID = NULL;                             // check for XA and XRF image (ignore MLUT)
-            if ((docu->getValue(DCM_SOPClassUID, sopClassUID) == 0) || (sopClassUID == NULL) ||
-               ((strcmp(sopClassUID, UID_XRayAngiographicImageStorage) != 0) &&
-                (strcmp(sopClassUID, UID_XRayRadiofluoroscopicImageStorage) != 0) &&
-                (strcmp(sopClassUID, UID_RETIRED_XRayAngiographicBiPlaneImageStorage) != 0)))
+            if (!docu->getValue(DCM_SOPClassUID, sopClassUID) || (sopClassUID == NULL))
+                sopClassUID = "";
+            if ((strcmp(sopClassUID, UID_XRayAngiographicImageStorage) == 0) ||
+                (strcmp(sopClassUID, UID_XRayRadiofluoroscopicImageStorage) == 0) ||
+                (strcmp(sopClassUID, UID_RETIRED_XRayAngiographicBiPlaneImageStorage) == 0))
             {
-                EL_BitsPerTableEntry descMode = ELM_UseValue;
+                /* David Clunie in comp.protocols.dicom (2000-12-13):
+                    "Modality LUTs in XA and XRF objects are totally screwy and
+                     do not follow the normal rules. [...] A Modality LUT may be
+                     included with the image to allow it to be scaled back to its
+                     proportional value to X-Ray beam intensity. In other words,
+                     for the objects that use this module (XA and XRF), the
+                     Modality LUT is used BACKWARDS. It is used to convert stored
+                     pixels to X-Ray beam intensity space, but it is NOT APPLIED
+                     to stored pixels for the purpose of display (or more
+                     specifically prior to application of the VOI LUT Module
+                     attributes to the stored pixel data)."
+                */
+                DCMIMGLE_INFO("processing XA or XRF image ... ignoring possible modality transform");
+            } else {
+                EL_BitsPerTableEntry descMode = ELM_UseValue;          // first search on main level
                 if (docu->getFlags() & CIF_IgnoreModalityLutBitDepth)
                     descMode = ELM_IgnoreValue;
                 else if (docu->getFlags() & CIF_CheckLutBitDepth)
@@ -74,14 +85,60 @@ DiMonoModality::DiMonoModality(const DiDocument *docu,
                 TableData = new DiLookupTable(docu, DCM_ModalityLUTSequence, DCM_LUTDescriptor, DCM_LUTData,
                     DCM_LUTExplanation, descMode);
                 checkTable();
+                if (LookupTable)
+                    DCMIMGLE_DEBUG("found modality LUT on main dataset level");
                 Rescaling = (docu->getValue(DCM_RescaleIntercept, RescaleIntercept) > 0);
                 Rescaling &= (docu->getValue(DCM_RescaleSlope, RescaleSlope) > 0);
+                if (Rescaling)
+                    DCMIMGLE_DEBUG("found 'RescaleSlope/Intercept' on main dataset level");
+                else if (!LookupTable)                                 // then check for functional groups sequence
+                {
+                    DcmSequenceOfItems *seq = NULL;
+                    if (docu->getSequence(DCM_SharedFunctionalGroupsSequence, seq))
+                    {
+                        DcmItem *item = seq->getItem(0);
+                        if ((item != NULL) && docu->getSequence(DCM_PixelValueTransformationSequence, seq, item))
+                        {
+                            item = seq->getItem(0);
+                            if (item != NULL)
+                            {
+                                Rescaling = (docu->getValue(DCM_RescaleIntercept, RescaleIntercept, 0, item) > 0);
+                                Rescaling &= (docu->getValue(DCM_RescaleSlope, RescaleSlope, 0, item) > 0);
+                                if (Rescaling)
+                                    DCMIMGLE_DEBUG("found 'RescaleSlope/Intercept' in 'SharedFunctionalGroupsSequence'");
+                            }
+                        }
+                    }
+                }
                 checkRescaling(pixel);
-            } else {
-                DCMIMGLE_INFO("processing XA or XRF image ... ignoring possible modality transform");
+                if (Rescaling || LookupTable)                          // check for possibly inappropriate use of MLUT
+                {
+                    /* David Clunie in comp.protocols.dicom (2012-10-28):
+                        "By the way, in general, it can be difficult to decide
+                         whether or not to apply the conceptual Modality LUT
+                         step before windowing, even if it is specified by
+                         Rescale Slope/Intercept values rather than an actual
+                         LUT. For example, in MR images to which Philips has
+                         added the rescale values, these should not be applied
+                         before their window values; likewise in PET images,
+                         especially those with GML Units and rescale values to
+                         SUV (small decimal numbers), the window values are
+                         historically usually in stored pixel values rather than
+                         SUVs.
+                         Making the correct decision may require comparing the
+                         range of possible rescaled output values (across the
+                         domain of possible input stored pixel values) with the
+                         specific window values, to see if the latter "make
+                         sense".
+                    */
+                    if (strcmp(sopClassUID, UID_MRImageStorage) == 0)
+                        DCMIMGLE_WARN("processing MR image ... applying modality transform may create unexpected result");
+                    else if (strcmp(sopClassUID, UID_PositronEmissionTomographyImageStorage) == 0)
+                        DCMIMGLE_WARN("processing PET image ... applying modality transform may create unexpected result");
+                    else if (strcmp(sopClassUID, UID_RTDoseStorage) == 0)
+                        DCMIMGLE_WARN("processing RTDOSE object ... applying modality transform may create unexpected result");
+                }
             }
-        } else {
-            DCMIMGLE_INFO("configuration flag set ... ignoring possible modality transform");
         }
         determineRepresentation(docu);
     }
@@ -188,10 +245,12 @@ int DiMonoModality::Init(const DiDocument *docu,
         AbsMinimum = pixel->getAbsMinimum();
         AbsMaximum = pixel->getAbsMaximum();
         Uint16 us;
-        if (docu->getValue(DCM_SamplesPerPixel, us) && (us != 1))
+        if (docu->getValue(DCM_SamplesPerPixel, us) > 0)
         {
-            DCMIMGLE_WARN("invalid value for 'SamplesPerPixel' (" << us << ") ... assuming 1");
-        }
+            if (us != 1)
+                DCMIMGLE_WARN("invalid value for 'SamplesPerPixel' (" << us << ") ... assuming 1");
+        } else
+            DCMIMGLE_WARN("missing value for 'SamplesPerPixel' ... assuming 1");
         return 1;
     }
     return 0;
@@ -260,126 +319,3 @@ void DiMonoModality::determineRepresentation(const DiDocument *docu)
         << DicomImageClass::getRepresentationBits(Representation) << " bits ("
         << (DicomImageClass::isRepresentationSigned(Representation) ? "signed" : "unsigned") << ")");
 }
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: dimomod.cc,v $
- * Revision 1.30  2010-10-14 13:14:18  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.29  2010-09-24 13:25:41  joergr
- * Compared names of SOP Class UIDs with 2009 edition of the DICOM standard. The
- * resulting name changes are mainly caused by the fact that the corresponding
- * SOP Class is now retired.
- *
- * Revision 1.28  2010-02-23 16:52:22  joergr
- * Added trace log message which outputs the internal representation for
- * monochrome images (number of bits and signed/unsigned).
- *
- * Revision 1.27  2009-10-28 14:26:02  joergr
- * Fixed minor issues in log output.
- *
- * Revision 1.26  2009-10-28 09:53:41  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.25  2009-04-21 08:27:30  joergr
- * Added new compatibility flag CIF_UseAbsolutePixelRange which changes the way
- * the internal representation of monochrome images is determined.
- * Added method getUsedBits() which allows for retrieving the number of bits
- * actually used to store the output data.
- *
- * Revision 1.24  2008-06-20 12:07:26  joergr
- * Added check for retired SOP Class 'X-Ray Angiographic Bi-Plane Image Storage'
- * since the Modality LUT should not be applied to the pixel data in this case.
- *
- * Revision 1.23  2007/03/16 11:51:15  joergr
- * Introduced new flag that allows to select how to handle the BitsPerTableEntry
- * value in the LUT descriptor (use, ignore or check).
- *
- * Revision 1.22  2006/08/15 16:30:11  meichel
- * Updated the code in module dcmimgle to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.21  2005/12/08 15:43:00  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.20  2005/03/09 17:37:08  joergr
- * Fixed bug in calculation of bits stored value after modality transformation.
- *
- * Revision 1.19  2003/12/17 16:18:34  joergr
- * Added new compatibility flag that allows to ignore the third value of LUT
- * descriptors and to determine the bits per table entry automatically.
- *
- * Revision 1.18  2003/12/08 17:38:27  joergr
- * Updated CVS header.
- *
- * Revision 1.17  2003/12/08 14:36:35  joergr
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- *
- * Revision 1.16  2003/05/20 09:25:08  joergr
- * Added new configuration/compatibility flag that allows to ignore the
- * modality transform stored in the dataset.
- *
- * Revision 1.15  2001/09/28 13:17:24  joergr
- * Enhanced algorithm to determine the min and max value.
- *
- * Revision 1.14  2001/06/01 15:49:58  meichel
- * Updated copyright header
- *
- * Revision 1.13  2000/12/14 13:46:45  joergr
- * Ignore modality LUT transform for XA and XRF images (report message on that
- * in verbose mode).
- *
- * Revision 1.12  2000/08/31 15:51:39  joergr
- * Corrected bug: min and max value were reversed for images with negative
- * rescale slope.
- *
- * Revision 1.11  2000/04/28 12:33:46  joergr
- * DebugLevel - global for the module - now derived from OFGlobal (MF-safe).
- *
- * Revision 1.10  2000/04/27 13:10:30  joergr
- * Dcmimgle library code now consistently uses ofConsole for error output.
- *
- * Revision 1.9  2000/03/08 16:24:31  meichel
- * Updated copyright header.
- *
- * Revision 1.8  2000/03/03 14:09:21  meichel
- * Implemented library support for redirecting error messages into memory
- *   instead of printing them to stdout/stderr for GUI applications.
- *
- * Revision 1.7  1999/05/31 12:35:58  joergr
- * Corrected bug concerning the conversion of color images to grayscale.
- *
- * Revision 1.6  1999/04/28 15:04:48  joergr
- * Introduced new scheme for the debug level variable: now each level can be
- * set separately (there is no "include" relationship).
- *
- * Revision 1.5  1999/02/03 17:41:45  joergr
- * Moved global functions maxval() and determineRepresentation() to class
- * DicomImageClass (as static methods).
- * Added member variable and related methods to store number of bits used for
- * pixel data.
- *
- * Revision 1.4  1998/12/22 13:41:04  joergr
- * Changed calculation of AbsMinimum/Maximum.
- * Removed member variable and method for isPotentiallySigned.
- *
- * Revision 1.3  1998/12/16 16:16:50  joergr
- * Added explanation string to LUT class (retrieved from dataset).
- *
- * Revision 1.2  1998/12/14 17:38:18  joergr
- * Added support for correct scaling of input/output values for grayscale
- * transformations.
- *
- * Revision 1.1  1998/11/27 16:14:35  joergr
- * Added copyright message.
- * Introduced global debug level for dcmimage module to control error output.
- * Added constructors to use external modality transformations.
- *
- * Revision 1.4  1998/05/11 14:52:33  joergr
- * Added CVS/RCS header to each file.
- *
- *
- */

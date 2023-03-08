@@ -1,6 +1,6 @@
-//
-// (C) Jan de Vaan 2007-2010, all rights reserved. See the accompanying "License.txt" for licensed use.
-//
+// 
+// (C) Jan de Vaan 2007-2010, all rights reserved. See the accompanying "License.txt" for licensed use. 
+// 
 #ifndef CHARLS_PUBLICTYPES
 #define CHARLS_PUBLICTYPES
 
@@ -17,7 +17,8 @@ enum JLS_ERROR
 	TooMuchCompressedData,
 	ImageTypeNotSupported,
 	UnsupportedBitDepthForTransform,
-	UnsupportedColorTransform
+	UnsupportedColorTransform,
+	MemoryAllocationFailure
 };
 
 

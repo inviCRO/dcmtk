@@ -1,10 +1,11 @@
+// -*- C++ -*-
 // Module:  Log4CPLUS
-// File:    nullappender.h
+// File:    nullap.h
 // Created: 6/2003
 // Author:  Tad E. Smith
 //
 //
-// Copyright 2003-2009 Tad E. Smith
+// Copyright 2003-2010 Tad E. Smith
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,24 +21,29 @@
 
 /** @file */
 
-#ifndef _LOG4CPLUS_NULL_APPENDER_HEADER_
-#define _LOG4CPLUS_NULL_APPENDER_HEADER_
+#ifndef DCMTK_LOG4CPLUS_NULL_APPENDER_HEADER_
+#define DCMTK_LOG4CPLUS_NULL_APPENDER_HEADER_
 
 #include "dcmtk/oflog/config.h"
+
+#if defined (DCMTK_LOG4CPLUS_HAVE_PRAGMA_ONCE)
+#pragma once
+#endif
+
 #include "dcmtk/oflog/appender.h"
-#include "dcmtk/oflog/helpers/property.h"
 
 
+namespace dcmtk {
 namespace log4cplus {
 
     /**
-     * Appends log events to a file.
+     * Appends log events to a file. 
      */
-    class LOG4CPLUS_EXPORT NullAppender : public Appender {
+    class DCMTK_LOG4CPLUS_EXPORT NullAppender : public Appender {
     public:
       // Ctors
         NullAppender();
-        NullAppender(const log4cplus::helpers::Properties& properties, log4cplus::tstring& error);
+        NullAppender(const log4cplus::helpers::Properties&);
 
       // Dtor
         virtual ~NullAppender();
@@ -55,6 +61,7 @@ namespace log4cplus {
     };
 
 } // end namespace log4cplus
+} // end namespace dcmtk
 
-#endif // _LOG4CPLUS_NULL_APPENDER_HEADER_
+#endif // DCMTK_LOG4CPLUS_NULL_APPENDER_HEADER_
 

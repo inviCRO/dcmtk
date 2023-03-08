@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2019, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,28 +18,24 @@
  *  Purpose:
  *    classes: SiNullProfile
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:25 $
- *  CVS/RCS Revision: $Revision: 1.5 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef SINULLPR_H
 #define SINULLPR_H
 
 #include "dcmtk/config/osconfig.h"
-#include "dcmtk/dcmsign/sisprof.h"   /* for SiSecurityProfile */
 
 #ifdef WITH_OPENSSL
 
-/** defines a "null" security profile that does not require or forbid any 
+#include "dcmtk/dcmsign/sisprof.h"   /* for SiSecurityProfile */
+
+/** defines a "null" security profile that does not require or forbid any
  *  MAC algorithm, signature algorithm, or attribute tag. This class can be
  *  used to clean up a proposed attribute list against a dataset.
+ *  @remark this class is only available if DCMTK is compiled with
+ *  OpenSSL support enabled.
  */
-class SiNullProfile: public SiSecurityProfile
+class DCMTK_DCMSIGN_EXPORT SiNullProfile: public SiSecurityProfile
 {
 public:
 
@@ -48,7 +44,7 @@ public:
 
   /// destructor
   virtual ~SiNullProfile() { }
-  
+
   /** checks whether the given MAC type can be used with this security profile.
    *  @param macType MAC type to be checked
    *  @return true if MAC type is allowable for this profile, false otherwise.
@@ -68,11 +64,18 @@ public:
   virtual OFBool isAllowableTransferSyntax(E_TransferSyntax xfer) const;
 
   /** checks whether an attribute with the given tag is required to be signed
-   *  for the current security profile.
+   *  for the current security profile if the attribute is present in the dataset
    *  @param key tag key to be checked
    *  @return true if required, false otherwise.
    */
-  virtual OFBool attributeRequired(const DcmTagKey& key) const;
+  virtual OFBool attributeRequiredIfPresent(const DcmTagKey& key) const;
+
+  /** checks whether all attributes that are required unconditionally
+   *  to be signed in this profile are included in the given tagList.
+   *  @param taglist attribute tag list
+   *  @return true if requirements for profile are fulfilled, false otherwise.
+   */
+  virtual OFBool checkRequiredAttributeList(DcmAttributeTag& tagList) const;
 
   /** checks whether an attribute with the given tag must not be signed
    *  for the current security profile.
@@ -81,29 +84,22 @@ public:
    */
   virtual OFBool attributeForbidden(const DcmTagKey& key) const;
 
+  /** some digital signature profiles specify conditions under which certain
+   *  attributes must be included into the signature.
+   *  This method allows the signature profile to inspect the dataset in order
+   *  to determine whether or not the conditions are met.
+   *  This method should be called before DcmSignature::createSignature() is executed.
+   *  @param item the dataset or item to which the signature will be added
+   *  @return status code
+   */
+  virtual OFCondition inspectSignatureDataset(DcmItem &item);
+
+  /** returns true if this signature profile only applies to main dataset level
+   *  @return OFTrue if this signature profile only applies to main dataset level, OFFalse otherwise
+   */
+  virtual OFBool mainDatasetRequired() const;
+
 };
 
 #endif
 #endif
-
-/*
- *  $Log: sinullpr.h,v $
- *  Revision 1.5  2010-10-14 13:17:25  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.4  2005-12-08 16:04:40  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.3  2003/06/04 14:21:03  meichel
- *  Simplified include structure to avoid preprocessor limitation
- *    (max 32 #if levels) on MSVC5 with STL.
- *
- *  Revision 1.2  2001/06/01 15:50:49  meichel
- *  Updated copyright header
- *
- *  Revision 1.1  2000/11/07 16:48:56  meichel
- *  Initial release of dcmsign module for DICOM Digital Signatures
- *
- *
- */
-

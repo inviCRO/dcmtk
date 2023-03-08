@@ -6,15 +6,15 @@
 \page dcmmklut dcmmklut: Create DICOM look-up tables
 \endif
 
-\section synopsis SYNOPSIS
+\section dcmmklut_synopsis SYNOPSIS
 
 \verbatim
 dcmmklut [options] dcmimg-out
 \endverbatim
 
-\section description DESCRIPTION
+\section dcmmklut_description DESCRIPTION
 
-The \b dcmmklut utility allows to create a variety of DICOM Modality,
+The \b dcmmklut utility allows one to create a variety of DICOM Modality,
 Presentation and VOI look-up tables (LUT) and is intended for the creation
 of test images.  The utility is able to read an existing DICOM image file,
 create a look up table according to the command line options, and write
@@ -36,15 +36,15 @@ In addition to the DICOM output file the LUT data can also be exported to a
 tabbed text file which allows the easy visualization of the curves with a
 common spread sheet application (e.g. Microsoft Excel).
 
-\section parameters PARAMETERS
+\section dcmmklut_parameters PARAMETERS
 
 \verbatim
 dcmimg-out  DICOM output filename
 \endverbatim
 
-\section options OPTIONS
+\section dcmmklut_options OPTIONS
 
-\subsection general_options general options
+\subsection dcmmklut_general_options general options
 \verbatim
   -h   --help
          print this help text and exit
@@ -72,7 +72,7 @@ dcmimg-out  DICOM output filename
          use config file f for the logger
 \endverbatim
 
-\subsection lut_creation_options LUT creation options
+\subsection dcmmklut_lut_creation_options LUT creation options
 \verbatim
 LUT type:
 
@@ -170,7 +170,7 @@ LUT data VR:
          write LUT Data as SS (minimal support)
 \endverbatim
 
-\subsection file_options file options
+\subsection dcmmklut_file_options file options
 \verbatim
   +Fi  --dicom-input  [f]ilename: string
          read dataset from DICOM file f
@@ -179,13 +179,13 @@ LUT data VR:
          write LUT data to tabbed text file f
 \endverbatim
 
-\section notes NOTES
+\section dcmmklut_notes NOTES
 
 Please check the DICOM standard for further restrictions on the look-up table
 structure.  Especially the number of bits per table entry might be restricted
 in particular IODs.
 
-\section logging LOGGING
+\section dcmmklut_logging LOGGING
 
 The level of logging output of the various command line tools and underlying
 libraries can be specified by the user.  By default, only errors and warnings
@@ -202,9 +202,9 @@ rotation), to syslog (Unix) or the event log (Windows) option \e --log-config
 can be used.  This configuration file also allows for directing only certain
 messages to a particular output stream and for filtering certain messages
 based on the module or application where they are generated.  An example
-configuration file is provided in <em>\<etcdir\>/logger.cfg</em>).
+configuration file is provided in <em>\<etcdir\>/logger.cfg</em>.
 
-\section command_line COMMAND LINE
+\section dcmmklut_command_line COMMAND LINE
 
 All command line tools use the following notation for parameters: square
 brackets enclose optional values (0-1), three trailing dots indicate that
@@ -213,7 +213,7 @@ multiple values are allowed (1-n), a combination of both means 0 to n values.
 Command line options are distinguished from parameters by a leading '+' or '-'
 sign, respectively.  Usually, order and position of command line options are
 arbitrary (i.e. they can appear anywhere).  However, if options are mutually
-exclusive the rightmost appearance is used.  This behaviour conforms to the
+exclusive the rightmost appearance is used.  This behavior conforms to the
 standard evaluation rules of common Unix shells.
 
 In addition, one or more command files can be specified using an '@' sign as a
@@ -222,11 +222,11 @@ is replaced by the content of the corresponding text file (multiple
 whitespaces are treated as a single separator unless they appear between two
 quotation marks) prior to any further evaluation.  Please note that a command
 file cannot contain another command file.  This simple but effective approach
-allows to summarize common combinations of options/parameters and avoids
+allows one to summarize common combinations of options/parameters and avoids
 longish and confusing command lines (an example is provided in file
 <em>\<datadir\>/dumppat.txt</em>).
 
-\section environment ENVIRONMENT
+\section dcmmklut_environment ENVIRONMENT
 
 The \b dcmmklut utility will attempt to load DICOM data dictionaries specified
 in the \e DCMDICTPATH environment variable.  By default, i.e. if the
@@ -234,7 +234,7 @@ in the \e DCMDICTPATH environment variable.  By default, i.e. if the
 <em>\<datadir\>/dicom.dic</em> will be loaded unless the dictionary is built
 into the application (default for Windows).
 
-The default behaviour should be preferred and the \e DCMDICTPATH environment
+The default behavior should be preferred and the \e DCMDICTPATH environment
 variable only used when alternative data dictionaries are required.  The
 \e DCMDICTPATH environment variable has the same format as the Unix shell
 \e PATH variable in that a colon (":") separates entries.  On Windows systems,
@@ -242,12 +242,12 @@ a semicolon (";") is used as a separator.  The data dictionary code will
 attempt to load each file specified in the \e DCMDICTPATH environment variable.
 It is an error if no data dictionary can be loaded.
 
-\section files FILES
+\section dcmmklut_files FILES
 
 <em>\<datadir\>/philips.lut</em> - sample LUT in text format
 
-\section copyright COPYRIGHT
+\section dcmmklut_copyright COPYRIGHT
 
-Copyright (C) 1998-2010 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany.
+Copyright (C) 1998-2022 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany.
 
 */

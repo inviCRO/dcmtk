@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1996-2010, OFFIS e.V.
+ *  Copyright (C) 1996-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: DicomOverlayPlane (Header)
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:27 $
- *  CVS/RCS Revision: $Revision: 1.32 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -35,10 +28,6 @@
 #include "dcmtk/ofstd/ofcast.h"
 
 #include "dcmtk/dcmimgle/diutils.h"
-
-#define INCLUDE_CSTDDEF
-#include "dcmtk/ofstd/ofstdinc.h"
-
 
 /*------------------------*
  *  forward declarations  *
@@ -56,7 +45,7 @@ class DiDocument;
 
 /** Class to handle a single overlay plane
  */
-class DiOverlayPlane
+class DCMTK_DCMIMGLE_EXPORT DiOverlayPlane
 {
 
  public:
@@ -110,7 +99,7 @@ class DiOverlayPlane
      */
     DiOverlayPlane(DiOverlayPlane *plane,
                    const unsigned int bit,
-                   Uint16 *data,
+                   const Uint16 *data,
                    Uint16 *temp,
                    const Uint16 width,
                    const Uint16 height,
@@ -324,6 +313,16 @@ class DiOverlayPlane
         return Mode;
     }
 
+    /** check whether overlay plane is a multi-frame overlay.
+     *  (see DICOM PS3.3 for definition of "Multi-frame Overlay")
+     *
+     ** @return true if plane is a multi-frame overlay, false otherwise
+     */
+    inline int isMultiframe() const
+    {
+        return MultiframeOverlay;
+    }
+
     /** check whether overlay plane is embedded in the pixel data
      *
      ** @return true if plane is embedded, false otherwise
@@ -364,14 +363,16 @@ class DiOverlayPlane
      *  Overlay plane is clipped to the area specified by the four min/max coordinates.
      *  Memory isn't handled internally and must therefore be deleted from calling program.
      *
-     ** @param  frame  number of frame
-     *  @param  xmin   x-coordinate of the top left hand corner
-     *  @param  ymin   y-coordinate of the top left hand corner
-     *  @param  xmax   x-coordinate of the bottom right hand corner
-     *  @param  ymax   y-coordinate of the bottom right hand corner
-     *  @param  bits   number of bits (stored) in the resulting array
-     *  @param  fore   foreground color used for the plane (0x00-0xff)
-     *  @param  back   transparent background color (0x00-0xff)
+     ** @param  frame      number of frame
+     *  @param  xmin       x-coordinate of the top left hand corner
+     *  @param  ymin       y-coordinate of the top left hand corner
+     *  @param  xmax       x-coordinate of the bottom right hand corner
+     *  @param  ymax       y-coordinate of the bottom right hand corner
+     *  @param  bits       number of bits (stored) in the resulting array
+     *  @param  fore       foreground color used for the plane (0..2^bits-1)
+     *  @param  back       transparent background color (0..2^bits-1)
+     *  @param  useOrigin  use overlay plane's origin for calculating the start position
+     *                     if true (default), ignore it otherwise
      *
      ** @return pointer to pixel data if successful, NULL otherwise
      */
@@ -382,7 +383,8 @@ class DiOverlayPlane
                   const Uint16 ymax,
                   const int bits,
                   const Uint16 fore,
-                  const Uint16 back);
+                  const Uint16 back,
+                  const OFBool useOrigin = OFTrue);
 
     /** create overlay plane data in (6xxx,3000) format.
      *  (1 bit allocated and stored, foreground color is 1, background color is 0,
@@ -417,11 +419,14 @@ class DiOverlayPlane
 
     /** set internal 'cursor' to a specific position
      *
-     ** @param  x  new x-coordinate to start from
-     *  @param  y  new y-coordinate to start from
+     ** @param  x          new x-coordinate to start from
+     *  @param  y          new y-coordinate to start from
+     *  @param  useOrigin  use overlay plane's origin for calculating the start position
+     *                     if true (default), ignore it otherwise
      */
     inline void setStart(const Uint16 x,
-                         const Uint16 y);
+                         const Uint16 y,
+                         const OFBool useOrigin = OFTrue);
 
 
  protected:
@@ -430,6 +435,8 @@ class DiOverlayPlane
     Uint32 NumberOfFrames;
     /// number of starting frame
     Uint16 ImageFrameOrigin;
+    /// first frame to be processed (from DicomImage constructor)
+    Uint32 FirstFrame;
 
     /// y-coordinate of overlay plane's origin
     Sint16 Top;
@@ -486,7 +493,9 @@ class DiOverlayPlane
     /// y-coordinate of first pixel in surrounding memory buffer
     unsigned int StartTop;
 
-    /// true, if overlay data in embedded in pixel data
+    /// true if overlay plane is a multi-frame overlay
+    int MultiframeOverlay;
+    /// true if overlay data is embedded in pixel data
     int EmbeddedData;
 
     /// pointer to current element of 'Data'
@@ -509,18 +518,32 @@ class DiOverlayPlane
 inline int DiOverlayPlane::reset(const unsigned long frame)
 {
     int result = 0;
-    if (Valid && (Data != NULL) && (frame >= ImageFrameOrigin) && (frame < ImageFrameOrigin + NumberOfFrames))
+    if (Valid && (Data != NULL))
     {
-        const unsigned long bits = (OFstatic_cast(unsigned long, StartLeft) + OFstatic_cast(unsigned long, StartTop) *
-            OFstatic_cast(unsigned long, Columns) + frame * OFstatic_cast(unsigned long, Rows) *
-            OFstatic_cast(unsigned long, Columns)) * OFstatic_cast(unsigned long, BitsAllocated);
-        StartBitPos = BitPos = OFstatic_cast(unsigned long, BitPosition) + bits;
-        /* distinguish between embedded and separate overlay data */
-        if (BitsAllocated == 16)
-            StartPtr = Ptr = Data + (bits >> 4);
-        else
-            StartPtr = Data;
-        result = (getRight() > 0) && (getBottom() > 0);
+        /* check for multi-frame overlay */
+        const Uint32 frameNumber = (MultiframeOverlay) ? OFstatic_cast(Uint32, FirstFrame + frame) : 0;
+        DCMIMGLE_TRACE("reset overlay plane in group 0x" << STD_NAMESPACE hex << GroupNumber << " to start position");
+        /* special case: single frame overlay for multi-frame image */
+        if (!MultiframeOverlay && (frame > 0))
+            DCMIMGLE_TRACE("  using single frame overlay for multi-frame image (see CP-1974)");
+        DCMIMGLE_TRACE("  frameNumber: " << frameNumber << " (" << FirstFrame << "+" << frame
+            << "), ImageFrameOrigin: " << ImageFrameOrigin << ", NumberOfFrames: " << NumberOfFrames);
+        if ((frameNumber >= ImageFrameOrigin) && (frameNumber < ImageFrameOrigin + NumberOfFrames))
+        {
+            const unsigned long bits = (OFstatic_cast(unsigned long, StartLeft) + OFstatic_cast(unsigned long, StartTop) *
+                OFstatic_cast(unsigned long, Columns) + (frameNumber - ImageFrameOrigin) * OFstatic_cast(unsigned long, Rows) *
+                OFstatic_cast(unsigned long, Columns)) * OFstatic_cast(unsigned long, BitsAllocated);
+            StartBitPos = BitPos = OFstatic_cast(unsigned long, BitPosition) + bits;
+            DCMIMGLE_TRACE("  StartLeft: " << StartLeft << ", StartTop: " << StartTop << ", Columns: " << Columns << ", Rows: " << Rows);
+            DCMIMGLE_TRACE("  StartBitPos: " << StartBitPos << ", BitPosition: " << BitPosition << ", BitsAllocated: " << BitsAllocated << ", bits: " << bits);
+            /* distinguish between embedded and separate overlay data */
+            if (BitsAllocated == 16)
+                StartPtr = Ptr = Data + (bits >> 4);
+            else
+                StartPtr = Data;
+            result = (getRight() > 0) && (getBottom() > 0);
+        } else
+            DCMIMGLE_TRACE("  -> overlay plane does not apply to this frame");
     }
     return result;
 }
@@ -529,159 +552,38 @@ inline int DiOverlayPlane::reset(const unsigned long frame)
 inline int DiOverlayPlane::getNextBit()
 {
     int result;
-    if (BitsAllocated == 16)                                        // optimization
-        result = OFstatic_cast(int, *(Ptr++) & (1 << BitPosition));
+    if (BitsAllocated == 16)                     // optimization
+        result = *(Ptr++) & (1 << BitPosition);
     else
     {
-        Ptr = StartPtr + (BitPos >> 4);                             // div 16
-        result = OFstatic_cast(int, *Ptr & (1 << (BitPos & 0xf)));  // mod 16
-        BitPos += BitsAllocated;                                    // next bit
+        Ptr = StartPtr + (BitPos >> 4);          // div 16
+        result = *Ptr & (1 << (BitPos & 0xf));   // mod 16
+        BitPos += BitsAllocated;                 // next bit
     }
     return result;
 }
 
 
 inline void DiOverlayPlane::setStart(const Uint16 x,
-                                     const Uint16 y)
+                                     const Uint16 y,
+                                     const OFBool useOrigin)
 {
-    if (BitsAllocated == 16)
-        Ptr = StartPtr + OFstatic_cast(unsigned long, y - Top) * OFstatic_cast(unsigned long, Columns) +
-            OFstatic_cast(unsigned long, x - Left);
-    else
-        BitPos = StartBitPos + (OFstatic_cast(unsigned long, y - Top) * OFstatic_cast(unsigned long, Columns) +
-            OFstatic_cast(unsigned long, x - Left)) * OFstatic_cast(unsigned long, BitsAllocated);
+    if (useOrigin)
+    {
+        if (BitsAllocated == 16)
+            Ptr = StartPtr + OFstatic_cast(unsigned long, y - Top) * OFstatic_cast(unsigned long, Columns) +
+                OFstatic_cast(unsigned long, x - Left);
+        else
+            BitPos = StartBitPos + (OFstatic_cast(unsigned long, y - Top) * OFstatic_cast(unsigned long, Columns) +
+                OFstatic_cast(unsigned long, x - Left)) * OFstatic_cast(unsigned long, BitsAllocated);
+    } else {
+        if (BitsAllocated == 16)
+            Ptr = StartPtr + OFstatic_cast(unsigned long, y) * OFstatic_cast(unsigned long, Columns) +
+                OFstatic_cast(unsigned long, x);
+        else
+            BitPos = StartBitPos + (OFstatic_cast(unsigned long, y) * OFstatic_cast(unsigned long, Columns) +
+                OFstatic_cast(unsigned long, x)) * OFstatic_cast(unsigned long, BitsAllocated);
+    }
 }
 
-
 #endif
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: diovpln.h,v $
- * Revision 1.32  2010-10-14 13:16:27  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.31  2010-06-16 08:10:53  joergr
- * Removed inline declaration from place() function.
- *
- * Revision 1.30  2010-06-16 07:08:08  joergr
- * Added type cast to integer variables in order to avoid compiler warnings
- * reported by VisualStudio 2008 with warning level 4 (highest).
- *
- * Revision 1.29  2010-03-01 09:08:47  uli
- * Removed some unnecessary include directives in the headers.
- *
- * Revision 1.28  2008-11-18 11:01:28  joergr
- * Fixed issue with incorrectly encoded overlay planes (wrong values for
- * OverlayBitsAllocated and OverlayBitPosition).
- *
- * Revision 1.27  2006/11/09 11:03:51  joergr
- * Fixed possible program crash when processing multi-frame overlay data stored in
- * data element OverlayData (60xx,3000).
- *
- * Revision 1.26  2005/12/08 16:48:03  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.25  2004/01/05 14:52:20  joergr
- * Removed acknowledgements with e-mail addresses from CVS log.
- *
- * Revision 1.24  2003/12/09 10:11:28  joergr
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- * Removed leading underscore characters from preprocessor symbols (reserved
- * symbols). Updated copyright header.
- *
- * Revision 1.23  2003/06/12 15:08:34  joergr
- * Fixed inconsistent API documentation reported by Doxygen.
- *
- * Revision 1.22  2002/12/09 13:32:55  joergr
- * Renamed parameter/local variable to avoid name clashes with global
- * declaration left and/or right (used for as iostream manipulators).
- *
- * Revision 1.21  2002/11/27 14:08:07  meichel
- * Adapted module dcmimgle to use of new header file ofstdinc.h
- *
- * Revision 1.20  2002/04/16 13:53:12  joergr
- * Added configurable support for C++ ANSI standard includes (e.g. streams).
- *
- * Revision 1.19  2001/09/28 13:10:32  joergr
- * Added method to extract embedded overlay planes from pixel data and store
- * them in group (6xxx,3000) format.
- *
- * Revision 1.18  2001/06/01 15:49:49  meichel
- * Updated copyright header
- *
- * Revision 1.17  2001/05/22 13:20:44  joergr
- * Enhanced checking routines for corrupt overlay data (e.g. invalid value for
- * OverlayBitsAllocated).
- *
- * Revision 1.16  2000/03/08 16:24:22  meichel
- * Updated copyright header.
- *
- * Revision 1.15  2000/02/02 11:02:39  joergr
- * Removed space characters before preprocessor directives.
- *
- * Revision 1.14  1999/10/20 10:34:06  joergr
- * Enhanced method getOverlayData to support 12 bit data for print.
- *
- * Revision 1.13  1999/09/17 12:46:59  joergr
- * Added/changed/completed DOC++ style comments in the header files.
- *
- * Revision 1.12  1999/08/25 16:41:55  joergr
- * Added new feature: Allow clipping region to be outside the image
- * (overlapping).
- *
- * Revision 1.11  1999/05/03 11:09:31  joergr
- * Minor code purifications to keep Sun CC 2.0.1 quiet.
- *
- * Revision 1.10  1999/04/29 16:46:47  meichel
- * Minor code purifications to keep DEC cxx 6 quiet.
- *
- * Revision 1.9  1999/03/24 17:20:21  joergr
- * Added/Modified comments and formatting.
- *
- * Revision 1.8  1999/03/22 08:52:18  joergr
- * Added parameter to specify (transparent) background color for method
- * getOverlayData().
- *
- * Revision 1.7  1999/02/03 17:34:36  joergr
- * Added BEGIN_EXTERN_C and END_EXTERN_C to some C includes.
- * Added support for calibration according to Barten transformation (incl.
- * a DISPLAY file describing the monitor characteristic).
- *
- * Revision 1.6  1998/12/23 13:21:29  joergr
- * Changed parameter type (long to int) to avoid warning reported by MSVC5.
- *
- * Revision 1.5  1998/12/23 11:37:42  joergr
- * Changed order of parameters for addOverlay() and getOverlayData().
- * Changed behaviour of getLabel/Description/Explanation() methods: return
- * NULL if string empty, no empty string "".
- *
- * Revision 1.4  1998/12/22 14:36:30  joergr
- * Added method to check whether plane is visible, to get plane mode and to
- * remove all planes. Set 'value' used for getOverlay/PlaneData().
- *
- * Revision 1.3  1998/12/16 16:37:51  joergr
- * Added method to export overlay planes (create 8-bit bitmap).
- * Implemented flipping and rotation of overlay planes.
- *
- * Revision 1.2  1998/12/14 17:28:18  joergr
- * Added methods to add and remove additional overlay planes (still untested).
- * Added methods to support overlay labels and descriptions.
- *
- * Revision 1.1  1998/11/27 15:45:09  joergr
- * Added copyright message.
- * Added method to detach pixel data if it is no longer needed.
- * Added methods and constructors for flipping and rotating, changed for
- * scaling and clipping.
- *
- * Revision 1.7  1998/07/01 08:39:26  joergr
- * Minor changes to avoid compiler warnings (gcc 2.8.1 with additional
- * options), e.g. add copy constructors.
- *
- * Revision 1.6  1998/05/11 14:53:26  joergr
- * Added CVS/RCS header to each file.
- *
- *
- */

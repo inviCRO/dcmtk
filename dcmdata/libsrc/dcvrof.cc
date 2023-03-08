@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2010, OFFIS e.V.
+ *  Copyright (C) 2002-2020, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,20 +17,17 @@
  *
  *  Purpose: Implementation of class DcmOtherFloat
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-20 16:44:17 $
- *  CVS/RCS Revision: $Revision: 1.7 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 
+#include "dcmtk/ofstd/ofuuid.h"
+#include "dcmtk/ofstd/ofstd.h"
+
+#include "dcmtk/dcmdata/dcjson.h"
 #include "dcmtk/dcmdata/dcvrof.h"
-#include "dcmtk/dcmdata/dcvrfl.h"
+#include "dcmtk/dcmdata/dcswap.h"
 
 
 // ********************************
@@ -71,6 +68,7 @@ OFCondition DcmOtherFloat::copyFrom(const DcmObject& rhs)
   return EC_Normal;
 }
 
+
 // ********************************
 
 
@@ -95,32 +93,121 @@ unsigned long DcmOtherFloat::getVM()
 }
 
 
-/*
- * CVS/RCS Log:
- * $Log: dcvrof.cc,v $
- * Revision 1.7  2010-10-20 16:44:17  joergr
- * Use type cast macros (e.g. OFstatic_cast) where appropriate.
- *
- * Revision 1.6  2010-10-14 13:14:10  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.5  2010-04-23 14:30:34  joergr
- * Added new method to all VR classes which checks whether the stored value
- * conforms to the VR definition and to the specified VM.
- *
- * Revision 1.4  2009-11-04 09:58:11  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.3  2008-07-17 10:31:32  onken
- * Implemented copyFrom() method for complete DcmObject class hierarchy, which
- * permits setting an instance's value from an existing object. Implemented
- * assignment operator where necessary.
- *
- * Revision 1.2  2005-12-08 15:41:58  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.1  2002/12/06 12:07:02  joergr
- * Added support for new value representation Other Float String (OF).
- *
- *
- */
+// ********************************
+
+
+OFCondition DcmOtherFloat::writeXML(STD_NAMESPACE ostream &out,
+                                    const size_t flags)
+{
+    /* always write XML start tag */
+    writeXMLStartTag(out, flags);
+    /* OF data requires special handling in the Native DICOM Model format */
+    if (flags & DCMTypes::XF_useNativeModel)
+    {
+        /* for an empty value field, we do not need to do anything */
+        if (getLengthField() > 0)
+        {
+            /* encode binary data as Base64 */
+            if (flags & DCMTypes::XF_encodeBase64)
+            {
+                out << "<InlineBinary>";
+                Uint8 *byteValues = OFstatic_cast(Uint8 *, getValue());
+                /* Base64 encoder requires big endian input data */
+                swapIfNecessary(EBO_BigEndian, gLocalByteOrder, byteValues, getLengthField(), sizeof(Float32));
+                /* update the byte order indicator variable correspondingly */
+                setByteOrder(EBO_BigEndian);
+                OFStandard::encodeBase64(out, byteValues, OFstatic_cast(size_t, getLengthField()));
+                out << "</InlineBinary>" << OFendl;
+            } else {
+                /* generate a new UID but the binary data is not (yet) written. */
+                OFUUID uuid;
+                out << "<BulkData uuid=\"";
+                uuid.print(out, OFUUID::ER_RepresentationHex);
+                out << "\"/>" << OFendl;
+            }
+        }
+    } else {
+        /* write element value (if loaded) */
+        if (valueLoaded())
+        {
+            Float32 *floatValues = NULL;
+            /* get and check 32 bit float data */
+            if (getFloat32Array(floatValues).good() && (floatValues != NULL))
+            {
+                const size_t count = getNumberOfValues();
+                /* count can be zero if we have an invalid element with less than four bytes length */
+                if (count > 0)
+                {
+                    /* increase default precision - see DcmFloatingPointSingle::print() */
+                    const STD_NAMESPACE streamsize oldPrecision = out.precision(8);
+                    /* print float values with separators */
+                    out << (*(floatValues++));
+                    for (unsigned long i = 1; i < count; i++)
+                        out << "\\" << (*(floatValues++));
+                    /* reset i/o manipulators */
+                    out.precision(oldPrecision);
+                }
+            }
+        }
+    }
+    /* always write XML end tag */
+    writeXMLEndTag(out, flags);
+    /* always report success */
+    return EC_Normal;
+}
+
+
+// ********************************
+
+
+OFCondition DcmOtherFloat::writeJson(STD_NAMESPACE ostream &out,
+                                     DcmJsonFormat &format)
+{
+    /* always write JSON Opener */
+    writeJsonOpener(out, format);
+    /* for an empty value field, we do not need to do anything */
+    if (getLengthField() > 0)
+    {
+        OFString value;
+        if (format.asBulkDataURI(getTag(), value))
+        {
+            /* return defined BulkDataURI */
+            format.printBulkDataURIPrefix(out);
+            DcmJsonFormat::printString(out, value);
+        }
+        else
+        {
+            /* encode binary data as Base64 */
+            format.printInlineBinaryPrefix(out);
+            out << "\"";
+            /* adjust byte order to little endian */
+            Uint8 *byteValues = OFstatic_cast(Uint8 *, getValue(EBO_LittleEndian));
+            OFStandard::encodeBase64(out, byteValues, OFstatic_cast(size_t, getLengthField()));
+            out << "\"";
+        }
+    }
+    /* always write JSON Closer */
+    writeJsonCloser(out, format);
+    /* always report success */
+    return EC_Normal;
+}
+
+
+// ********************************
+
+
+OFCondition DcmOtherFloat::createFloat32Array(const Uint32 numFloats,
+                                              Float32 *&floatVals)
+{
+    Uint32 bytesRequired = 0;
+    /* make sure that max length is not exceeded */
+    if (OFStandard::safeMult(numFloats, OFstatic_cast(Uint32, sizeof(Float32)), bytesRequired))
+        errorFlag = createEmptyValue(bytesRequired);
+    else
+        errorFlag = EC_ElemLengthExceeds32BitField;
+    if (errorFlag.good())
+        floatVals = OFstatic_cast(Float32 *, this->getValue());
+    else
+        floatVals = NULL;
+    return errorFlag;
+}

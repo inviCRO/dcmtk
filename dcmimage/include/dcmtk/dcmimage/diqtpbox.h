@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2010, OFFIS e.V.
+ *  Copyright (C) 2002-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,25 +17,18 @@
  *
  *  Purpose: class DcmQuantPixelBoxArray
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:30 $
- *  CVS/RCS Revision: $Revision: 1.6 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
 #ifndef DIQTPBOX_H
 #define DIQTPBOX_H
 
-
 #include "dcmtk/config/osconfig.h"
 
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CASSERT
-#include "dcmtk/ofstd/ofstdinc.h"
+#include <cstdlib>
+#include <cassert>
+
+#include "dcmtk/dcmimage/dicdefin.h"
 
 BEGIN_EXTERN_C
 #ifdef HAVE_SYS_TYPES_H
@@ -48,7 +41,7 @@ END_EXTERN_C
  *  Each object of this class represents a pixel box used in the
  *  Median Cut algorithm.
  */
-struct DcmQuantPixelBox
+struct DCMTK_DCMIMAGE_EXPORT DcmQuantPixelBox
 {
   /// index of the color histogram array where the colors represented by this box start
   int ind;
@@ -70,7 +63,7 @@ typedef DcmQuantPixelBox *DcmQuantPixelBoxPointer;
  *  to determine a color look-up table of given size for a
  *  true color image.
  */
-class DcmQuantPixelBoxArray
+class DCMTK_DCMIMAGE_EXPORT DcmQuantPixelBoxArray
 {
 public:
 
@@ -90,9 +83,9 @@ public:
   inline DcmQuantPixelBox& operator[](size_t idx)
   {
 #ifdef DEBUG
-  	assert(idx < length);
+    assert(idx < length);
 #endif
-  	return *(array[idx]);
+    return *(array[idx]);
   }
 
   /** sorts the given number of pixel boxes in the array,
@@ -119,29 +112,3 @@ private:
 
 
 #endif
-
-
-/*
- * CVS/RCS Log:
- * $Log: diqtpbox.h,v $
- * Revision 1.6  2010-10-14 13:16:30  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.5  2009-08-19 14:45:30  meichel
- * Added additional includes needed for Sun Studio 11 on Solaris.
- *
- * Revision 1.4  2005-12-08 16:01:52  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.3  2003/12/23 12:19:10  joergr
- * Updated copyright header.
- *
- * Revision 1.2  2002/11/27 14:16:56  meichel
- * Adapted module dcmimage to use of new header file ofstdinc.h
- *
- * Revision 1.1  2002/01/25 13:32:06  meichel
- * Initial release of new color quantization classes and
- *   the dcmquant tool in module dcmimage.
- *
- *
- */

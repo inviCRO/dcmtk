@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1996-2010, OFFIS e.V.
+ *  Copyright (C) 1996-2019, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Joerg Riesmeier
  *
  *  Purpose: Provides main interface to the "DICOM image toolkit"
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:25 $
- *  CVS/RCS Revision: $Revision: 1.65 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -61,7 +54,7 @@ class DiPluginFormat;
 /** Interface class for dcmimgle/dcmimage module.
  *  The main purpose of these modules is image display.
  */
-class DicomImage
+class DCMTK_DCMIMGLE_EXPORT DicomImage
 {
 
  public:
@@ -86,11 +79,12 @@ class DicomImage
 #ifndef STARVIEW
     /** constructor, use a given DcmObject
      *
-     ** @param  object  pointer to DICOM data structures
+     ** @param  object  pointer to DICOM data structures (fileformat, dataset or item).
      *                  (do not delete while referenced, i.e. while this image object or any
      *                   descendant exists; not deleted within dcmimage unless configuration flag
      *                   CIF_TakeOverExternalDataset is set - in this case do not delete it at all)
-     *  @param  xfer    transfer syntax
+     *  @param  xfer    transfer syntax of the 'object'.
+     *                  (could also be EXS_Unknown in case of fileformat or dataset)
      *  @param  flags   configuration flags (CIF_xxx, see diutils.h)
      *  @param  fstart  first frame to be processed (optional, 0 = 1st frame), all subsequent use
      *                  of parameters labeled 'frame' in this class refers to this start frame.
@@ -106,11 +100,12 @@ class DicomImage
      *  NB: This constructor ignores the Photometric Interpretation stored in the DICOM dataset
      *      and always creates a MONOCHROME2 image - useful in combination with Presentation States.
      *
-     ** @param  object     pointer to DICOM data structures
+     ** @param  object     pointer to DICOM data structures (fileformat, dataset or item).
      *                     (do not delete while referenced, i.e. while this image object or any
      *                      descendant exists; not deleted within dcmimage unless configuration flag
      *                      CIF_TakeOverExternalDataset is set - in this case do not delete it at all)
-     *  @param  xfer       transfer syntax
+     *  @param  xfer       transfer syntax of the 'object'.
+     *                     (could also be EXS_Unknown in case of fileformat or dataset)
      *  @param  slope      rescale slope (modality transformation)
      *  @param  intercept  rescale intercept (modality transformation)
      *  @param  flags      configuration flags (CIF_xxx, see diutils.h)
@@ -130,11 +125,12 @@ class DicomImage
      *  NB: This constructor ignores the Photometric Interpretation stored in the DICOM dataset
      *      and always creates a MONOCHROME2 image - useful in combination with Presentation States.
      *
-     ** @param  object       pointer to DICOM data structures
+     ** @param  object       pointer to DICOM data structures (fileformat, dataset or item).
      *                       (do not delete while referenced, i.e. while this image object or any
      *                        descendant exists; not deleted within dcmimage unless configuration flag
      *                        CIF_TakeOverExternalDataset is set - in this case do not delete it at all)
-     *  @param  xfer         transfer syntax
+     *  @param  xfer         transfer syntax of the 'object'.
+     *                       (could also be EXS_Unknown in case of fileformat or dataset)
      *  @param  data         dataset element containing modality LUT data
      *  @param  descriptor   dataset element containing modality LUT descriptor
      *  @param  explanation  dataset element containing modality LUT explanation
@@ -211,10 +207,10 @@ class DicomImage
 
     /** get number of frames.
      *  Please note that this function does not return the number of frames stored in the
-     *  DICOM file/dataset.  It rather refers to the number of frames processed by this class
-     *  (see constructors for details).
+     *  DICOM file/dataset (use getNumberOfFrames() instead).  It rather refers to the
+     *  number of frames processed by this class (see constructors for details).
      *
-     ** @return number of frames
+     ** @return number of frames processed by this class
      */
     inline unsigned long getFrameCount() const
     {
@@ -234,6 +230,18 @@ class DicomImage
             Image->getFirstFrame() : 0;
     }
 
+    /** get number of frames stored in the DICOM file/dataset.
+     *  This attribute is mandatory for DICOM images with multiple frames.
+     *  For single frame images, the value defaults to 1.
+     *
+     ** @return number of frames stored in the DICOM file/dataset
+     */
+    inline unsigned long getNumberOfFrames() const
+    {
+        return (Image != NULL) ?
+            Image->getTotalNumberOfFrames() : 0;
+    }
+
     /** get index of representative frame.
      *  This attribute is optionally stored in the DICOM dataset (type 3).
      *
@@ -243,6 +251,17 @@ class DicomImage
     {
         return (Image != NULL) ?
             Image->getRepresentativeFrame() : 0;
+    }
+
+    /** get nominal time (in milliseconds) between individual frames.
+     *  This attribute might not always be stored in the DICOM dataset.
+     *
+     ** @return nominal time between individual frames, 0 if absent
+     */
+    inline double getFrameTime() const
+    {
+        return (Image != NULL) ?
+            Image->getFrameTime() : 0;
     }
 
     /** get image width in pixels
@@ -298,8 +317,11 @@ class DicomImage
 
     /** get width height ratio (pixel aspect ratio: x/y).
      *  If present in the dataset and not overwritten using setWidthHeightRatio(), the following
-     *  attributes are supported in order to determine this value:
-     *  - Pixel Spacing, Imager Pixel Spacing, Nominal Scanned Pixel Spacing, Pixel Aspect Ratio
+     *  attributes are checked in order to determine this value:
+     *  - Pixel Spacing, Imager Pixel Spacing, Nominal Scanned Pixel Spacing, Pixel Aspect Ratio.
+     *  The first attribute (Pixel Spacing) is checked both on the main dataset level and within
+     *  the Pixel Measures Sequence of the Shared Functional Groups Sequence (if present).
+     *
      ** @return pixel aspect ratio (floating point value)
      */
     inline double getWidthHeightRatio() const
@@ -310,8 +332,10 @@ class DicomImage
 
     /** get height width ratio (pixel aspect ratio: y/x).
      *  If present in the dataset and not overwritten using setWidthHeightRatio(), the following
-     *  attributes are supported in order to determine this value:
+     *  attributes are checked in order to determine this value:
      *  - Pixel Spacing, Imager Pixel Spacing, Nominal Scanned Pixel Spacing, Pixel Aspect Ratio
+     *  The first attribute (Pixel Spacing) is checked both on the main dataset level and within
+     *  the Pixel Measures Sequence of the Shared Functional Groups Sequence (if present).
      *
      ** @return pixel aspect ratio (floating point value)
      */
@@ -380,8 +404,9 @@ class DicomImage
      *  apply VOI/PLUT transformation and (visible) overlay planes.
      *  internal memory buffer will be delete for the next getBitmap/Output operation.
      *  output data is always padded to 8, 16, 32, ... bits (bits allocated).
-     *  Supported output color models: Monochrome 2, RGB (and YCbCr_Full if flag
-     *  CIF_KeepYCbCrColorModel set).  The rendered pixel data is alway unsigned.
+     *  Supported output color models: Monochrome 2 for monochrome images and RGB
+     *  (or YCbCr_Full if flag CIF_KeepYCbCrColorModel is set) for color images.
+     *  The rendered pixel data is always unsigned.
      *
      ** @param  bits    number of bits per sample used to render the pixel data
      *                  (image depth, 1..MAX_BITS, 0 means 'bits stored' in the image)
@@ -405,8 +430,9 @@ class DicomImage
     /** render pixel data and output to given memory buffer.
      *  apply VOI/PLUT transformation and (visible) overlay planes.
      *  output data is always padded to 8, 16, 32, ... bits (bits allocated).
-     *  Supported output color models: Monochrome 2, RGB (and YCbCr_Full if flag
-     *  CIF_KeepYCbCrColorModel set).  The rendered pixel data is alway unsigned.
+     *  Supported output color models: Monochrome 2 for monochrome images and RGB
+     *  (or YCbCr_Full if flag CIF_KeepYCbCrColorModel is set) for color images.
+     *  The rendered pixel data is always unsigned.
      *
      ** @param  buffer  pointer to memory buffer (must already be allocated)
      *  @param  size    size of memory buffer (will be checked whether it is sufficient)
@@ -431,10 +457,11 @@ class DicomImage
     }
 
     /** render pixel data and return pointer to given plane (internal memory buffer).
-     *  apply VOI/PLUT transformation and (visible) overlay planes
+     *  apply VOI/PLUT transformation and (visible) overlay planes.
      *  internal memory buffer will be delete for the next getBitmap/Output operation.
-     *  Supported output color models: Monochrome 2, RGB (and YCbCr_Full if flag
-     *  CIF_KeepYCbCrColorModel set).  The rendered pixel data is alway unsigned.
+     *  Supported output color models: Monochrome 2 for monochrome images and RGB
+     *  (or YCbCr_Full if flag CIF_KeepYCbCrColorModel is set) for color images.
+     *  The rendered pixel data is always unsigned.
      *
      ** @param  plane  number of plane to be rendered
      *
@@ -477,6 +504,8 @@ class DicomImage
     }
 
     /** check whether image has given SOP class UID.
+     *
+     ** @param  uid  SOP class UID to be checked
      *
      ** @return true if image has given SOP class UID, false otherwise
      */
@@ -591,8 +620,8 @@ class DicomImage
      *
      ** @param  idx  ignore global min/max values if true (1)
      *
-     ** @return true if sucessful (1 = window has changed,
-     *                             2 = new window is the same as previous one),
+     ** @return true if successful (1 = window has changed,
+     *                              2 = new window is the same as previous one),
      *          false otherwise
      */
     inline int setMinMaxWindow(const int idx = 0)
@@ -604,7 +633,7 @@ class DicomImage
     /** set automatically calculated histogram window.
      *  possibly active VOI LUT is implicitly disabled.
      *
-     ** @param  thresh  threshhold value specifying percentage of histogram border which
+     ** @param  thresh  threshold value specifying percentage of histogram border which
      *                  shall be ignored (defaut: 5%).
      *
      ** @return true if successful, false otherwise
@@ -627,8 +656,8 @@ class DicomImage
      *  @param  height    height in pixels of the rectangular ROI (minimum: 1)
      *  @param  frame     index of the frame to be used for calculation (default: 0 = first)
      *
-     ** @return true if sucessful (1 = window has changed,
-     *                             2 = new window is the same as previous one),
+     ** @return true if successful (1 = window has changed,
+     *                              2 = new window is the same as previous one),
      *          false otherwise
      */
     inline int setRoiWindow(const unsigned long left_pos,
@@ -641,7 +670,8 @@ class DicomImage
             Image->getMonoImagePtr()->setRoiWindow(left_pos, top_pos, width, height, frame) : 0;
     }
 
-    /** set specified window (given by index to window width/center sequence stored in image file).
+    /** set specified VOI window (given by index to window width/center sequence stored in image
+     *  file).
      *  possibly active VOI LUT is implicitly disabled.
      *  NB: This function does nothing if the flag CIF_UsePresentationState is set.
      *
@@ -655,14 +685,14 @@ class DicomImage
             Image->getMonoImagePtr()->setWindow(window) : 0;
     }
 
-    /** set specified window (given by window width and center).
+    /** set specified VOI window (given by window width and center).
      *  possibly active VOI LUT is implicitly disabled.
      *
      ** @param  center  center of specified window
-     *  @param  width   width of specified window (> 0.0)
+     *  @param  width   width of specified window (>= 1.0)
      *
-     ** @return true if sucessful (1 = window has changed,
-     *                             2 = new window is the same as previous one),
+     ** @return true if successful (1 = window has changed,
+     *                              2 = new window is the same as previous one),
      *          false otherwise
      */
     inline int setWindow(const double center,
@@ -672,7 +702,7 @@ class DicomImage
             Image->getMonoImagePtr()->setWindow(center, width) : 0;
     }
 
-    /** get current window center and width values
+    /** get current VOI window as window center and width values
      *
      ** @param  center  return current window center value
      *  @param  width   return current window width value
@@ -697,8 +727,7 @@ class DicomImage
             Image->getMonoImagePtr()->getWindowCount() : 0;
     }
 
-    /** set VOI LUT function.
-     *  NB: Implementation of sigmoid transformation in "dimoopxt.h" is still missing.
+    /** set VOI LUT function
      *
      ** @param  function  type of VOI LUT function (default, linear or sigmoid).
      *                    'default' basically means the same as 'linear'.
@@ -715,7 +744,6 @@ class DicomImage
 
     /** get VOI LUT function.
      *  possible values are: EFV_Default, EFV_Linear, EFV_Sigmoid.
-     *  NB: Implementation of sigmoid transformation in "dimoopxt.h" is still missing.
      *
      ** @return currently active VOI LUT function or EFV_Default if not set
      */
@@ -958,7 +986,7 @@ class DicomImage
      ** @param  group        group number (0x60nn) of overlay plane
      *  @param  width        width of overlay plane (in pixels)
      *  @param  height       height of overlay plane (in pixels)
-     *  @param  left_pos     x coordinate of plane orgin (referring to image origin)
+     *  @param  left_pos     x coordinate of plane origin (referring to image origin)
      *  @param  top_pos      y coordinate of plane origin
      *  @param  data         overlay plane data (dcmdata element)
      *  @param  label        overlay plane label
@@ -1006,7 +1034,7 @@ class DicomImage
     }
 
     /** check whether specified overlay plane is visible/activated.
-     *  see show/hideOverlay() to modifiy the visibility status.
+     *  see show/hideOverlay() to modify the visibility status.
      *
      ** @param  plane  number (0..15) or group number (0x60nn) of overlay plane
      *  @param  idx    index of overlay group (0 = dataset, 1 = additional), default: 0
@@ -1040,7 +1068,7 @@ class DicomImage
      ** @param  plane   number (0..15) or group number (0x60nn) of overlay plane
      *  @param  mode    display mode (see 'diutils.h')
      *  @param  fore    plane's foreground color (in percent, default: 1.0)
-     *  @param  thresh  treshhold value (in percent, default: 0.5), only for EMO_TreshholdReplace
+     *  @param  thresh  threshold value (in percent, default: 0.5), only for EMO_ThresholdReplace
      *  @param  idx     index of overlay group (0 = dataset, 1 = additional), default: 0
      *
      ** @return false (0) if an error occurred, true otherwise
@@ -1086,7 +1114,7 @@ class DicomImage
      *
      ** @param  mode    display mode (see 'diutils.h')
      *  @param  fore    plane's foreground color (in percent, default: 1.0)
-     *  @param  thresh  treshhold value (in percent, default: 0.5), only for EMO_TreshholdReplace
+     *  @param  thresh  threshold value (in percent, default: 0.5), only for EMO_ThresholdReplace
      *  @param  idx     index of overlay group (0 = dataset, 1 = additional), default: 0
      *
      ** @return false (0) if an error occurred, true otherwise (1 = planes have been successfully activated,
@@ -1207,7 +1235,7 @@ class DicomImage
      ** @param  plane  number (0..15) or group number (0x60nn) of overlay plane
      *  @param  idx    index of overlay group (0 = dataset, 1 = additional), default: 0
      *
-     ** @return mode of overlay plane if succesful, EMO_Default otherwise
+     ** @return mode of overlay plane if successful, EMO_Default otherwise
      */
     inline EM_Overlay getOverlayMode(const unsigned int plane,
                                      const unsigned int idx = 0) const
@@ -1419,7 +1447,7 @@ class DicomImage
      *  NB: Clipping and interpolated scaling at the same moment is not yet fully implemented!
      *
      ** @param  left_pos     x coordinate of top left corner of area to be scaled
-     *                       (referring to image orgin, negative values create a border around the image)
+     *                       (referring to image origin, negative values create a border around the image)
      *  @param  top_pos      y coordinate of top left corner of area to be scaled
      *  @param  width        width of area to be scaled
      *  @param  height       height of area to be scaled
@@ -1450,7 +1478,7 @@ class DicomImage
      *  memory is not handled internally - must be deleted from calling program.
      *
      ** @param  left_pos  x coordinate of top left corner of area to be copied
-     *                    (referring to image orgin, negative values create a border around the image)
+     *                    (referring to image origin, negative values create a border around the image)
      *  @param  top_pos   y coordinate of top left corner of area to be copied
      *  @param  width     width of area to be copied/clipped
      *  @param  height    height of area to be copied/clipped
@@ -1529,7 +1557,7 @@ class DicomImage
      *  use the lower 24 bits (-RGB).
      *  The memory buffer can be allocated both externally (from the calling program) and internally
      *  (inside this class/module).  If the 'data' parameter is not NULL and the 'size' parameter, which
-     *  describes the size (in bytes) of the allocated buffer, is suffiently large, the bitmap is stored
+     *  describes the size (in bytes) of the allocated buffer, is sufficiently large, the bitmap is stored
      *  in this buffer.  Otherwise (i.e. 'data' is NULL) the memory is allocated internally.  Please note
      *  that in both cases the memory is not handled internally after this method has finished and,
      *  therefore, must be deleted from the calling program.
@@ -1543,7 +1571,7 @@ class DicomImage
      *                      the bottom-most of the source image (as required by the BMP file format)
      *  @param  padding     align each line to a 32-bit address if true (default)
      *
-     ** @return number of bytes allocated by the bitmap, or 0 if an error occured
+     ** @return number of bytes allocated by the bitmap, or 0 if an error occurred
      */
     unsigned long createWindowsDIB(void *&data,
                                    const unsigned long size,
@@ -1566,7 +1594,7 @@ class DicomImage
      *  @param  frame  index of frame to be converted (default: 0 = first frame)
      *  @param  bits   number of bits per pixel used for the output bitmap (8 or 32, default: 32)
      *
-     ** @return number of bytes allocated by the bitmap, or 0 if an error occured
+     ** @return number of bytes allocated by the bitmap, or 0 if an error occurred
      */
     unsigned long createJavaAWTBitmap(void *&data,
                                       const unsigned long frame = 0,
@@ -1621,8 +1649,8 @@ class DicomImage
      *    - Pixel Representation, Pixel Data
      *  Updates the following DICOM attributes (if present in the original image dataset):
      *    - Pixel Spacing and/or Pixel Aspect Ratio
-     *  Supported output color models: Monochrome 2, RGB (and YCbCr_Full if flag
-     *  CIF_KeepYCbCrColorModel set).
+     *  Supported output color models: Monochrome 2 for monochrome images and RGB
+     *  (or YCbCr_Full if flag CIF_KeepYCbCrColorModel is set) for color images.
      *
      ** @param  dataset  reference to DICOM dataset where the image attributes are stored
      *  @param  bits     number of bits per sample (image depth, 1..MAX_BITS)
@@ -1656,8 +1684,8 @@ class DicomImage
      *    - Pixel Representation, Pixel Data
      *  Updates the following DICOM attributes (if present in the original image dataset):
      *    - Pixel Spacing and/or Pixel Aspect Ratio
-     *  Supported output color models: Monochrome 1/2, RGB (and YCbCr_Full if flag
-     *  CIF_KeepYCbCrColorModel set).
+     *  Supported output color models: Monochrome 1 or 2 for monochrome images and RGB
+     *  (or YCbCr_Full if flag CIF_KeepYCbCrColorModel is set) for color images.
      *
      ** @param  dataset  reference to DICOM dataset where the image attributes are stored
      *  @param  mode     0 = determine value of BitsStored from 'used' pixel values,
@@ -1795,7 +1823,7 @@ class DicomImage
                  const int bits = 0,
                  const unsigned long frame = 0);
 
-    /** write pixel data to plugable image format file (specified by open C stream).
+    /** write pixel data to pluggable image format file (specified by open C stream).
      *  Format specific parameters may be set directly in the instantiated 'plugin' class.
      *
      ** @param  plugin  pointer to image format plugin (derived from abstract class DiPluginFormat)
@@ -1808,7 +1836,7 @@ class DicomImage
                           FILE *stream,
                           const unsigned long frame = 0);
 
-    /** write pixel data to plugable image format file (specified by filename).
+    /** write pixel data to pluggable image format file (specified by filename).
      *  Format specific parameters may be set directly in the instantiated 'plugin' class.
      *
      ** @param  plugin    pointer to image format plugin (derived from abstract class DiPluginFormat)
@@ -1882,287 +1910,3 @@ class DicomImage
 
 
 #endif
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: dcmimage.h,v $
- * Revision 1.65  2010-10-14 13:16:25  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.64  2010-10-05 15:24:02  joergr
- * Added preliminary support for VOI LUT function. Please note, however, that
- * the sigmoid transformation is not yet implemented.
- *
- * Revision 1.63  2010-03-02 09:23:32  joergr
- * Enhanced comments of some methods, e.g. processNextFrames().
- *
- * Revision 1.62  2009-11-25 15:07:00  joergr
- * Added new method which allows for processing the frames of a multi-frame
- * image successively. The getString() method now returns the Defined Term of
- * the attribute PhotometricInterpretation.
- *
- * Revision 1.61  2009-02-12 12:03:56  joergr
- * Never update value of ImagerPixelSpacing when image is scaled, use
- * PixelSpacing instead.
- * Added support for NominalScannedPixelSpacing in order to determine the pixel
- * aspect ratio (used for the new SC image IODs).
- *
- * Revision 1.60  2008-07-11 08:35:28  joergr
- * Fixed typo in API documentation.
- *
- * Revision 1.59  2008-05-20 10:02:33  joergr
- * Added new bilinear and bicubic scaling algorithms for image magnification.
- *
- * Revision 1.58  2008-05-13 09:54:40  joergr
- * Added new parameter to writeImageToDataset() in order to affect the planar
- * configuration of the output image/dataset. Changed behaviour: By default,
- * the output now uses the same planar configuration as the "original" image
- * (previously: always color-by-plane).
- *
- * Revision 1.57  2007/03/16 11:56:05  joergr
- * Introduced new flag that allows to select how to handle the BitsPerTableEntry
- * value in the LUT descriptor (use, ignore or check).
- *
- * Revision 1.56  2006/08/15 16:30:11  meichel
- * Updated the code in module dcmimgle to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.55  2006/07/10 10:52:27  joergr
- * Added support for 32-bit BMP images.
- *
- * Revision 1.54  2005/12/08 16:47:31  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.53  2005/03/09 17:33:40  joergr
- * Added mode to writeImageToDataset() which allows the value of BitsStored to
- * be determined either from 'used' or from 'possible' pixel values.
- *
- * Revision 1.52  2004/07/20 18:12:16  joergr
- * Added API method to "officially" access the internal intermediate pixel data
- * representation (e.g. to get Hounsfield Units for CT images).
- *
- * Revision 1.51  2003/12/17 16:17:29  joergr
- * Added new compatibility flag that allows to ignore the third value of LUT
- * descriptors and to determine the bits per table entry automatically.
- *
- * Revision 1.50  2003/12/11 17:22:19  joergr
- * Added comment to getOutputData/Plane() methods that the rendered pixel data
- * is always unsigned.
- *
- * Revision 1.49  2003/12/08 18:39:00  joergr
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- * Removed leading underscore characters from preprocessor symbols (reserved
- * symbols). Updated CVS header.
- *
- * Revision 1.48  2003/06/12 15:08:34  joergr
- * Fixed inconsistent API documentation reported by Doxygen.
- *
- * Revision 1.47  2003/05/20 09:24:31  joergr
- * Added method returning the number of bytes required to store a single
- * rendered frame: getOutputDataSize().
- *
- * Revision 1.46  2002/12/09 13:32:50  joergr
- * Renamed parameter/local variable to avoid name clashes with global
- * declaration left and/or right (used for as iostream manipulators).
- *
- * Revision 1.45  2002/10/21 10:09:58  joergr
- * Slightly enhanced comments for getOutputData().
- *
- * Revision 1.44  2002/08/21 09:51:43  meichel
- * Removed DicomImage and DiDocument constructors that take a DcmStream
- *   parameter
- *
- * Revision 1.43  2002/08/02 15:02:34  joergr
- * Enhanced writeFrameToDataset() routine (remove out-data DICOM attributes
- * from the dataset).
- * Added function to write the current image (not only a selected frame) to a
- * DICOM dataset.
- *
- * Revision 1.42  2002/07/19 08:24:20  joergr
- * Enhanced/corrected comments.
- *
- * Revision 1.41  2002/07/05 10:37:47  joergr
- * Added comments.
- *
- * Revision 1.40  2002/06/26 16:00:25  joergr
- * Added support for polarity flag to color images.
- * Added new method to write a selected frame to a DICOM dataset (incl. required
- * attributes from the "Image Pixel Module").
- * Added new methods to get the explanation string of stored VOI windows and
- * LUTs (not only of the currently selected VOI transformation).
- *
- * Revision 1.39  2002/01/29 17:05:49  joergr
- * Added optional flag to the "Windows DIB" methods allowing to switch off the
- * scanline padding.
- *
- * Revision 1.38  2001/11/27 18:18:20  joergr
- * Added support for plugable output formats in class DicomImage. First
- * implementation is JPEG.
- *
- * Revision 1.37  2001/11/19 12:54:29  joergr
- * Added parameter 'frame' to setRoiWindow().
- *
- * Revision 1.36  2001/11/09 16:25:13  joergr
- * Added support for Window BMP file format.
- * Enhanced and renamed createTrueColorDIB() method.
- *
- * Revision 1.35  2001/09/28 13:00:55  joergr
- * Changed default behaviour of setMinMaxWindow().
- * Added routines to get the currently active Polarity and PresentationLUTShape.
- * Added method setRoiWindow() which automatically calculates a min-max VOI
- * window for a specified rectangular region of the image.
- * Added method to extract embedded overlay planes from pixel data and store
- * them in group (6xxx,3000) format.
- * Added new flag (CIF_KeepYCbCrColorModel) which avoids conversion of YCbCr
- * color models to RGB.
- *
- * Revision 1.34  2001/06/20 15:12:49  joergr
- * Enhanced multi-frame support for command line tool 'dcm2pnm': extract all
- * or a range of frames with one call.
- *
- * Revision 1.33  2001/05/14 09:49:17  joergr
- * Added support for "1 bit output" of overlay planes; useful to extract
- * overlay planes from the pixel data and store them separately in the dataset.
- *
- * Revision 1.32  2001/05/10 16:46:26  joergr
- * Enhanced comments of some overlay related methods.
- *
- * Revision 1.31  2000/07/07 13:42:11  joergr
- * Added support for LIN OD presentation LUT shape.
- *
- * Revision 1.30  2000/06/07 14:30:26  joergr
- * Added method to set the image polarity (normal, reverse).
- *
- * Revision 1.29  2000/04/27 13:08:37  joergr
- * Dcmimgle library code now consistently uses ofConsole for error output.
- *
- * Revision 1.28  2000/03/08 16:24:13  meichel
- * Updated copyright header.
- *
- * Revision 1.27  2000/03/06 18:16:02  joergr
- * Removed inline specifier from a 'large' method (reported by Sun CC 4.2).
- *
- * Revision 1.26  1999/11/19 12:36:55  joergr
- * Added explicit type cast to avoid compiler warnings (reported by gcc
- * 2.7.2.1 on Linux).
- *
- * Revision 1.25  1999/10/20 10:32:05  joergr
- * Enhanced method getOverlayData to support 12 bit data for print.
- *
- * Revision 1.24  1999/10/06 13:26:08  joergr
- * Corrected creation of PrintBitmap pixel data: VOI windows should be applied
- * before clipping to avoid that the region outside the image (border) is also
- * windowed (this requires a new method in dcmimgle to create a DicomImage
- * with the grayscale transformations already applied).
- *
- * Revision 1.23  1999/09/17 12:06:17  joergr
- * Added/changed/completed DOC++ style comments in the header files.
- *
- * Revision 1.22  1999/09/10 08:45:17  joergr
- * Added support for CIELAB display function.
- *
- * Revision 1.21  1999/09/08 15:19:23  joergr
- * Completed implementation of setting inverse presentation LUT as needed
- * e.g. for DICOM print (invert 8->12 bits PLUT).
- *
- * Revision 1.20  1999/08/25 16:38:48  joergr
- * Allow clipping region to be outside the image (overlapping).
- *
- * Revision 1.19  1999/07/23 13:50:07  joergr
- * Added methods to set 'PixelAspectRatio'.
- * Added dummy method (no implementation yet) to create inverse LUTs.
- * Added method to create 12 bit packed bitmap data (used for grayscale print
- * storage).
- * Added method to return pointer to currently used display function.
- * Added new interpolation algorithm for scaling.
- *
- * Revision 1.18  1999/05/10 09:33:54  joergr
- * Moved dcm2pnm version definition from module dcmimgle to dcmimage.
- *
- * Revision 1.17  1999/05/03 11:09:27  joergr
- * Minor code purifications to keep Sun CC 2.0.1 quiet.
- *
- * Revision 1.16  1999/04/28 14:45:54  joergr
- * Added experimental support to create grayscale images with more than 256
- * shades of gray to be displayed on a consumer monitor (use pastel colors).
- *
- * Revision 1.15  1999/03/24 17:19:56  joergr
- * Added/Modified comments and formatting.
- *
- * Revision 1.14  1999/03/22 08:51:06  joergr
- * Added parameter to specify (transparent) background color for method
- * getOverlayData().
- * Added/Changed comments.
- *
- * Revision 1.13  1999/03/03 11:43:39  joergr
- * Changed comments.
- *
- * Revision 1.12  1999/02/11 15:35:04  joergr
- * Added routine to check whether particular grayscale values are unused in
- * the output data.
- *
- * Revision 1.11  1999/02/09 14:21:08  meichel
- * Corrected const signatures of some ctor declarations
- *
- * Revision 1.10  1999/02/08 12:37:35  joergr
- * Changed implementation of removeAllOverlays().
- * Added parameter 'idx' to some overlay methods to distinguish between
- * built-in and additional overlay planes.
- *
- * Revision 1.9  1999/02/05 16:42:22  joergr
- * Added optional parameter to method convertPValueToDDL to specify width
- * of output data (number of bits).
- *
- * Revision 1.8  1999/02/03 16:59:54  joergr
- * Added support for calibration according to Barten transformation (incl.
- * a DISPLAY file describing the monitor characteristic).
- *
- * Revision 1.7  1999/01/20 14:58:26  joergr
- * Added new output method to fill external memory buffer with rendered pixel
- * data.
- *
- * Revision 1.6  1999/01/11 09:31:20  joergr
- * Added parameter to method 'getMinMaxValues()' to return absolute minimum
- * and maximum values ('possible') in addition to actually 'used' pixel
- * values.
- *
- * Revision 1.5  1998/12/23 11:31:58  joergr
- * Changed order of parameters for addOverlay() and getOverlayData().
- *
- * Revision 1.3  1998/12/16 16:26:17  joergr
- * Added explanation string to LUT class (retrieved from dataset).
- * Added explanation string for VOI transformations.
- * Added method to export overlay planes (create 8-bit bitmap).
- * Renamed 'setNoVoiLutTransformation' method ('Voi' instead of 'VOI').
- * Removed several methods used for monochrome images only in base class
- * 'DiImage'. Introduced mechanism to use the methods directly.
- *
- * Revision 1.2  1998/12/14 17:14:07  joergr
- * Added methods to add and remove additional overlay planes (still untested).
- * Added methods to support overlay labels and descriptions.
- *
- * Revision 1.1  1998/11/27 14:50:00  joergr
- * Added copyright message.
- * Added methods to convert module defined enum types to strings.
- * Added methods to support presentation LUTs and shapes.
- * Moved type definitions to diutils.h.
- * Added constructors to use external modality transformations.
- * Added method to directly create java AWT bitmaps.
- * Added methods and constructors for flipping and rotating, changed for
- * scaling and clipping.
- *
- * Revision 1.12  1998/07/01 08:39:17  joergr
- * Minor changes to avoid compiler warnings (gcc 2.8.1 with additional
- * options), e.g. add copy constructors.
- *
- * Revision 1.11  1998/06/25 08:50:09  joergr
- * Added compatibility mode to support ACR-NEMA images and wrong
- * palette attribute tags.
- *
- * Revision 1.10  1998/05/11 14:53:07  joergr
- * Added CVS/RCS header to each file.
- *
- *
- */

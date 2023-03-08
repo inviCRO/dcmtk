@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose:
  *    classes: DcmPresentationState
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:31 $
- *  CVS/RCS Revision: $Revision: 1.15 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -50,32 +43,9 @@
 #include "dcmtk/dcmpstat/dvpstx.h"      /* for DVPSTextObject, needed by MSVC5 with STL */
 #include "dcmtk/dcmpstat/dvpsgr.h"      /* for DVPSGraphicObject, needed by MSVC5 with STL */
 
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CSTDIO
-#define INCLUDE_CSTRING
-#define INCLUDE_CMATH
-#define INCLUDE_CTIME
-#define INCLUDE_LIBC
-#define INCLUDE_UNISTD
-#include "dcmtk/ofstd/ofstdinc.h"
-
-OFLogger DCM_dcmpstatGetLogger()
-{
-    static OFLogger DCM_dcmpstatLogger = OFLog::getLogger("dcmtk.dcmpstat");
-    return DCM_dcmpstatLogger;
-}
-
-OFLogger DCM_dcmpstatDumpGetLogger()
-{
-    static OFLogger DCM_dcmpstatLogger = OFLog::getLogger("dcmtk.dcmpstat.dump");
-    return DCM_dcmpstatLogger;
-}
-
-OFLogger DCM_dcmpstatLogfileGetLogger()
-{
-    static OFLogger DCM_dcmpstatLogger = OFLog::getLogger("dcmtk.dcmpstat.logfile");
-    return DCM_dcmpstatLogger;
-}
+OFLogger DCM_dcmpstatLogger = OFLog::getLogger("dcmtk.dcmpstat");
+OFLogger DCM_dcmpstatDumpLogger = OFLog::getLogger("dcmtk.dcmpstat.dump");
+OFLogger DCM_dcmpstatLogfileLogger = OFLog::getLogger("dcmtk.dcmpstat.logfile");
 
 /* --------------- class DcmPresentationState --------------- */
 
@@ -321,125 +291,128 @@ OFCondition DcmPresentationState::read(DcmItem &dset)
   DcmUniqueIdentifier sopclassuid(DCM_SOPClassUID);
   DcmCodeString modality(DCM_Modality);
   OFString aString;
-  READ_FROM_DATASET(DcmUniqueIdentifier, sopclassuid)
-  READ_FROM_DATASET(DcmCodeString, modality)
+  READ_FROM_DATASET(DcmUniqueIdentifier, EVR_UI, sopclassuid)
+  READ_FROM_DATASET(DcmCodeString, EVR_CS, modality)
 
   if (sopclassuid.getLength() == 0)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("SOPClassUID absent or empty in presentation state");
+    DCMPSTAT_WARN("SOPClassUID absent or empty in presentation state");
   }
   else if (sopclassuid.getVM() != 1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("SOPClassUID VM != 1 in presentation state");
+    DCMPSTAT_WARN("SOPClassUID VM != 1 in presentation state");
   }
 
   if (modality.getLength() == 0)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("Modality absent or empty in presentation state");
+    DCMPSTAT_WARN("Modality absent or empty in presentation state");
   }
   else if (modality.getVM() != 1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("Modality VM != 1 in presentation state");
+    DCMPSTAT_WARN("Modality VM != 1 in presentation state");
   }
 
   sopclassuid.getOFString(aString,0);
   if (aString != UID_GrayscaleSoftcopyPresentationStateStorage)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("SOP Class UID does not match GrayscaleSoftcopyPresentationStateStorage");
+    DCMPSTAT_WARN("SOP Class UID does not match GrayscaleSoftcopyPresentationStateStorage");
   }
 
   modality.getOFString(aString,0);
   if (aString != "PR")
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("Modality does not match 'PR' for presentation state");
+    DCMPSTAT_WARN("Modality does not match 'PR' for presentation state");
   }
 
   if (result==EC_Normal)
   {
-    READ_FROM_DATASET(DcmPersonName, patientName)
-    READ_FROM_DATASET(DcmLongString, patientID)
-    READ_FROM_DATASET(DcmDate, patientBirthDate)
-    READ_FROM_DATASET(DcmCodeString, patientSex)
-    READ_FROM_DATASET(DcmUniqueIdentifier, studyInstanceUID)
-    READ_FROM_DATASET(DcmDate, studyDate)
-    READ_FROM_DATASET(DcmTime, studyTime)
-    READ_FROM_DATASET(DcmPersonName, referringPhysicianName)
-    READ_FROM_DATASET(DcmShortString, studyID)
-    READ_FROM_DATASET(DcmShortString, accessionNumber)
-    READ_FROM_DATASET(DcmUniqueIdentifier, seriesInstanceUID)
-    READ_FROM_DATASET(DcmIntegerString, seriesNumber)
-    READ_FROM_DATASET(DcmLongString, manufacturer)
-    READ_FROM_DATASET(DcmIntegerString, imageNumber)
-    READ_FROM_DATASET(DcmCodeString, presentationLabel)
-    READ_FROM_DATASET(DcmLongString, presentationDescription)
-    READ_FROM_DATASET(DcmDate, presentationCreationDate)
-    READ_FROM_DATASET(DcmTime, presentationCreationTime)
-    READ_FROM_DATASET(DcmPersonName, presentationCreatorsName)
-    READ_FROM_DATASET(DcmUniqueIdentifier, sOPInstanceUID)
-    READ_FROM_DATASET(DcmCodeString, specificCharacterSet)
-    READ_FROM_DATASET(DcmDate, instanceCreationDate)
-    READ_FROM_DATASET(DcmTime, instanceCreationTime)
-    READ_FROM_DATASET(DcmUniqueIdentifier, instanceCreatorUID)
-    READ_FROM_DATASET(DcmCodeString, shutterShape)
-    READ_FROM_DATASET(DcmIntegerString, shutterLeftVerticalEdge)
-    READ_FROM_DATASET(DcmIntegerString, shutterRightVerticalEdge)
-    READ_FROM_DATASET(DcmIntegerString, shutterUpperHorizontalEdge)
-    READ_FROM_DATASET(DcmIntegerString, shutterLowerHorizontalEdge)
-    READ_FROM_DATASET(DcmIntegerString, centerOfCircularShutter)
-    READ_FROM_DATASET(DcmIntegerString, radiusOfCircularShutter)
-    READ_FROM_DATASET(DcmIntegerString, verticesOfThePolygonalShutter)
-    READ_FROM_DATASET(DcmUnsignedShort, shutterPresentationValue)
-    READ_FROM_DATASET(DcmUnsignedShort, shutterOverlayGroup)
-    READ_FROM_DATASET(DcmUnsignedShort, imageRotation)
-    READ_FROM_DATASET(DcmCodeString, imageHorizontalFlip)
-    READ_FROM_DATASET(DcmDecimalString, rescaleIntercept)
-    READ_FROM_DATASET(DcmDecimalString, rescaleSlope)
-    READ_FROM_DATASET(DcmLongString, rescaleType)
+    READ_FROM_DATASET(DcmPersonName, EVR_PN, patientName)
+    READ_FROM_DATASET(DcmLongString, EVR_LO, patientID)
+    READ_FROM_DATASET(DcmDate, EVR_DA, patientBirthDate)
+    READ_FROM_DATASET(DcmCodeString, EVR_CS, patientSex)
+    READ_FROM_DATASET(DcmUniqueIdentifier, EVR_UI, studyInstanceUID)
+    READ_FROM_DATASET(DcmDate, EVR_DA, studyDate)
+    READ_FROM_DATASET(DcmTime, EVR_TM, studyTime)
+    READ_FROM_DATASET(DcmPersonName, EVR_PN, referringPhysicianName)
+    READ_FROM_DATASET(DcmShortString, EVR_SH, studyID)
+    READ_FROM_DATASET(DcmShortString, EVR_SH, accessionNumber)
+    READ_FROM_DATASET(DcmUniqueIdentifier, EVR_UI, seriesInstanceUID)
+    READ_FROM_DATASET(DcmIntegerString, EVR_IS, seriesNumber)
+    READ_FROM_DATASET(DcmLongString, EVR_LO, manufacturer)
+    READ_FROM_DATASET(DcmIntegerString, EVR_IS, imageNumber)
+    READ_FROM_DATASET(DcmCodeString, EVR_CS, presentationLabel)
+    READ_FROM_DATASET(DcmLongString, EVR_LO, presentationDescription)
+    READ_FROM_DATASET(DcmDate, EVR_DA, presentationCreationDate)
+    READ_FROM_DATASET(DcmTime, EVR_TM, presentationCreationTime)
+    READ_FROM_DATASET(DcmPersonName, EVR_PN, presentationCreatorsName)
+    READ_FROM_DATASET(DcmUniqueIdentifier, EVR_UI, sOPInstanceUID)
+    READ_FROM_DATASET(DcmCodeString, EVR_CS, specificCharacterSet)
+    READ_FROM_DATASET(DcmDate, EVR_DA, instanceCreationDate)
+    READ_FROM_DATASET(DcmTime, EVR_TM, instanceCreationTime)
+    READ_FROM_DATASET(DcmUniqueIdentifier, EVR_UI, instanceCreatorUID)
+    READ_FROM_DATASET(DcmCodeString, EVR_CS, shutterShape)
+    READ_FROM_DATASET(DcmIntegerString, EVR_IS, shutterLeftVerticalEdge)
+    READ_FROM_DATASET(DcmIntegerString, EVR_IS, shutterRightVerticalEdge)
+    READ_FROM_DATASET(DcmIntegerString, EVR_IS, shutterUpperHorizontalEdge)
+    READ_FROM_DATASET(DcmIntegerString, EVR_IS, shutterLowerHorizontalEdge)
+    READ_FROM_DATASET(DcmIntegerString, EVR_IS, centerOfCircularShutter)
+    READ_FROM_DATASET(DcmIntegerString, EVR_IS, radiusOfCircularShutter)
+    READ_FROM_DATASET(DcmIntegerString, EVR_IS, verticesOfThePolygonalShutter)
+    READ_FROM_DATASET(DcmUnsignedShort, EVR_US, shutterPresentationValue)
+    READ_FROM_DATASET(DcmUnsignedShort, EVR_US, shutterOverlayGroup)
+    READ_FROM_DATASET(DcmUnsignedShort, EVR_US, imageRotation)
+    READ_FROM_DATASET(DcmCodeString, EVR_CS, imageHorizontalFlip)
+    READ_FROM_DATASET(DcmDecimalString, EVR_DS, rescaleIntercept)
+    READ_FROM_DATASET(DcmDecimalString, EVR_DS, rescaleSlope)
+    READ_FROM_DATASET(DcmLongString, EVR_LO, rescaleType)
   }
 
   /* read Modality LUT Sequence */
   if (result==EC_Normal)
   {
     stack.clear();
-    if (EC_Normal == dset.search(DCM_ModalityLUTSequence, stack, ESM_fromHere, OFFalse))
+    if ((EC_Normal == dset.search(DCM_ModalityLUTSequence, stack, ESM_fromHere, OFFalse)) && (stack.top()->ident() == EVR_SQ))
     {
       seq=(DcmSequenceOfItems *)stack.top();
       if (seq->card() ==1)
       {
          item = seq->getItem(0);
          stack.clear();
-         if (EC_Normal == item->search((DcmTagKey &)modalityLUTDescriptor.getTag(),
-           stack, ESM_fromHere, OFFalse))
+         // LUTDescriptor can be US or SS. For now we only handle US.
+         if ((EC_Normal == item->search((DcmTagKey &)modalityLUTDescriptor.getTag(),
+           stack, ESM_fromHere, OFFalse)) && (stack.top()->ident() == EVR_US))
          {
            modalityLUTDescriptor = *((DcmUnsignedShort *)(stack.top()));
          }
          stack.clear();
-         if (EC_Normal == item->search((DcmTagKey &)modalityLUTExplanation.getTag(),
-           stack, ESM_fromHere, OFFalse))
+         if ((EC_Normal == item->search((DcmTagKey &)modalityLUTExplanation.getTag(),
+           stack, ESM_fromHere, OFFalse)) && (stack.top()->ident() == EVR_LO))
          {
            modalityLUTExplanation = *((DcmLongString *)(stack.top()));
          }
          stack.clear();
-         if (EC_Normal == item->search((DcmTagKey &)modalityLUTData.getTag(),
-           stack, ESM_fromHere, OFFalse))
+
+         // LUTData can be OW, US or SS. For now we only handle US.
+         if ((EC_Normal == item->search((DcmTagKey &)modalityLUTData.getTag(),
+           stack, ESM_fromHere, OFFalse)) && (stack.top()->ident() == EVR_US))
          {
            modalityLUTData = *((DcmUnsignedShort *)(stack.top()));
          }
          stack.clear();
-         if (EC_Normal == item->search((DcmTagKey &)modalityLUTType.getTag(),
-           stack, ESM_fromHere, OFFalse))
+         if ((EC_Normal == item->search((DcmTagKey &)modalityLUTType.getTag(),
+           stack, ESM_fromHere, OFFalse)) && (stack.top()->ident() == EVR_LO))
          {
            modalityLUTType = *((DcmLongString *)(stack.top()));
          }
       } else {
         result=EC_TagNotFound;
-        DCMPSTAT_INFO("Modality LUT SQ does not have exactly one item in presentation state");
+        DCMPSTAT_WARN("Modality LUT SQ does not have exactly one item in presentation state");
       }
     }
   }
@@ -461,97 +434,97 @@ OFCondition DcmPresentationState::read(DcmItem &dset)
   if (patientName.getLength() == 0)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("patientName absent or empty in presentation state");
+    DCMPSTAT_WARN("patientName absent or empty in presentation state");
   }
   else if (patientName.getVM() != 1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("patientName VM != 1 in presentation state");
+    DCMPSTAT_WARN("patientName VM != 1 in presentation state");
   }
 
   if (studyInstanceUID.getLength() == 0)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("studyInstanceUID absent or empty in presentation state");
+    DCMPSTAT_WARN("studyInstanceUID absent or empty in presentation state");
   }
   else if (studyInstanceUID.getVM() != 1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("studyInstanceUID VM != 1 in presentation state");
+    DCMPSTAT_WARN("studyInstanceUID VM != 1 in presentation state");
   }
 
   if (displayedAreaSelectionList.size() == 0)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("displayedAreaSelectionSQ absent or empty in presentation state");
+    DCMPSTAT_WARN("displayedAreaSelectionSQ absent or empty in presentation state");
   }
 
   if (imageNumber.getLength() == 0)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("instanceNumber absent or empty in presentation state");
+    DCMPSTAT_WARN("instanceNumber absent or empty in presentation state");
   }
   else if (imageNumber.getVM() != 1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("instanceNumber VM != 1 in presentation state");
+    DCMPSTAT_WARN("instanceNumber VM != 1 in presentation state");
   }
 
   if (presentationLabel.getLength() == 0)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentationLabel absent or empty in presentation state");
+    DCMPSTAT_WARN("presentationLabel absent or empty in presentation state");
   }
   else if (presentationLabel.getVM() != 1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentationLabel VM != 1 in presentation state");
+    DCMPSTAT_WARN("presentationLabel VM != 1 in presentation state");
   }
 
   if (presentationCreationDate.getLength() == 0)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentationCreationDate absent or empty in presentation state");
+    DCMPSTAT_WARN("presentationCreationDate absent or empty in presentation state");
   }
   else if (presentationCreationDate.getVM() != 1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentationCreationDate VM != 1 in presentation state");
+    DCMPSTAT_WARN("presentationCreationDate VM != 1 in presentation state");
   }
 
   if (presentationCreationTime.getLength() == 0)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentationCreationTime absent or empty in presentation state");
+    DCMPSTAT_WARN("presentationCreationTime absent or empty in presentation state");
   }
   else if (presentationCreationTime.getVM() != 1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentationCreationTime VM != 1 in presentation state");
+    DCMPSTAT_WARN("presentationCreationTime VM != 1 in presentation state");
   }
 
   if (sOPInstanceUID.getLength() == 0)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("sOPInstanceUID absent or empty in presentation state");
+    DCMPSTAT_WARN("sOPInstanceUID absent or empty in presentation state");
   }
   else if (sOPInstanceUID.getVM() != 1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("sOPInstanceUID VM != 1 in presentation state");
+    DCMPSTAT_WARN("sOPInstanceUID VM != 1 in presentation state");
   }
 
     /* if imageRotation or imageHorizontalFlip are present, then both must be present. */
     if ((imageRotation.getLength() > 0)&&(imageHorizontalFlip.getLength() == 0))
     {
       result=EC_IllegalCall;
-      DCMPSTAT_INFO("imageRotation present but imageHorizontalFlip absent or empty in presentation state");
+      DCMPSTAT_WARN("imageRotation present but imageHorizontalFlip absent or empty in presentation state");
     }
 
     if ((imageRotation.getLength() == 0)&&(imageHorizontalFlip.getLength() > 0))
     {
       result=EC_IllegalCall;
-      DCMPSTAT_INFO("imageHorizontalFlip present but imageRotation absent or empty in presentation state");
+      DCMPSTAT_WARN("imageHorizontalFlip present but imageRotation absent or empty in presentation state");
     }
 
     /* Modality LUT */
@@ -562,27 +535,27 @@ OFCondition DcmPresentationState::read(DcmItem &dset)
       if (rescaleSlope.getLength() == 0)
       {
         result=EC_IllegalCall;
-        DCMPSTAT_INFO("rescaleIntercept present but rescaleSlope absent or empty in presentation state");
+        DCMPSTAT_WARN("rescaleIntercept present but rescaleSlope absent or empty in presentation state");
       }
       else if (rescaleSlope.getVM() != 1)
       {
         result=EC_IllegalCall;
-        DCMPSTAT_INFO("rescaleIntercept present but rescaleSlope VM != 1 in presentation state");
+        DCMPSTAT_WARN("rescaleIntercept present but rescaleSlope VM != 1 in presentation state");
       }
       if (rescaleType.getLength() == 0)
       {
         result=EC_IllegalCall;
-        DCMPSTAT_INFO("rescaleIntercept present but rescaleType absent or empty in presentation state");
+        DCMPSTAT_WARN("rescaleIntercept present but rescaleType absent or empty in presentation state");
       }
       else if (rescaleType.getVM() != 1)
       {
         result=EC_IllegalCall;
-        DCMPSTAT_INFO("rescaleIntercept present but rescaleType VM != 1 in presentation state");
+        DCMPSTAT_WARN("rescaleIntercept present but rescaleType VM != 1 in presentation state");
       }
       if (rescaleIntercept.getVM() != 1)
       {
         result=EC_IllegalCall;
-        DCMPSTAT_INFO("rescaleIntercept present but VM != 1 in presentation state");
+        DCMPSTAT_WARN("rescaleIntercept present but VM != 1 in presentation state");
       }
     } else useModalityRescale = OFFalse;
     if (modalityLUTData.getLength() > 0)
@@ -592,12 +565,12 @@ OFCondition DcmPresentationState::read(DcmItem &dset)
       if (modalityLUTDescriptor.getLength() == 0)
       {
         result=EC_IllegalCall;
-        DCMPSTAT_INFO("modalityLUTData present but modalityLUTDescriptor absent or empty in presentation state");
+        DCMPSTAT_WARN("modalityLUTData present but modalityLUTDescriptor absent or empty in presentation state");
       }
       else if (modalityLUTDescriptor.getVM() != 3)
       {
         result=EC_IllegalCall;
-        DCMPSTAT_INFO("modalityLUTData present but modalityLUTDescriptor VM != 3 in presentation state");
+        DCMPSTAT_WARN("modalityLUTData present but modalityLUTDescriptor VM != 3 in presentation state");
       }
 
     } else useModalityLUT = OFFalse;
@@ -605,7 +578,7 @@ OFCondition DcmPresentationState::read(DcmItem &dset)
     if (useModalityRescale && useModalityLUT)
     {
       result=EC_IllegalCall;
-      DCMPSTAT_INFO("both modality rescale and LUT present in presentation state");
+      DCMPSTAT_WARN("both modality rescale and LUT present in presentation state");
     }
 
   } /* end result==EC_Normal */
@@ -630,7 +603,7 @@ OFCondition DcmPresentationState::read(DcmItem &dset)
       else
       {
         result=EC_IllegalCall;
-        DCMPSTAT_INFO("unknown shutter type '" << aString << "'");
+        DCMPSTAT_WARN("unknown shutter type '" << aString << "'");
       }
     }
 
@@ -639,22 +612,22 @@ OFCondition DcmPresentationState::read(DcmItem &dset)
       if ((shutterLeftVerticalEdge.getLength() == 0)||(shutterLeftVerticalEdge.getVM() != 1))
       {
         result=EC_IllegalCall;
-        DCMPSTAT_INFO("rectangular shutter used but shutterLeftVerticalEdge absent or VM != 1 in presentation state");
+        DCMPSTAT_WARN("rectangular shutter used but shutterLeftVerticalEdge absent or VM != 1 in presentation state");
       }
       if ((shutterRightVerticalEdge.getLength() == 0)||(shutterRightVerticalEdge.getVM() != 1))
       {
         result=EC_IllegalCall;
-        DCMPSTAT_INFO("rectangular shutter used but shutterRightVerticalEdge absent or VM != 1 in presentation state");
+        DCMPSTAT_WARN("rectangular shutter used but shutterRightVerticalEdge absent or VM != 1 in presentation state");
       }
       if ((shutterUpperHorizontalEdge.getLength() == 0)||(shutterUpperHorizontalEdge.getVM() != 1))
       {
         result=EC_IllegalCall;
-        DCMPSTAT_INFO("rectangular shutter used but shutterUpperHorizontalEdge absent or VM != 1 in presentation state");
+        DCMPSTAT_WARN("rectangular shutter used but shutterUpperHorizontalEdge absent or VM != 1 in presentation state");
       }
       if ((shutterLowerHorizontalEdge.getLength() == 0)||(shutterLowerHorizontalEdge.getVM() != 1))
       {
         result=EC_IllegalCall;
-        DCMPSTAT_INFO("rectangular shutter used but shutterLowerHorizontalEdge absent or VM != 1 in presentation state");
+        DCMPSTAT_WARN("rectangular shutter used but shutterLowerHorizontalEdge absent or VM != 1 in presentation state");
       }
     }
     if (useShutterCircular)
@@ -662,12 +635,12 @@ OFCondition DcmPresentationState::read(DcmItem &dset)
       if ((centerOfCircularShutter.getLength() == 0)||(centerOfCircularShutter.getVM() != 2))
       {
         result=EC_IllegalCall;
-        DCMPSTAT_INFO("circular shutter used but centerOfCircularShutter absent or VM != 2 in presentation state");
+        DCMPSTAT_WARN("circular shutter used but centerOfCircularShutter absent or VM != 2 in presentation state");
       }
       if ((radiusOfCircularShutter.getLength() == 0)||(radiusOfCircularShutter.getVM() != 1))
       {
         result=EC_IllegalCall;
-        DCMPSTAT_INFO("circular shutter used but radiusOfCircularShutter absent or VM != 1 in presentation state");
+        DCMPSTAT_WARN("circular shutter used but radiusOfCircularShutter absent or VM != 1 in presentation state");
       }
     }
     if (useShutterPolygonal)
@@ -678,7 +651,7 @@ OFCondition DcmPresentationState::read(DcmItem &dset)
           ((verticesOfThePolygonalShutter.getVM() % 2) != 0))
       {
         result=EC_IllegalCall;
-        DCMPSTAT_INFO("polygonal shutter used but verticesOfThePolygonalShutter absent or VM != 2-2n in presentation state");
+        DCMPSTAT_WARN("polygonal shutter used but verticesOfThePolygonalShutter absent or VM != 2-2n in presentation state");
       }
     }
     if (useShutterBitmap)
@@ -686,7 +659,7 @@ OFCondition DcmPresentationState::read(DcmItem &dset)
       if ((shutterOverlayGroup.getLength() == 0)||(shutterOverlayGroup.getVM() != 1))
       {
         result=EC_IllegalCall;
-        DCMPSTAT_INFO("bitmap shutter used but shutterOverlayGroup absent or VM != 1 in presentation state");
+        DCMPSTAT_WARN("bitmap shutter used but shutterOverlayGroup absent or VM != 1 in presentation state");
       }
     }
     if (useShutterRectangular || useShutterCircular || useShutterPolygonal || useShutterBitmap)
@@ -694,14 +667,14 @@ OFCondition DcmPresentationState::read(DcmItem &dset)
       if ((shutterPresentationValue.getLength() == 0)||(shutterPresentationValue.getVM() != 1))
       {
         result=EC_IllegalCall;
-        DCMPSTAT_INFO("shutter used but shutterPresentationValue absent or VM != 1 in presentation state");
+        DCMPSTAT_WARN("shutter used but shutterPresentationValue absent or VM != 1 in presentation state");
       }
     }
     /* we can either have rect/circ/poly shutter or bitmap shutter but not both */
     if (useShutterBitmap && (useShutterRectangular || useShutterCircular || useShutterPolygonal))
     {
       result=EC_IllegalCall;
-      DCMPSTAT_INFO("both bitmap and rect/circ/poly shutter specified in presentation state");
+      DCMPSTAT_WARN("both bitmap and rect/circ/poly shutter specified in presentation state");
     }
   }
 
@@ -715,11 +688,11 @@ OFCondition DcmPresentationState::read(DcmItem &dset)
       if (!overlayList.haveOverlayGroup(shuttergroup))
       {
         result=EC_IllegalCall;
-        DCMPSTAT_INFO("bitmap shutter specified but referenced overlay group missing in presentation state");
+        DCMPSTAT_WARN("bitmap shutter specified but referenced overlay group missing in presentation state");
       }
     } else {
         result=EC_IllegalCall;
-        DCMPSTAT_INFO("wrong overlay group specified for bitmap shutter in presentation state");
+        DCMPSTAT_WARN("wrong overlay group specified for bitmap shutter in presentation state");
     }
   }
 
@@ -739,13 +712,13 @@ OFCondition DcmPresentationState::read(DcmItem &dset)
   if (EC_Normal == dset.search(DCM_MaskSubtractionSequence, stack, ESM_fromHere, OFFalse))
   {
       result=EC_IllegalCall;
-      DCMPSTAT_INFO("mask module present in presentation state, but unsupported");
+      DCMPSTAT_WARN("mask module present in presentation state, but unsupported");
   }
   stack.clear();
   if (EC_Normal == dset.search(DCM_RecommendedViewingMode, stack, ESM_fromHere, OFFalse))
   {
       result=EC_IllegalCall;
-      DCMPSTAT_INFO("mask module present in presentation state, but unsupported");
+      DCMPSTAT_WARN("mask module present in presentation state, but unsupported");
   }
 
   return result;
@@ -768,13 +741,13 @@ OFCondition DcmPresentationState::createDefaultDisplayedArea(DcmItem &dset)
   OFCondition result = EC_Normal;
   DcmStack stack;
 
-  READ_FROM_DATASET(DcmUnsignedShort, rows)
-  READ_FROM_DATASET(DcmUnsignedShort, columns)
-  READ_FROM_DATASET(DcmUniqueIdentifier, sopclassUID)
-  READ_FROM_DATASET(DcmUniqueIdentifier, imageUID)
-  READ_FROM_DATASET(DcmDecimalString, imagerPixelSpacing)
-  READ_FROM_DATASET(DcmDecimalString, pixelSpacing)
-  READ_FROM_DATASET(DcmIntegerString, pixelAspectRatio)
+  READ_FROM_DATASET(DcmUnsignedShort, EVR_US, rows)
+  READ_FROM_DATASET(DcmUnsignedShort, EVR_US, columns)
+  READ_FROM_DATASET(DcmUniqueIdentifier, EVR_UI, sopclassUID)
+  READ_FROM_DATASET(DcmUniqueIdentifier, EVR_UI, imageUID)
+  READ_FROM_DATASET(DcmDecimalString, EVR_DS, imagerPixelSpacing)
+  READ_FROM_DATASET(DcmDecimalString, EVR_DS, pixelSpacing)
+  READ_FROM_DATASET(DcmIntegerString, EVR_IS, pixelAspectRatio)
 
   if (result == EC_Normal) result = columns.getUint16(cols_uint,0);
   if (result == EC_Normal) result = rows.getUint16(rows_uint,0);
@@ -843,48 +816,48 @@ OFCondition DcmPresentationState::createFromImage(
   clear(); // re-initialize Presentation State object
 
   /* copy some image attributes we will need later */
-  READ_FROM_DATASET(DcmCodeString, photometricInterpretation)
-  READ_FROM_DATASET(DcmUniqueIdentifier, sopclassUID)
-  READ_FROM_DATASET(DcmUniqueIdentifier, imageUID)
+  READ_FROM_DATASET(DcmCodeString, EVR_CS, photometricInterpretation)
+  READ_FROM_DATASET(DcmUniqueIdentifier, EVR_UI, sopclassUID)
+  READ_FROM_DATASET(DcmUniqueIdentifier, EVR_UI, imageUID)
   sopclassUID.getOFString(ofsopclassUID,0);
   imageUID.getOFString(ofimageUID,0);
 
   /* copy attributes for Patient, General Study and General Equipment
    * modules from image object. Also copy specific character set (SOP common). */
-  READ_FROM_DATASET(DcmPersonName, patientName)
-  READ_FROM_DATASET(DcmLongString, patientID)
-  READ_FROM_DATASET(DcmDate, patientBirthDate)
-  READ_FROM_DATASET(DcmCodeString, patientSex)
-  READ_FROM_DATASET(DcmUniqueIdentifier, studyInstanceUID)
-  READ_FROM_DATASET(DcmDate, studyDate)
-  READ_FROM_DATASET(DcmTime, studyTime)
-  READ_FROM_DATASET(DcmPersonName, referringPhysicianName)
-  READ_FROM_DATASET(DcmShortString, studyID)
-  READ_FROM_DATASET(DcmShortString, accessionNumber)
-  READ_FROM_DATASET(DcmLongString, manufacturer)
-  READ_FROM_DATASET(DcmCodeString, specificCharacterSet)
+  READ_FROM_DATASET(DcmPersonName, EVR_PN, patientName)
+  READ_FROM_DATASET(DcmLongString, EVR_LO, patientID)
+  READ_FROM_DATASET(DcmDate, EVR_DA, patientBirthDate)
+  READ_FROM_DATASET(DcmCodeString, EVR_CS, patientSex)
+  READ_FROM_DATASET(DcmUniqueIdentifier, EVR_UI, studyInstanceUID)
+  READ_FROM_DATASET(DcmDate, EVR_DA, studyDate)
+  READ_FROM_DATASET(DcmTime, EVR_TM, studyTime)
+  READ_FROM_DATASET(DcmPersonName, EVR_PN, referringPhysicianName)
+  READ_FROM_DATASET(DcmShortString, EVR_SH, studyID)
+  READ_FROM_DATASET(DcmShortString, EVR_SH, accessionNumber)
+  READ_FROM_DATASET(DcmLongString, EVR_LO, manufacturer)
+  READ_FROM_DATASET(DcmCodeString, EVR_CS, specificCharacterSet)
 
   /* if there is a modality rescale, copy it now.
    * Later we decide whether we want to use it.
    */
-  READ_FROM_DATASET(DcmDecimalString, rescaleIntercept)
-  READ_FROM_DATASET(DcmDecimalString, rescaleSlope)
-  READ_FROM_DATASET(DcmLongString, rescaleType)
+  READ_FROM_DATASET(DcmDecimalString, EVR_DS, rescaleIntercept)
+  READ_FROM_DATASET(DcmDecimalString, EVR_DS, rescaleSlope)
+  READ_FROM_DATASET(DcmLongString, EVR_LO, rescaleType)
 
   if ((result==EC_Normal) && shutterActivation)
   {
     /* if there is a display shutter in the image (i.e. in XA, RF, DX), copy it.
      * We never copy bitmap shutters.
      */
-    READ_FROM_DATASET(DcmCodeString, shutterShape)
-    READ_FROM_DATASET(DcmIntegerString, shutterLeftVerticalEdge)
-    READ_FROM_DATASET(DcmIntegerString, shutterRightVerticalEdge)
-    READ_FROM_DATASET(DcmIntegerString, shutterUpperHorizontalEdge)
-    READ_FROM_DATASET(DcmIntegerString, shutterLowerHorizontalEdge)
-    READ_FROM_DATASET(DcmIntegerString, centerOfCircularShutter)
-    READ_FROM_DATASET(DcmIntegerString, radiusOfCircularShutter)
-    READ_FROM_DATASET(DcmIntegerString, verticesOfThePolygonalShutter)
-    READ_FROM_DATASET(DcmUnsignedShort, shutterPresentationValue)
+    READ_FROM_DATASET(DcmCodeString, EVR_CS, shutterShape)
+    READ_FROM_DATASET(DcmIntegerString, EVR_IS, shutterLeftVerticalEdge)
+    READ_FROM_DATASET(DcmIntegerString, EVR_IS, shutterRightVerticalEdge)
+    READ_FROM_DATASET(DcmIntegerString, EVR_IS, shutterUpperHorizontalEdge)
+    READ_FROM_DATASET(DcmIntegerString, EVR_IS, shutterLowerHorizontalEdge)
+    READ_FROM_DATASET(DcmIntegerString, EVR_IS, centerOfCircularShutter)
+    READ_FROM_DATASET(DcmIntegerString, EVR_IS, radiusOfCircularShutter)
+    READ_FROM_DATASET(DcmIntegerString, EVR_IS, verticesOfThePolygonalShutter)
+    READ_FROM_DATASET(DcmUnsignedShort, EVR_US, shutterPresentationValue)
   }
 
   if ((result==EC_Normal) && presentationActivation)
@@ -892,40 +865,43 @@ OFCondition DcmPresentationState::createFromImage(
     /* if there is a Presentation LUT shape in the image (i.e. in DX), copy it.
      * We never copy presentation LUT sequences.
      */
-    READ_FROM_DATASET(DcmCodeString, presentationLUTShape)
+    READ_FROM_DATASET(DcmCodeString, EVR_CS, presentationLUTShape)
   }
 
   /* read Modality LUT Sequence */
   if (result==EC_Normal)
   {
     stack.clear();
-    if (EC_Normal == dset.search(DCM_ModalityLUTSequence, stack, ESM_fromHere, OFFalse))
+    if ((EC_Normal == dset.search(DCM_ModalityLUTSequence, stack, ESM_fromHere, OFFalse)) && (stack.top()->ident() == EVR_SQ))
     {
       seq=(DcmSequenceOfItems *)stack.top();
       if (seq->card() >0)
       {
          item = seq->getItem(0);
          stack.clear();
-         if (EC_Normal == item->search((DcmTagKey &)modalityLUTDescriptor.getTag(),
-           stack, ESM_fromHere, OFFalse))
+         // LUTDescriptor can be US or SS. For now we only handle US.
+         if ((EC_Normal == item->search((DcmTagKey &)modalityLUTDescriptor.getTag(),
+           stack, ESM_fromHere, OFFalse)) && (stack.top()->ident() == EVR_US))
          {
            modalityLUTDescriptor = *((DcmUnsignedShort *)(stack.top()));
          }
          stack.clear();
-         if (EC_Normal == item->search((DcmTagKey &)modalityLUTExplanation.getTag(),
-           stack, ESM_fromHere, OFFalse))
+         if ((EC_Normal == item->search((DcmTagKey &)modalityLUTExplanation.getTag(),
+           stack, ESM_fromHere, OFFalse)) && (stack.top()->ident() == EVR_LO))
          {
            modalityLUTExplanation = *((DcmLongString *)(stack.top()));
          }
          stack.clear();
-         if (EC_Normal == item->search((DcmTagKey &)modalityLUTData.getTag(),
-           stack, ESM_fromHere, OFFalse))
+
+         // LUTData can be OW, US or SS. For now we only handle US.
+         if ((EC_Normal == item->search((DcmTagKey &)modalityLUTData.getTag(),
+           stack, ESM_fromHere, OFFalse)) && (stack.top()->ident() == EVR_US))
          {
            modalityLUTData = *((DcmUnsignedShort *)(stack.top()));
          }
          stack.clear();
-         if (EC_Normal == item->search((DcmTagKey &)modalityLUTType.getTag(),
-           stack, ESM_fromHere, OFFalse))
+         if ((EC_Normal == item->search((DcmTagKey &)modalityLUTType.getTag(),
+           stack, ESM_fromHere, OFFalse)) && (stack.top()->ident() == EVR_LO))
          {
            modalityLUTType = *((DcmLongString *)(stack.top()));
          }
@@ -949,7 +925,7 @@ OFCondition DcmPresentationState::createFromImage(
     else if ((aString != "MONOCHROME2")&&(aString != "MONOCHROME 2"))
     {
       result = EC_IllegalCall;
-      DCMPSTAT_INFO("Wrong image photometric interpretation - not MONOCHROME1/2");
+      DCMPSTAT_WARN("Wrong image photometric interpretation - not MONOCHROME1/2");
     }
   }
 
@@ -981,7 +957,9 @@ OFCondition DcmPresentationState::createFromImage(
   if (result==EC_Normal) result = seriesInstanceUID.putString(dcmGenerateUniqueIdentifier(uid, SITE_SERIES_UID_ROOT));
   if (result==EC_Normal) result = sOPInstanceUID.putString(dcmGenerateUniqueIdentifier(uid));
   if (result==EC_Normal) result = seriesNumber.putString(DEFAULT_seriesNumber);
-  if (result==EC_Normal) result = specificCharacterSet.putString(DEFAULT_specificCharacterSet);
+
+  /* If no other character set is specified by the image, we use ISO_IR 100 as the default */
+  if ((result==EC_Normal) && (specificCharacterSet.getLength() == 0)) result = specificCharacterSet.putString(DEFAULT_specificCharacterSet);
 
   if (result==EC_Normal)
   {
@@ -995,7 +973,7 @@ OFCondition DcmPresentationState::createFromImage(
       if (aString == "INVERSE") presentationLUT.setType(DVPSP_inverse);
       if (aString == "LIN OD")
       {
-        DCMPSTAT_INFO("LIN OD found in presentation state; set to IDENTITY");
+        DCMPSTAT_WARN("LIN OD found in presentation state; set to IDENTITY");
         presentationLUT.setType(DVPSP_identity);
       }
     }
@@ -1320,7 +1298,7 @@ OFCondition DcmPresentationState::addImageReference(
   studyInstanceUID.getOFString(study,0);
   if (study != studyUID)
   {
-    DCMPSTAT_INFO("cannot add reference to image with different Study Instance UID.");
+    DCMPSTAT_WARN("cannot add reference to image with different Study Instance UID.");
     return EC_IllegalCall;
   }
   return referencedSeriesList.addImageReference(seriesUID, sopclassUID, instanceUID, frames, aetitle, filesetID, filesetUID);
@@ -1349,11 +1327,11 @@ OFCondition DcmPresentationState::addImageReference(
   Sint32 ofnumberOfFrames=0;
   DcmStack stack;
 
-  READ_FROM_DATASET(DcmIntegerString, numberOfFrames)
-  READ_FROM_DATASET(DcmUniqueIdentifier, studyUID)
-  READ_FROM_DATASET(DcmUniqueIdentifier, seriesUID)
-  READ_FROM_DATASET(DcmUniqueIdentifier, sopclassUID)
-  READ_FROM_DATASET(DcmUniqueIdentifier, imageUID)
+  READ_FROM_DATASET(DcmIntegerString, EVR_IS, numberOfFrames)
+  READ_FROM_DATASET(DcmUniqueIdentifier, EVR_UI, studyUID)
+  READ_FROM_DATASET(DcmUniqueIdentifier, EVR_UI, seriesUID)
+  READ_FROM_DATASET(DcmUniqueIdentifier, EVR_UI, sopclassUID)
+  READ_FROM_DATASET(DcmUniqueIdentifier, EVR_UI, imageUID)
 
   numberOfFrames.getSint32(ofnumberOfFrames,0);
   seriesUID.getOFString(ofseriesUID,0);
@@ -1367,7 +1345,7 @@ OFCondition DcmPresentationState::addImageReference(
   {
     for (i=0; i<ofnumberOfFrames; i++)
     {
-        if (aString.length() > 0) sprintf(buf, "\\%ld", (long)(i+1)); else sprintf(buf, "%ld", (long)(i+1));
+        if (!aString.empty()) sprintf(buf, "\\%ld", (long)(i+1)); else sprintf(buf, "%ld", (long)(i+1));
         aString += buf;
     }
     result = addImageReference(ofstudyUID.c_str(), ofseriesUID.c_str(), ofsopclassUID.c_str(),
@@ -1414,9 +1392,9 @@ OFCondition DcmPresentationState::removeImageReference(DcmItem &dset)
   OFString ofimageUID;
   DcmStack stack;
 
-  READ_FROM_DATASET(DcmUniqueIdentifier, studyUID)
-  READ_FROM_DATASET(DcmUniqueIdentifier, seriesUID)
-  READ_FROM_DATASET(DcmUniqueIdentifier, imageUID)
+  READ_FROM_DATASET(DcmUniqueIdentifier, EVR_UI, studyUID)
+  READ_FROM_DATASET(DcmUniqueIdentifier, EVR_UI, seriesUID)
+  READ_FROM_DATASET(DcmUniqueIdentifier, EVR_UI, imageUID)
 
   seriesUID.getOFString(ofseriesUID,0);
   studyInstanceUID.getOFString(ofstudyInstanceUID,0);
@@ -1597,8 +1575,8 @@ OFCondition DcmPresentationState::getPolyShutterVertex(size_t idx, Sint32& x, Si
 {
   x=0;
   y=0;
-  OFCondition result = verticesOfThePolygonalShutter.getSint32(y,2*idx);
-  if (EC_Normal==result) result = verticesOfThePolygonalShutter.getSint32(x,2*idx+1);
+  OFCondition result = verticesOfThePolygonalShutter.getSint32(y,OFstatic_cast(Uint32, 2*idx));
+  if (EC_Normal==result) result = verticesOfThePolygonalShutter.getSint32(x,OFstatic_cast(Uint32, 2*idx+1));
   return result;
 }
 
@@ -1954,357 +1932,3 @@ OFCondition DcmPresentationState::moveOverlay(size_t old_layer, size_t idx, size
   activationLayerList.removeActivation(group);
   return activationLayerList.setActivation(group, lname);
 }
-
-
-/*
- *  $Log: dcmpstat.cc,v $
- *  Revision 1.15  2010-10-14 13:14:31  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.14  2010-09-24 13:32:58  joergr
- *  Compared names of SOP Class UIDs with 2009 edition of the DICOM standard. The
- *  resulting name changes are mainly caused by the fact that the corresponding
- *  SOP Class is now retired.
- *
- *  Revision 1.13  2010-08-09 13:21:56  joergr
- *  Updated data dictionary to 2009 edition of the DICOM standard. From now on,
- *  the official "keyword" is used for the attribute name which results in a
- *  number of minor changes (e.g. "PatientsName" is now called "PatientName").
- *
- *  Revision 1.12  2010-04-29 10:36:20  joergr
- *  Fixed typo in log message.
- *
- *  Revision 1.11  2009-12-15 14:50:49  uli
- *  Fixes some issues with --logfile and the config's log options.
- *
- *  Revision 1.10  2009-11-24 14:12:58  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.9  2006-08-15 16:57:01  meichel
- *  Updated the code in module dcmpstat to correctly compile when
- *    all standard C++ classes remain in namespace std.
- *
- *  Revision 1.8  2005/12/08 15:46:14  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.7  2004/08/03 11:43:18  meichel
- *  Headers libc.h and unistd.h are now included via ofstdinc.h
- *
- *  Revision 1.6  2004/02/13 11:49:36  joergr
- *  Adapted code for changed tag names (e.g. PresentationLabel -> ContentLabel).
- *
- *  Revision 1.5  2004/02/04 15:57:48  joergr
- *  Removed acknowledgements with e-mail addresses from CVS log.
- *
- *  Revision 1.4  2003/12/18 16:37:49  meichel
- *  During creation of default presentation state from image the Modality LUT
- *    is now ignored for XA, RF and XA Biplane SOP instances
- *
- *  Revision 1.3  2003/09/05 14:30:08  meichel
- *  Introduced new API methods that allow Displayed Areas to be queried
- *    and set either relative to the image (ignoring rotation and flip) or
- *    in absolute values as defined in the standard.  Rotate and flip methods
- *    now adjust displayed areas in the presentation state.
- *
- *  Revision 1.2  2003/09/05 08:37:46  meichel
- *  Fixed minor issue that caused certain error messages during the
- *    parse process on a GSPS object to be "swallowed".
- *
- *  Revision 1.1  2003/08/27 14:57:20  meichel
- *  Splitted class DVPresentationState into a base class DcmPresentationState
- *    that does not depend on module dcmimgle and current derived class with
- *    public API identical to the previous version.
- *
- *  Revision 1.76  2003/06/04 12:30:29  meichel
- *  Added various includes needed by MSVC5 with STL
- *
- *  Revision 1.75  2003/04/14 14:28:05  meichel
- *  Added explicit typecasts in calls to pow(). Needed by Visual C++ .NET 2003.
- *
- *  Revision 1.74  2002/12/09 13:28:16  joergr
- *  Renamed parameter/local variable to avoid name clashes with global
- *  declaration left and/or right (used for as iostream manipulators).
- *
- *  Revision 1.73  2002/12/04 10:41:38  meichel
- *  Changed toolkit to use OFStandard::ftoa instead of sprintf for all
- *    double to string conversions that are supposed to be locale independent
- *
- *  Revision 1.72  2002/11/27 15:48:15  meichel
- *  Adapted module dcmpstat to use of new header file ofstdinc.h
- *
- *  Revision 1.71  2002/04/16 14:02:22  joergr
- *  Added configurable support for C++ ANSI standard includes (e.g. streams).
- *
- *  Revision 1.70  2002/01/08 10:40:58  joergr
- *  Corrected spelling of function dcmGenerateUniqueIdentifier().
- *  Changed prefix of UIDs created for series and studies (now using constants
- *  SITE_SERIES_UID_ROOT and SITE_STUDY_UID_ROOT which are supposed to be used
- *  in these cases).
- *
- *  Revision 1.69  2001/11/28 13:57:05  joergr
- *  Check return value of DcmItem::insert() statements where appropriate to
- *  avoid memory leaks when insert procedure fails.
- *
- *  Revision 1.68  2001/09/28 13:50:14  joergr
- *  Added "#include <iomanip.h>" to keep gcc 3.0 quiet.
- *
- *  Revision 1.67  2001/09/26 15:36:34  meichel
- *  Adapted dcmpstat to class OFCondition
- *
- *  Revision 1.66  2001/06/01 15:50:39  meichel
- *  Updated copyright header
- *
- *  Revision 1.65  2000/11/13 15:50:46  meichel
- *  Added dcmpstat support methods for creating image references
- *    in SR documents.
- *
- *  Revision 1.64  2000/07/12 12:49:05  joergr
- *  Added comment.
- *
- *  Revision 1.63  2000/07/03 14:04:01  joergr
- *  Fixed bug: VOI LUT transform defined per frame was not supported by the
- *  method renderPixelData().
- *
- *  Revision 1.62  2000/06/09 10:15:37  joergr
- *  Added support for rendering inverse presentation LUT into print bitmaps.
- *
- *  Revision 1.61  2000/06/08 17:39:07  joergr
- *  Corrected bug in addImageReferenceToPState().
- *
- *  Revision 1.60  2000/06/08 10:44:38  meichel
- *  Implemented Referenced Presentation LUT Sequence on Basic Film Session level.
- *    Empty film boxes (pages) are not written to file anymore.
- *
- *  Revision 1.59  2000/06/02 16:01:08  meichel
- *  Adapted all dcmpstat classes to use OFConsole for log and error output
- *
- *  Revision 1.58  2000/06/02 12:48:04  joergr
- *  Reject invalid frame numbers in method selectImageFrameNumber().
- *
- *  Revision 1.57  2000/05/31 13:02:40  meichel
- *  Moved dcmpstat macros and constants into a common header file
- *
- *  Revision 1.56  2000/05/30 14:22:14  joergr
- *  Renamed some variables to avoid compiler warnings (reported by gcc 2.9x with
- *  additional compiler flags).
- *
- *  Revision 1.55  2000/05/30 13:59:16  joergr
- *  Removed methods which were already marked as "retired".
- *  Added new function allowing to set a VOILUT created from a given gamma
- *  value.
- *
- *  Revision 1.54  2000/03/08 16:29:11  meichel
- *  Updated copyright header.
- *
- *  Revision 1.53  2000/03/03 14:14:06  meichel
- *  Implemented library support for redirecting error messages into memory
- *    instead of printing them to stdout/stderr for GUI applications.
- *
- *  Revision 1.52  2000/02/23 15:12:57  meichel
- *  Corrected macro for Borland C++ Builder 4 workaround.
- *
- *  Revision 1.51  2000/02/01 11:54:45  meichel
- *  Avoiding to include <stdlib.h> as extern "C" on Borland C++ Builder 4,
- *    workaround for bug in compiler header files.
- *
- *  Revision 1.50  1999/11/15 19:03:13  joergr
- *  Changed behaviour of method getOverlayData(): parameter 'transp' replaced by
- *  'fore' to specify the foreground color used for the overlay plane.
- *  Fixed bug concerning the setting of window center and width for the preview
- *  image.
- *
- *  Revision 1.49  1999/11/12 16:51:54  meichel
- *  Corrected creation of circular shutters, X/Y coordinates were swapped.
- *
- *  Revision 1.48  1999/10/25 18:46:07  joergr
- *  Fixed bug caused by the incorrect order of x/y coordinates for circular
- *  and polygonal shutters (the DICOM standard is somehow inconsistent in this
- *  respect).
- *
- *  Revision 1.47  1999/10/22 09:08:23  joergr
- *  Added validity check to methods setting pixel aspect ratio and pixel
- *  spacing (>0). Fixed problems with incorrect pixel spacing (0\0) stored in
- *  sample images.
- *
- *  Revision 1.46  1999/10/20 18:41:20  joergr
- *  Added explicit type cast to make MSVC happy.
- *
- *  Revision 1.45  1999/10/20 11:01:16  joergr
- *  Enhanced method getOverlayData to support 12 bit data for print.
- *  Enhanced method convertPValueToDDL to support 12 bit data for print.
- *  Added support for a down-scaled preview image of the current DICOM image
- *  (e.g. useful for online-windowing or print preview).
- *  Always use the variable 'currentImageSelectedFrame' as the frame number,
- *  not 1.
- *
- *  Revision 1.44  1999/10/19 16:24:58  meichel
- *  Corrected handling of MONOCHROME1 images when used with P-LUTs
- *
- *  Revision 1.43  1999/10/18 10:18:52  joergr
- *  Use the current display shutter P-value for the border area of print
- *  bitmaps.
- *  Switch off time consuming interpolation for implicite scaling of print
- *  bitmaps.
- *
- *  Revision 1.42  1999/10/13 14:12:02  meichel
- *  Added config file entries and access methods
- *    for user-defined VOI presets, log directory, verbatim logging
- *    and an explicit list of image display formats for each printer.
- *
- *  Revision 1.41  1999/10/07 17:22:03  meichel
- *  Reworked management of Presentation LUTs in order to create tighter
- *    coupling between Softcopy and Print.
- *
- *  Revision 1.40  1999/10/06 13:24:50  joergr
- *  Fixed bug in renderPixelData: images haven't been flipped correctly for
- *  PrintBitmap.
- *  Corrected creation of PrintBitmap pixel data: VOI windows should be applied
- *  before clipping to avoid that the region outside the image (border) is also
- *  windowed (this requires a new method in dcmimgle to create a DicomImage
- *  with the grayscale transformations already applied).
- *
- *  Revision 1.39  1999/09/30 12:04:04  joergr
- *  Corrected typos and formatting; modified comments.
- *
- *  Revision 1.38  1999/09/20 13:22:23  joergr
- *  Corrected bug with clipping of rotated print bitmaps (removed inconsistency
- *  with 90 and 270 degree rotation).
- *
- *  Revision 1.37  1999/09/17 14:29:46  meichel
- *  Moved static helper functions to new class DVPSHelper, removed some unused code.
- *
- *  Revision 1.36  1999/09/13 14:01:23  thiel
- *  correction of DEBUG code for LIN_OD
- *
- *  Revision 1.35  1999/09/10 13:07:38  thiel
- *  correction of LIN OD in createFromImage
- *
- *  Revision 1.34  1999/09/10 12:46:58  meichel
- *  Added implementations for a number of print API methods.
- *
- *  Revision 1.33  1999/09/10 09:16:44  joergr
- *  Added support for CIELAB display function. New methods to handle display
- *  functions. Old methods are marked as retired and should be removed asap.
- *
- *  Revision 1.32  1999/09/10 07:32:44  thiel
- *  Added Presentation LUT Shape LIN OD
- *
- *  Revision 1.31  1999/09/07 09:05:13  joergr
- *  Completed support for getting a print bitmap out of a pstate object.
- *
- *  Revision 1.30  1999/09/01 16:15:11  meichel
- *  Added support for requested image size to print routines
- *
- *  Revision 1.29  1999/08/31 14:01:38  meichel
- *  Fixed print image crop boundary computation problem
- *
- *  Revision 1.28  1999/08/27 15:57:51  meichel
- *  Added methods for saving hardcopy images and stored print objects
- *    either in file or in the local database.
- *
- *  Revision 1.27  1999/08/25 16:51:17  joergr
- *  Added minimal support to get a print bitmap out of a pstate object.
- *
- *  Revision 1.26  1999/07/30 13:35:01  meichel
- *  Added new classes managing Stored Print objects
- *
- *  Revision 1.25  1999/07/28 07:57:26  meichel
- *  Minor correction for VC++ 5.
- *
- *  Revision 1.24  1999/07/22 16:40:04  meichel
- *  Adapted dcmpstat data structures and API to supplement 33 letter ballot text.
- *
- *  Revision 1.23  1999/07/14 12:03:44  meichel
- *  Updated data dictionary for supplement 29, 39, 33_lb, CP packet 4 and 5.
- *    Corrected dcmtk applications for changes in attribute name constants.
- *
- *  Revision 1.22  1999/05/04 15:27:27  meichel
- *  Minor code purifications to keep gcc on OSF1 quiet.
- *
- *  Revision 1.21  1999/05/03 11:01:38  joergr
- *  Minor code purifications to keep Sun CC 2.0.1 quiet.
- *
- *  Revision 1.20  1999/04/28 11:34:29  meichel
- *  When creating a presentation state for an image, modality rescale/slope
- *    without rescale type is handled now in a more lenient way.
- *
- *  Revision 1.19  1999/04/27 11:26:01  joergr
- *  Added method to check whether current image is inverse or not.
- *
- *  Revision 1.18  1999/03/22 09:52:42  meichel
- *  Reworked data dictionary based on the 1998 DICOM edition and the latest
- *    supplement versions. Corrected dcmtk applications for minor changes
- *    in attribute name constants.
- *
- *  Revision 1.17  1999/03/22 09:06:48  joergr
- *  Added parameter to get value of (transparent) background color for method
- *  getOverlayData.
- *
- *  Revision 1.16  1999/03/03 17:58:07  joergr
- *  Changed implementation of invertImage(): set modify flag for all plut types.
- *
- *  Revision 1.15  1999/03/03 14:02:03  joergr
- *  Changed implementation of invertImage() to avoid compiler errors on MSVC5
- *  ('return' has to be last statement).
- *
- *  Revision 1.14  1999/03/03 13:32:34  joergr
- *  Added method to invert an image by changing the presentation state LUT or
- *  shape.
- *  Changed implementation of method 'getOverlayData()': now conversion from
- *  P-value to DDL is implictly performed and the correct P-value for the related
- *  layer is used.
- *
- *  Revision 1.13  1999/02/25 18:41:42  joergr
- *  Added method to fill pixel data into an externally handled storage area.
- *  Added initialization of local variable to avoid compiler warnings (reported
- *  by gcc 2.7.2.1 on Linux).
- *
- *  Revision 1.12  1999/02/23 11:49:05  joergr
- *  Corrected bug: shutters were not saved correctly (sometimes even ignored).
- *
- *  Revision 1.11  1999/02/18 11:36:40  meichel
- *  Added new method convertPValueToDDL() to DcmPresentationState
- *    that maps P-Values to DDLs.
- *
- *  Revision 1.10  1999/02/17 10:05:35  meichel
- *  Moved creation of Display Function object from DcmPresentationState to
- *    DVInterface to avoid unnecessary re-reads.
- *
- *  Revision 1.9  1999/02/09 15:59:09  meichel
- *  Implemented bitmap shutter activation amd method for
- *    exchanging graphic layers.
- *
- *  Revision 1.8  1999/02/05 17:45:39  meichel
- *  Added config file entry for monitor characteristics file.  Monitor charac-
- *    teristics are passed to dcmimage if present to activate Barten transform.
- *
- *  Revision 1.7  1999/01/18 17:30:36  meichel
- *  Now preventing VOI Windows with a width <= 0.0.  Presentation label and
- *    creator's name are now correctly set.
- *
- *  Revision 1.6  1999/01/15 17:32:59  meichel
- *  added methods to DcmPresentationState allowing to access the image
- *    references in the presentation state.  Also added methods allowing to
- *    get the width and height of the attached image.
- *
- *  Revision 1.5  1999/01/11 13:35:51  meichel
- *  added new methods getImageAspectRatio, getImageMinMaxPixelRange and
- *    getImageMinMaxPixelValue to class DcmPresentationState.
- *
- *  Revision 1.4  1998/12/23 14:02:27  meichel
- *  Updated for changed interfaces in dcmimage overlays.
- *    Fixed bug affecting overlay origin delivered to dcmimage.
- *
- *  Revision 1.3  1998/12/22 17:57:18  meichel
- *  Implemented Presentation State interface for overlays,
- *    VOI LUTs, VOI windows, curves. Added test program that
- *    allows to add curve data to DICOM images.
- *
- *  Revision 1.2  1998/12/14 16:10:48  meichel
- *  Implemented Presentation State interface for graphic layers,
- *    text and graphic annotations, presentation LUTs.
- *
- *  Revision 1.1  1998/11/27 14:50:47  meichel
- *  Initial Release.
- *
- */

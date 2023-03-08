@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2009-2010, OFFIS e.V.
+ *  Copyright (C) 2009-2019, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,94 +17,72 @@
  *
  *  Purpose: test programm for class OFMap
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:15 $
- *  CVS/RCS Revision: $Revision: 1.2 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"
 
-#define INCLUDE_CASSERT
-#include "dcmtk/ofstd/ofstdinc.h"
+#define OFTEST_OFSTD_ONLY
+#include "dcmtk/ofstd/oftest.h"
 #include "dcmtk/ofstd/ofmap.h"
-#include "dcmtk/ofstd/ofconsol.h"
 
 
-int main()
+OFTEST(ofstd_OFMap)
 {
     OFMap<int, int> m;
     OFMap<int, int>::iterator it;
+    int i;
 
     // Fill a map with some entries
-    for (int i = 1; i <= 6; ++i)
+    for (i = 1; i <= 6; ++i)
         m[i] = i;
 
-#define NEXT(n)                 \
-    do                           \
-    {                            \
-        assert(m[n] == n);       \
-        assert(it->first == n);  \
-        assert(it->second == n); \
-        it++;                    \
-    } while (0)
-
-    // and verify they where really added
-    assert(m.size() == 6);
+    // and verify they were really added
+    OFCHECK_EQUAL(m.size(), 6);
 
     it = m.begin();
-    assert(it != m.end());
+    OFCHECK(it != m.end());
 
-    NEXT(1);
-    NEXT(2);
-    NEXT(3);
-    NEXT(4);
-    NEXT(5);
-    NEXT(6);
-#undef NEXT
+    for (i = 1; i <= 6; ++i)
+    {
+        OFCHECK_EQUAL(m[i], i);
+        OFCHECK_EQUAL(it->first, i);
+        OFCHECK_EQUAL(it->second, i);
+        it++;
+    }
 
-    assert(it == m.end());
+    OFCHECK(it == m.end());
 
     // Now check if removing "4" really removes it
     it = m.find(4);
-    assert(it != m.end());
+    OFCHECK(it != m.end());
     m.erase(it);
-    assert(m.find(4) == m.end());
+    OFCHECK(m.find(4) == m.end());
 
     // Do the same again but using a different function for removing "5"
-    assert(m.find(5) != m.end());
+    OFCHECK(m.find(5) != m.end());
     m.erase(5);
-    assert(m.find(5) == m.end());
+    OFCHECK(m.find(5) == m.end());
 
     // Now remove a range of objects by removing 1 and 2
-    assert(m.size() == 4);
+    OFCHECK_EQUAL(m.size(), 4);
     m.erase(m.find(1), m.find(3));
-    assert(m.size() == 2);
-    assert(m.find(2) == m.end());
+    OFCHECK_EQUAL(m.size(), 2);
+    OFCHECK(m.find(2) == m.end());
 
-    assert(m.size() == 2);
-    assert(m[3] == 3);
+    OFCHECK_EQUAL(m.size(), 2);
+    OFCHECK_EQUAL(m[3], 3);
 
-    COUT << "Everything is ok" << OFendl; // ... or assert() is disabled
-
-    return 0;
+    // Check whether map is sorted
+    m.clear();
+    // Insert values in reverse order
+    for (i = 0; i < 6 ; ++i)
+        m[6 - i] = 6 - i;
+    // Check all elements are stored in sorted order
+    OFCHECK_EQUAL(m.size(), 6);
+    it = m.begin();
+    for (i = 1; i <= 6; ++i)
+    {
+        OFCHECK((*it).second == i);
+        it++;
+    }
 }
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: tmap.cc,v $
- * Revision 1.2  2010-10-14 13:15:15  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.1  2009-09-29 13:59:34  uli
- * Fix an invalid iterator use in OFMap. A iterator was used after it was passed
- * to erase().
- * Add a test case which verifies some of OFMap's implementation.
- *
- *
- */

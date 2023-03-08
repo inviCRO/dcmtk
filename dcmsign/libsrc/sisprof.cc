@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2019, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose:
  *    classes: SiSecurityProfile
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:38 $
- *  CVS/RCS Revision: $Revision: 1.8 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"
@@ -36,6 +29,8 @@
 #include "dcmtk/dcmdata/dcvrat.h"    /* for DcmAttributeTag */
 #include "dcmtk/dcmsign/simac.h"     /* for SiMAC */
 #include "dcmtk/dcmsign/sialgo.h"    /* for SiAlgorithm */
+
+#include "dcmtk/dcmdata/dcdeftag.h"
 
 OFBool SiSecurityProfile::isAllowableMAC(const SiMAC& mac) const
 {
@@ -51,32 +46,65 @@ OFBool SiSecurityProfile::isAllowableAlgorithm(const SiAlgorithm& algo) const
 
 OFCondition SiSecurityProfile::updateAttributeList(DcmItem &item, DcmAttributeTag& tagList)
 {
-  OFCondition result = EC_Normal;
   unsigned long card = item.card();
   if (card == 0)
   {
     // nothing to sign
     tagList.clear();
-    return result;
+    return SI_EC_DatasetEmpty;
   }
+
+  OFCondition result = EC_Normal;
   unsigned long maxArray = 2*card;
   Uint16 *array = new Uint16[maxArray];
   if (array == NULL) return EC_MemoryExhausted;
-  unsigned long i=0;  
+  unsigned long i=0;
   for (i=0; i<maxArray; i++) array[i]=0;
   DcmElement *elem = NULL;
 
-  // for all elements in the dataset, check if we want to have them in the list  
+  // for all elements in the dataset, check if we want to have them in the list
   for (i=0; i<card; i++)
   {
     elem = item.getElement(i);
-    const DcmTagKey& key = elem->getTag();
-    if (key.isSignableTag())
+    const DcmTag& key = elem->getTag();
+
+    if (containsTag(tagList, key))
     {
-      if ((attributeRequired(key))||((containsTag(tagList, key))&&(! attributeForbidden(key))))
+      // tag is already in the list of elements to be signed. Check if this is permitted
+      if (elem->isSignable() && !attributeForbidden(key))
       {
-      	array[2*i] = key.getGroup();
-      	array[2*i+1] = key.getElement();
+        array[2*i] = key.getGroup();
+        array[2*i+1] = key.getElement();
+      }
+      else if (attributeForbidden(key))
+      {
+        DcmTag tag(key);
+        DCMSIGN_INFO("List of attributes to be signed contains element forbidden by signature profile: " << tag << " " << tag.getTagName() );
+        result = SI_EC_AttributeNotSignable;
+      }
+      else
+      {
+        DcmTag tag(key);
+        DCMSIGN_INFO("List of attributes to be signed contains unsignable element " << tag << " " << tag.getTagName() );
+        result = SI_EC_AttributeNotSignable;
+      }
+    }
+    else
+    {
+      // tag is not in the list of elements to be signed. Check if we should include it
+      if (attributeRequiredIfPresent(key))
+      {
+        if (elem->isSignable())
+        {
+          array[2*i] = key.getGroup();
+          array[2*i+1] = key.getElement();
+        }
+        else
+        {
+          DcmTag tag(key);
+          DCMSIGN_INFO("List of attributes to be signed according to signature profile contains unsignable element " << tag << " " << tag.getTagName() );
+          result = SI_EC_AttributeNotSignable;
+        }
       }
     }
   }
@@ -92,19 +120,108 @@ OFCondition SiSecurityProfile::updateAttributeList(DcmItem &item, DcmAttributeTa
       array [j++] = array[i++];
     } else i += 2;
   }
-  
+
   // now copy nonzero entries from array to tagList
   tagList.clear();
-  if (j > 0)
+  if (j > 0 && result.good())
   {
     result = tagList.putUint16Array(array, j>>1);
   }
+  delete[] array;
+
+  if (result.good())
+  {
+    if (!checkRequiredAttributeList(tagList))
+    {
+      result = SI_EC_RequiredAttributeMissing;
+    }
+  }
+
+  return result;
+}
+
+
+OFCondition SiSecurityProfile::createAttributeList(DcmItem &item, DcmAttributeTag& tagList)
+{
+  unsigned long card = item.card();
+  if (card == 0) return SI_EC_DatasetEmpty;
+
+  OFCondition result = EC_Normal;
+  unsigned long maxArray = 2*card;
+  Uint16 *array = new Uint16[maxArray];
+  if (array == NULL) return EC_MemoryExhausted;
+  unsigned long i=0;
+  for (i=0; i<maxArray; i++) array[i]=0;
+  DcmElement *elem = NULL;
+
+  // for all elements in the dataset, check if we want to have them in the list
+  for (i=0; i<card; i++)
+  {
+    elem = item.getElement(i);
+    const DcmTag& key = elem->getTag();
+
+    if (attributeRequiredIfPresent(key))
+    {
+      // attribute is present and required
+      if (elem->isSignable())
+      {
+        array[2*i] = key.getGroup();
+        array[2*i+1] = key.getElement();
+      }
+      else
+      {
+        DcmTag tag(key);
+        DCMSIGN_INFO("List of attributes to be signed according to signature profile contains unsignable element " << tag << " " << tag.getTagName() );
+        result = SI_EC_AttributeNotSignable;
+      }
+    }
+    else
+    {
+      // attribute is not required. Include it if permitted, ignore it otherwise.
+      if (elem->isSignable() && !attributeForbidden(key))
+      {
+        array[2*i] = key.getGroup();
+        array[2*i+1] = key.getElement();
+      }
+    }
+  }
+
+  // pack array
+  unsigned long j=0;
+  i = 0;
+  while (i < maxArray)
+  {
+    if (array[i] > 0)
+    {
+      array [j++] = array[i++];
+      array [j++] = array[i++];
+    } else i += 2;
+  }
+
+  // now copy nonzero entries from array to tagList
+  tagList.clear();
+  if (j > 0 && result.good())
+  {
+    result = tagList.putUint16Array(array, j>>1);
+  }
+  delete[] array;
+
+  if (result.good())
+  {
+    if (!checkRequiredAttributeList(tagList))
+    {
+      result = SI_EC_RequiredAttributeMissing;
+    }
+  }
+
   return result;
 }
 
 
 OFBool SiSecurityProfile::checkAttributeList(DcmItem &item, DcmAttributeTag& tagList)
 {
+  // first check if all attributes that must be signed if present
+  // are included in the signature, if present
   DcmElement *elem = NULL;
   unsigned long card = item.card();
   for (unsigned long i=0; i<card; i++)
@@ -117,13 +234,16 @@ OFBool SiSecurityProfile::checkAttributeList(DcmItem &item, DcmAttributeTag& tag
       {
         if (attributeForbidden(key)) return OFFalse; // attribute is signed but forbidden
       } else {
-        if (attributeRequired(key)) return OFFalse;  // attribute is required but unsigned
+        if (attributeRequiredIfPresent(key)) return OFFalse;  // attribute is required but unsigned
       }
     } else {
       if (containsTag(tagList, key)) return OFFalse; // unsignable tag contained in list
     }
   }
-  return OFTrue;
+
+  // finally check if all attributes that must be signed unconditionally
+  // are included in the signature.
+  return checkRequiredAttributeList(tagList);
 }
 
 
@@ -138,40 +258,14 @@ OFBool SiSecurityProfile::containsTag(DcmAttributeTag& tagList, const DcmTagKey&
   return OFFalse;
 }
 
+SiSignaturePurpose::E_SignaturePurposeType SiSecurityProfile::getOverrideSignaturePurpose() const
+{
+  return SiSignaturePurpose::ESP_none;
+}
+
 
 #else /* WITH_OPENSSL */
 
 int sisprof_cc_dummy_to_keep_linker_from_moaning = 0;
 
 #endif
-
-/*
- *  $Log: sisprof.cc,v $
- *  Revision 1.8  2010-10-14 13:14:38  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.7  2005-12-08 15:47:31  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.6  2002/12/16 12:57:53  meichel
- *  Minor modification to shut up linker on MacOS X when compiling
- *    without OpenSSL support
- *
- *  Revision 1.5  2001/11/19 15:22:58  meichel
- *  Cleaned up signature code to avoid some gcc warnings.
- *
- *  Revision 1.4  2001/11/16 15:50:54  meichel
- *  Adapted digital signature code to final text of supplement 41.
- *
- *  Revision 1.3  2001/09/26 14:30:26  meichel
- *  Adapted dcmsign to class OFCondition
- *
- *  Revision 1.2  2001/06/01 15:50:56  meichel
- *  Updated copyright header
- *
- *  Revision 1.1  2000/11/07 16:49:08  meichel
- *  Initial release of dcmsign module for DICOM Digital Signatures
- *
- *
- */
-

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2010, OFFIS e.V.
+ *  Copyright (C) 2010-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -11,19 +11,12 @@
  *    D-26121 Oldenburg, Germany
  *
  *
- *  Module:  dcmsr
+ *  Module: dcmsr
  *
- *  Author:  Joerg Riesmeier
+ *  Author: Joerg Riesmeier
  *
  *  Purpose:
  *    classes: DSRImplantationPlanSRDocumentConstraintChecker
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-11-05 11:06:57 $
- *  CVS/RCS Revision: $Revision: 1.1 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -56,9 +49,12 @@ OFBool DSRImplantationPlanSRDocumentConstraintChecker::isTemplateSupportRequired
 }
 
 
-const char *DSRImplantationPlanSRDocumentConstraintChecker::getRootTemplateIdentifier() const
+OFCondition DSRImplantationPlanSRDocumentConstraintChecker::getRootTemplateIdentification(OFString &templateIdentifier,
+                                                                                          OFString &mappingResource) const
 {
-    return "7000";
+    templateIdentifier = "7000";
+    mappingResource = "DCMR";
+    return EC_Normal;
 }
 
 
@@ -73,7 +69,7 @@ OFBool DSRImplantationPlanSRDocumentConstraintChecker::checkContentRelationship(
                                                                                 const E_ValueType targetValueType,
                                                                                 const OFBool byReference) const
 {
-    /* the following code implements the constraints of table A.35.Y-2 in DICOM PS3.3 (Supplement 134) */
+    /* the following code implements the constraints of table A.35.12-2 in DICOM PS3.3 */
     OFBool result = OFFalse;
     /* by-reference relationships not allowed at all */
     if (!byReference)
@@ -81,16 +77,16 @@ OFBool DSRImplantationPlanSRDocumentConstraintChecker::checkContentRelationship(
         /* row 1 of the table */
         if ((relationshipType == RT_contains) && (sourceValueType == VT_Container))
         {
-            result = (targetValueType == VT_Text) || (targetValueType == VT_Code) || (targetValueType == VT_Num) ||
+            result = (targetValueType == VT_Text)   || (targetValueType == VT_Code)      || (targetValueType == VT_Num)   ||
                      (targetValueType == VT_UIDRef) || (targetValueType == VT_Composite) || (targetValueType == VT_Image) ||
                      (targetValueType == VT_Container);
         }
         /* row 2 of the table */
         else if ((relationshipType == RT_hasObsContext) && (sourceValueType == VT_Container))
         {
-            result = (targetValueType == VT_Text) || (targetValueType == VT_Code) || (targetValueType == VT_Num) ||
-                     (targetValueType == VT_Date) || (targetValueType == VT_UIDRef) || (targetValueType == VT_PName) ||
-                     (targetValueType == VT_Composite);
+            result = (targetValueType == VT_Text)      || (targetValueType == VT_Code)   || (targetValueType == VT_Num)   ||
+                     (targetValueType == VT_Date)      || (targetValueType == VT_UIDRef) || (targetValueType == VT_PName) ||
+                     (targetValueType == VT_Composite) || (targetValueType == VT_Container) /* see CP-2084 */;
         }
         /* row 3 of the table */
         else if (relationshipType == RT_hasConceptMod)
@@ -99,7 +95,7 @@ OFBool DSRImplantationPlanSRDocumentConstraintChecker::checkContentRelationship(
         }
         /* row 4 of the table */
         else if ((relationshipType == RT_hasProperties) &&
-            ((sourceValueType == VT_Text) || (sourceValueType == VT_Code) || (sourceValueType == VT_Num) ||
+            ((sourceValueType == VT_Text) || (sourceValueType == VT_Code)   || (sourceValueType == VT_Num) ||
             (sourceValueType == VT_Image) || (sourceValueType == VT_UIDRef) || (sourceValueType == VT_Composite)))
         {
             result = (targetValueType == VT_Composite);
@@ -107,14 +103,3 @@ OFBool DSRImplantationPlanSRDocumentConstraintChecker::checkContentRelationship(
     }
     return result;
 }
-
-
-/*
- *  CVS/RCS Log:
- *  $Log: dsrimpcc.cc,v $
- *  Revision 1.1  2010-11-05 11:06:57  joergr
- *  Added support for new Implantation Plan SR Document Storage SOP Class.
- *
- *
- *
- */

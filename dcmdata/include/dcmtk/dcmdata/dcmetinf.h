@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2019, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: Interface of class DcmMetaInfo
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:41 $
- *  CVS/RCS Revision: $Revision: 1.33 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -34,15 +27,18 @@
 
 #include "dcmtk/dcmdata/dcitem.h"
 
+// forward declarations
+class DcmJsonFormat;
+
 
 /// magic string identifying DICOM files
-#define DCM_Magic                       "DICM"
+#define DCM_Magic "DICM"
 
 /// length of magic string identifying DICOM files
-#define DCM_MagicLen                    4
+#define DCM_MagicLen 4
 
 /// length of DICOM file preamble, in bytes
-#define DCM_PreambleLen                 128
+#define DCM_PreambleLen 128
 
 /// transfer syntax used for encoding DICOM meta-headers
 #define META_HEADER_DEFAULT_TRANSFERSYNTAX EXS_LittleEndianExplicit
@@ -50,7 +46,7 @@
 
 /** a class representing the DICOM file meta information header
  */
-class DcmMetaInfo
+class DCMTK_DCMDATA_EXPORT DcmMetaInfo
   : public DcmItem
 {
 
@@ -66,7 +62,8 @@ class DcmMetaInfo
     DcmMetaInfo(const DcmMetaInfo &old);
 
     /** assignment operator.
-     *  @param the metainfo to be copied
+     *  @param obj the metainfo to be copied
+     *  @return reference to this object
      */
     DcmMetaInfo &operator=(const DcmMetaInfo &obj);
 
@@ -106,7 +103,8 @@ class DcmMetaInfo
     virtual void removeInvalidGroups();
 
     /** return the transfer syntax in which this dataset was originally read.
-     *  @return transfer syntax in which this dataset was originally read, EXS_Unknown if the dataset was created in memory
+     *  @return transfer syntax in which this dataset was originally read, EXS_Unknown
+     *    if the dataset was created in memory
      */
     E_TransferSyntax getOriginalXfer() const;
 
@@ -117,7 +115,7 @@ class DcmMetaInfo
      *  @param pixelFileName not used
      *  @param pixelCounter not used
      */
-    virtual void print(STD_NAMESPACE ostream&out,
+    virtual void print(STD_NAMESPACE ostream &out,
                        const size_t flags = 0,
                        const int level = 0,
                        const char *pixelFileName = NULL,
@@ -133,22 +131,17 @@ class DcmMetaInfo
      */
     virtual void transferEnd();
 
-    /** calculate the length of this DICOM element when encoded with the
-     *  given transfer syntax and the given encoding type for sequences.
-     *  For elements, the length includes the length of the tag, length field,
-     *  VR field and the value itself, for items and sequences it returns
-     *  the length of the complete item or sequence including delimitation tags
-     *  if applicable. Never returns undefined length.
-     *  @param xfer transfer syntax for length calculation
-     *  @param enctype sequence encoding type for length calculation
-     *  @return length of DICOM element
+    /** @copydoc DcmObject::calcElementLength()
      */
     virtual Uint32 calcElementLength(const E_TransferSyntax xfer,
                                      const E_EncodingType enctype);
 
     /** read object from a stream.
      *  @param inStream DICOM input stream
-     *  @param xfer transfer syntax to use when parsing
+     *  @param xfer transfer syntax to use when parsing. EXS_Unknown will
+     *              lead to reading the preamble (if any) and parsing
+     *              metaheader using detected transfer syntax, usually
+     *              Explicit VR Little Endian.
      *  @param glenc handling of group length parameters
      *  @param maxReadLength attribute values larger than this value are skipped
      *    while parsing and read later upon first access if the stream type supports
@@ -177,19 +170,29 @@ class DcmMetaInfo
      *  @param flags optional flag used to customize the output (see DCMTypes::XF_xxx)
      *  @return status, EC_Normal if successful, an error code otherwise
      */
-    virtual OFCondition writeXML(STD_NAMESPACE ostream&out,
+    virtual OFCondition writeXML(STD_NAMESPACE ostream &out,
                                  const size_t flags = 0);
 
-    /** load object from a DICOM file
-     *  @param fileName name of the file to load
+    /** write object in JSON format
+     *  @param out output stream to which the JSON document is written
+     *  @param format used to format and customize the output
+     *  @return status, EC_Normal if successful, an error code otherwise
+     */
+    virtual OFCondition writeJson(STD_NAMESPACE ostream &out,
+                                  DcmJsonFormat &format);
+
+    /** load object from a DICOM file.  If the file preamble is missing, an error is returned.
+     *  @param fileName name of the file to load (may contain wide chars if support enabled).
+     *    Since there are various constructors for the OFFilename class, a "char *", "OFString"
+     *    or "wchar_t *" can also be passed directly to this parameter.
      *  @param readXfer transfer syntax used to read the data (auto detection if EXS_Unknown)
      *  @param groupLength flag, specifying how to handle the group length tags
      *  @param maxReadLength maximum number of bytes to be read for an element value.
      *    Element values with a larger size are not loaded until their value is retrieved
-     *    (with getXXX()) or loadAllDataElements() is called.
+     *    (with getXXX()) or loadAllDataIntoMemory() is called.
      *  @return status, EC_Normal if successful, an error code otherwise
      */
-    virtual OFCondition loadFile(const char *fileName,
+    virtual OFCondition loadFile(const OFFilename &fileName,
                                  const E_TransferSyntax readXfer = EXS_Unknown,
                                  const E_GrpLenEncoding groupLength = EGL_noChange,
                                  const Uint32 maxReadLength = DCM_MaxReadLength);
@@ -215,6 +218,7 @@ class DcmMetaInfo
 
     /** peeks into the input stream and checks whether the next element
      *  is group 0002, i.e. belongs to the meta-header
+     *  @param inStream input stream
      *  @return true if next element is part of meta-header, false otherwise
      */
     OFBool nextTagIsMeta(DcmInputStream &inStream);
@@ -227,7 +231,8 @@ class DcmMetaInfo
      *  @param xtag attribute tag for group length
      *  @param glenc handling of group length encoding element in dataset
      *  @param headerLen output parameter; length of meta-header as encoded in group length element
-     *  @param bytesRead output parameter; number of bytes read when reading group length (for counting the remaining number of meta-header bytes)
+     *  @param bytesRead output parameter; number of bytes read when reading group length
+     *    (for counting the remaining number of meta-header bytes)
      *  @param maxReadLength max read length for elements
      *  @return EC_Normal if successful, an error code otherwise
      */
@@ -254,135 +259,3 @@ class DcmMetaInfo
 };
 
 #endif // DCMETINF_H
-
-/*
-** CVS/RCS Log:
-** $Log: dcmetinf.h,v $
-** Revision 1.33  2010-10-14 13:15:41  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.32  2010-06-07 13:54:13  joergr
-** Added new method that allows for loading the meta-header only.
-**
-** Revision 1.31  2010-03-01 09:08:44  uli
-** Removed some unnecessary include directives in the headers.
-**
-** Revision 1.30  2010-02-22 11:39:54  uli
-** Remove some unneeded includes.
-**
-** Revision 1.29  2009-08-25 13:00:52  joergr
-** Added new methods which remove all data elements with an invalid group number
-** from the meta information header, dataset and/or fileformat.
-**
-** Revision 1.28  2008-07-17 11:19:48  onken
-** Updated copyFrom() documentation.
-**
-** Revision 1.27  2008-07-17 10:30:23  onken
-** Implemented copyFrom() method for complete DcmObject class hierarchy, which
-** permits setting an instance's value from an existing object. Implemented
-** assignment operator where necessary.
-**
-** Revision 1.26  2008-06-23 12:09:13  joergr
-** Fixed inconsistencies in Doxygen API documentation.
-**
-** Revision 1.25  2007/11/29 14:30:19  meichel
-** Write methods now handle large raw data elements (such as pixel data)
-**   without loading everything into memory. This allows very large images to
-**   be sent over a network connection, or to be copied without ever being
-**   fully in memory.
-**
-** Revision 1.24  2007/02/19 14:57:22  meichel
-** Declaration of copy assignment operator now private, as it should be
-**
-** Revision 1.23  2006/08/15 15:49:56  meichel
-** Updated all code in module dcmdata to correctly compile when
-**   all standard C++ classes remain in namespace std.
-**
-** Revision 1.22  2005/12/08 16:28:21  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.21  2005/11/07 16:59:24  meichel
-** Cleaned up some copy constructors in the DcmObject hierarchy.
-**
-** Revision 1.20  2004/07/01 12:28:25  meichel
-** Introduced virtual clone method for DcmObject and derived classes.
-**
-** Revision 1.19  2003/03/21 13:06:46  meichel
-** Minor code purifications for warnings reported by MSVC in Level 4
-**
-** Revision 1.18  2002/12/06 12:49:11  joergr
-** Enhanced "print()" function by re-working the implementation and replacing
-** the boolean "showFullData" parameter by a more general integer flag.
-** Added doc++ documentation.
-** Made source code formatting more consistent with other modules/files.
-**
-** Revision 1.17  2002/08/27 16:55:35  meichel
-** Initial release of new DICOM I/O stream classes that add support for stream
-**   compression (deflated little endian explicit VR transfer syntax)
-**
-** Revision 1.16  2002/04/25 09:40:56  joergr
-** Added support for XML output of DICOM objects.
-**
-** Revision 1.15  2001/09/25 17:19:27  meichel
-** Adapted dcmdata to class OFCondition
-**
-** Revision 1.14  2001/06/01 15:48:41  meichel
-** Updated copyright header
-**
-** Revision 1.13  2000/04/14 15:31:32  meichel
-** Removed default value from output stream passed to print() method.
-**   Required for use in multi-thread environments.
-**
-** Revision 1.12  2000/03/08 16:26:16  meichel
-** Updated copyright header.
-**
-** Revision 1.11  2000/03/03 14:05:24  meichel
-** Implemented library support for redirecting error messages into memory
-**   instead of printing them to stdout/stderr for GUI applications.
-**
-** Revision 1.10  2000/02/10 10:50:51  joergr
-** Added new feature to dcmdump (enhanced print method of dcmdata): write
-** pixel data/item value fields to raw files.
-**
-** Revision 1.9  1999/03/31 09:24:41  meichel
-** Updated copyright header in module dcmdata
-**
-** Revision 1.8  1997/09/22 14:56:12  hewett
-** Added a method to retreive the original transfer syntax of a read
-** meta-header (getOriginalXfer).  This functionality is needed by
-** the DCMCHECK package.
-**
-** Revision 1.7  1997/07/21 08:25:09  andreas
-** - Replace all boolean types (BOOLEAN, CTNBOOLEAN, DICOM_BOOL, BOOL)
-**   with one unique boolean type OFBool.
-**
-** Revision 1.6  1997/05/16 08:23:47  andreas
-** - Revised handling of GroupLength elements and support of
-**   DataSetTrailingPadding elements. The enumeratio E_GrpLenEncoding
-**   got additional enumeration values (for a description see dctypes.h).
-**   addGroupLength and removeGroupLength methods are replaced by
-**   computeGroupLengthAndPadding. To support Padding, the parameters of
-**   element and sequence write functions changed.
-** - Added a new method calcElementLength to calculate the length of an
-**   element, item or sequence. For elements it returns the length of
-**   tag, length field, vr field, and value length, for item and
-**   sequences it returns the length of the whole item. sequence including
-**   the Delimitation tag (if appropriate).  It can never return
-**   UndefinedLength.
-**
-** Revision 1.5  1996/08/05 08:45:24  andreas
-** new print routine with additional parameters:
-**         - print into files
-**         - fix output length for elements
-** corrected error in search routine with parameter ESM_fromStackTop
-**
-** Revision 1.4  1996/01/09 11:06:16  andreas
-** New Support for Visual C++
-** Correct problems with inconsistent const declarations
-**
-** Revision 1.3  1996/01/05 13:22:57  andreas
-** - changed to support new streaming facilities
-** - more cleanups
-** - merged read / write methods for block and file transfer
-**
-*/

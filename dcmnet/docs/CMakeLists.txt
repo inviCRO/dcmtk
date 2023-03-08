@@ -1,2 +1,2 @@
 # declare installation files
-INSTALL_FILES(${INSTALL_DOCDIR} FILES asconfig.txt testing.txt)
+install(FILES asconfig.txt testing.txt DESTINATION "${CMAKE_INSTALL_DOCDIR}" COMPONENT doc)

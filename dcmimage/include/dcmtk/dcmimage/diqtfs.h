@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2010, OFFIS e.V.
+ *  Copyright (C) 2002-2016, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: class DcmQuantFloydSteinberg
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:29 $
- *  CVS/RCS Revision: $Revision: 1.5 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -33,7 +26,7 @@
 
 #include "dcmtk/config/osconfig.h"
 #include "dcmtk/dcmimage/diqtpix.h"   /* for DcmQuantPixel */
-#include "dcmtk/ofstd/ofcond.h"    /* for OFCondition */
+#include "dcmtk/ofstd/ofcond.h"       /* for OFCondition */
 
 
 /** Floyd-Steinberg error vectors are stored internally as integer numbers
@@ -45,7 +38,7 @@
 /** this class implements Floyd-Steinberg error diffusion.
  *  It is used during the color quantization of an image.
  */
-class DcmQuantFloydSteinberg
+class DCMTK_DCMIMAGE_EXPORT DcmQuantFloydSteinberg
 {
 public:
 
@@ -55,13 +48,13 @@ public:
   /// destructor
   ~DcmQuantFloydSteinberg();
 
-  /** initializes the Floyd-Steinberg error vectors for an image with the 
+  /** initializes the Floyd-Steinberg error vectors for an image with the
    *  given number of columns.
    *  @param cols number of columns in image
    *  @return EC_Normal if successful, an error code otherwise.
    */
   OFCondition initialize(unsigned long cols);
-  
+
   /** uses the Floyd-Steinberg error vectors to adjust the color of the current image pixel.
    *  @param px the original image pixel is passed in this parameter. Upon return, the pixel
    *    value contains the new value after error diffusion.
@@ -70,9 +63,9 @@ public:
    */
   inline void adjust(DcmQuantPixel& px, long col, long maxval)
   {
-    register long sr = px.getRed()   + thisrerr[col + 1] / DcmQuantFloydSteinbergScale;
-    register long sg = px.getGreen() + thisgerr[col + 1] / DcmQuantFloydSteinbergScale;
-    register long sb = px.getBlue()  + thisberr[col + 1] / DcmQuantFloydSteinbergScale;
+    long sr = px.getRed()   + thisrerr[col + 1] / DcmQuantFloydSteinbergScale;
+    long sg = px.getGreen() + thisgerr[col + 1] / DcmQuantFloydSteinbergScale;
+    long sb = px.getBlue()  + thisberr[col + 1] / DcmQuantFloydSteinbergScale;
     if ( sr < 0 ) sr = 0;
     else if ( sr > OFstatic_cast(long, maxval) ) sr = maxval;
     if ( sg < 0 ) sg = 0;
@@ -89,7 +82,7 @@ public:
    */
   inline void propagate(const DcmQuantPixel& px, const DcmQuantPixel& mapped, long col)
   {
-    register long err;
+    long err;
 
     /* Propagate Floyd-Steinberg error terms. */
     if ( fs_direction )
@@ -134,14 +127,14 @@ public:
    *  The error vectors for the next image row are initialized to zero.
    *  The initial and last column of the current row are determined
    *  @param col initial column for the current row returned in this parameter
-   *  @param limitcol limit column (one past the last valid column) for the 
+   *  @param limitcol limit column (one past the last valid column) for the
    *    current row returned in this parameter. May become negative.
    */
   inline void startRow(long& col, long& limitcol)
   {
     for (unsigned long c = 0; c < columns + 2; ++c)
       nextrerr[c] = nextgerr[c] = nextberr[c] = 0;
-  
+
     if (fs_direction)
     {
         col = 0;
@@ -153,8 +146,8 @@ public:
         limitcol = -1;
     }
   }
-  
-  /** finishes error diffusion for one image row.  The direction flag is 
+
+  /** finishes error diffusion for one image row.  The direction flag is
    *  inverted and the error vectors for the "current" and "next" image row
    *  are swapped.
    */
@@ -197,7 +190,7 @@ private:
 
   /// red error vector for next row. Points to an array of (columns + 2) entries.
   long *nextrerr;
-  
+
   /// current green error vector. Points to an array of (columns + 2) entries.
   long *thisgerr;
 
@@ -213,11 +206,11 @@ private:
   /// temporary pointer used for swapping error vectors
   long *temperr;
 
-  /** boolean flag indicating in which direction (left to right/right to left) 
+  /** boolean flag indicating in which direction (left to right/right to left)
    *  the FS distribution should be done. Flag is inverted after each row.
-   */  
+   */
   int fs_direction;
-  
+
   /// number of columns in image
   unsigned long columns;
 
@@ -225,27 +218,3 @@ private:
 
 
 #endif
-
-
-/*
- * CVS/RCS Log:
- * $Log: diqtfs.h,v $
- * Revision 1.5  2010-10-14 13:16:29  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.4  2005/12/08 16:01:46  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.3  2003/12/23 12:16:59  joergr
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- * Updated copyright header.
- *
- * Revision 1.2  2002/05/15 09:53:30  meichel
- * Minor corrections to avoid warnings on Sun CC 2.0.1
- *
- * Revision 1.1  2002/01/25 13:32:04  meichel
- * Initial release of new color quantization classes and
- *   the dcmquant tool in module dcmimage.
- *
- *
- */

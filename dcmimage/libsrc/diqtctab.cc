@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2010, OFFIS e.V.
+ *  Copyright (C) 2002-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: class DcmQuantColorTable
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:14 $
- *  CVS/RCS Revision: $Revision: 1.10 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"
@@ -38,9 +31,9 @@
 #include "dcmtk/dcmdata/dcswap.h"    /* for swapIfNecessary() */
 #include "dcmtk/dcmdata/dcdeftag.h"  /* for tag constants */
 #include "dcmtk/dcmdata/dcuid.h"     /* for OFFIS_DCMTK_VERSION */
+#include "dcmtk/ofstd/ofdiag.h"      /* for DCMTK_DIAGNOSTIC macros */
 
-#define INCLUDE_CSTDIO
-#include "dcmtk/ofstd/ofstdinc.h"
+#include DCMTK_DIAGNOSTIC_IGNORE_CONST_EXPRESSION_WARNING
 
 /* ------------------------------------------------------------ */
 
@@ -86,7 +79,7 @@ void DcmQuantColorTable::clear()
 {
   if (array)
   {
-  	for (unsigned long i=0; i < numColors; i++) delete array[i];
+    for (unsigned long i=0; i < numColors; i++) delete array[i];
     delete[] array;
     array = NULL;
   }
@@ -147,8 +140,8 @@ OFCondition DcmQuantColorTable::medianCut(
   for (unsigned int xx=0; xx < numberOfColors; xx++) array[xx] = new DcmQuantHistogramItem();
   numColors = numberOfColors;
 
-  register int i;
-  register unsigned int bi;
+  int i;
+  unsigned int bi;
   DcmQuantPixelBoxArray bv(numberOfColors);
 
   // Set up the initial box.
@@ -160,9 +153,9 @@ OFCondition DcmQuantColorTable::medianCut(
   // Main loop: split boxes until we have enough.
   while ( boxes < numberOfColors )
   {
-      register int indx, clrs;
+      int indx, clrs;
       unsigned long sm;
-      register int minr, maxr, ming, maxg, minb, maxb, v;
+      int minr, maxr, ming, maxg, minb, maxb, v;
       unsigned long halfsum, lowersum;
 
       // Find the first splittable box.
@@ -213,13 +206,13 @@ OFCondition DcmQuantColorTable::medianCut(
           double rl, gl, bl;
           DcmQuantPixel p;
 
-          p.assign(maxr - minr, 0, 0);
+          p.assign(OFstatic_cast(DcmQuantComponent, (maxr - minr)), 0, 0);
           rl = p.luminance();
 
-          p.assign(0, maxg - ming, 0);
+          p.assign(0, OFstatic_cast(DcmQuantComponent, (maxg - ming)), 0);
           gl = p.luminance();
 
-          p.assign(0, 0, maxb - minb);
+          p.assign(0, 0, OFstatic_cast(DcmQuantComponent, (maxb - minb)));
           bl = p.luminance();
 
           if ( rl >= gl && rl >= bl )
@@ -265,9 +258,9 @@ OFCondition DcmQuantColorTable::medianCut(
   {
       for ( bi = 0; bi < boxes; ++bi )
       {
-          register int indx = bv[bi].ind;
-          register int clrs = bv[bi].colors;
-          register int minr, maxr, ming, maxg, minb, maxb, v;
+          int indx = bv[bi].ind;
+          int clrs = bv[bi].colors;
+          int minr, maxr, ming, maxg, minb, maxb, v;
 
           minr = maxr = histogram.array[indx]->getRed();
           ming = maxg = histogram.array[indx]->getGreen();
@@ -284,16 +277,16 @@ OFCondition DcmQuantColorTable::medianCut(
               minb = (minb < v ? minb : v);
               maxb = (minb > v ? minb : v);
           }
-          array[bi]->assign(( minr + maxr ) / 2, ( ming + maxg ) / 2, ( minb + maxb ) / 2);
+          array[bi]->assign(OFstatic_cast(DcmQuantComponent, (( minr + maxr ) / 2)), OFstatic_cast(DcmQuantComponent, (( ming + maxg ) / 2)), OFstatic_cast(DcmQuantComponent, (( minb + maxb ) / 2)));
       }
   }
   else if (repType == DcmRepresentativeColorType_default)
   {
       for ( bi = 0; bi < boxes; ++bi )
       {
-          register int indx = bv[bi].ind;
-          register int clrs = bv[bi].colors;
-          register long r = 0, g = 0, b = 0;
+          int indx = bv[bi].ind;
+          int clrs = bv[bi].colors;
+          long r = 0, g = 0, b = 0;
 
           for ( i = 0; i < clrs; ++i )
           {
@@ -311,9 +304,9 @@ OFCondition DcmQuantColorTable::medianCut(
   {
       for ( bi = 0; bi < boxes; ++bi )
       {
-          register int indx = bv[bi].ind;
-          register int clrs = bv[bi].colors;
-          register unsigned long r = 0, g = 0, b = 0, sumVal = 0;
+          int indx = bv[bi].ind;
+          int clrs = bv[bi].colors;
+          unsigned long r = 0, g = 0, b = 0, sumVal = 0;
 
           for ( i = 0; i < clrs; ++i )
           {
@@ -391,7 +384,7 @@ OFCondition DcmQuantColorTable::write(
   if (array)
   {
     // create palette color LUT descriptor
-  	Uint16 descriptor[3];
+    Uint16 descriptor[3];
     descriptor[0] = (numColors > 65535) ? 0 : OFstatic_cast(Uint16, numColors); // number of entries
     descriptor[1] = 0; // first pixel value mapped
     descriptor[2] = write16BitEntries ? 16 : 8; // bits per entry, must be 8 or 16.
@@ -444,7 +437,7 @@ OFCondition DcmQuantColorTable::write(
       double factor = 1.0;
       if (write16BitEntries)
       {
-      	numWords = numColors;
+        numWords = numColors;
         rLUT = new Uint16[numWords];
         gLUT = new Uint16[numWords];
         bLUT = new Uint16[numWords];
@@ -470,7 +463,7 @@ OFCondition DcmQuantColorTable::write(
       else
       {
         // number of Uint16 words needed to store numColors Uint8 values plus padding
-      	numWords = (numColors+1)/2;
+        numWords = (numColors+1)/2;
         rLUT = new Uint16[numWords];
         gLUT = new Uint16[numWords];
         bLUT = new Uint16[numWords];
@@ -499,7 +492,7 @@ OFCondition DcmQuantColorTable::write(
       // the LUT data is prepared, now create the corresponding DICOM elements
       if (result.good())
       {
-      	if (writeAsOW) elem = new DcmOtherByteOtherWord(DcmTag(DCM_RedPaletteColorLookupTableData, EVR_OW));
+        if (writeAsOW) elem = new DcmOtherByteOtherWord(DcmTag(DCM_RedPaletteColorLookupTableData, EVR_OW));
         else elem = new DcmUnsignedShort(DcmTag(DCM_RedPaletteColorLookupTableData, EVR_US));
         if (elem)
         {
@@ -511,7 +504,7 @@ OFCondition DcmQuantColorTable::write(
 
       if (result.good())
       {
-      	if (writeAsOW) elem = new DcmOtherByteOtherWord(DcmTag(DCM_GreenPaletteColorLookupTableData, EVR_OW));
+        if (writeAsOW) elem = new DcmOtherByteOtherWord(DcmTag(DCM_GreenPaletteColorLookupTableData, EVR_OW));
         else elem = new DcmUnsignedShort(DcmTag(DCM_GreenPaletteColorLookupTableData, EVR_US));
         if (elem)
         {
@@ -523,7 +516,7 @@ OFCondition DcmQuantColorTable::write(
 
       if (result.good())
       {
-      	if (writeAsOW) elem = new DcmOtherByteOtherWord(DcmTag(DCM_BluePaletteColorLookupTableData, EVR_OW));
+        if (writeAsOW) elem = new DcmOtherByteOtherWord(DcmTag(DCM_BluePaletteColorLookupTableData, EVR_OW));
         else elem = new DcmUnsignedShort(DcmTag(DCM_BluePaletteColorLookupTableData, EVR_US));
         if (elem)
         {
@@ -551,44 +544,3 @@ void DcmQuantColorTable::setDescriptionString(OFString& str) const
 
   str = buf;
 }
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: diqtctab.cc,v $
- * Revision 1.10  2010-10-14 13:14:14  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.9  2009-11-25 14:44:52  joergr
- * Removed inclusion of header file "ofconsol.h".
- *
- * Revision 1.8  2005/12/08 15:42:28  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.7  2003/12/17 16:34:57  joergr
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- *
- * Revision 1.6  2002/12/11 18:10:21  joergr
- * Added extern "C" declaration to qsort functions to avoid warnings reported
- * by Sun CC 5.2.
- *
- * Revision 1.5  2002/12/09 13:39:19  joergr
- * Renamed local variable to avoid name clash with function parameter "sum".
- *
- * Revision 1.4  2002/11/27 14:16:58  meichel
- * Adapted module dcmimage to use of new header file ofstdinc.h
- *
- * Revision 1.3  2002/08/20 12:20:24  meichel
- * Adapted code to new loadFile and saveFile methods, thus removing direct
- *   use of the DICOM stream classes.
- *
- * Revision 1.2  2002/05/15 09:53:33  meichel
- * Minor corrections to avoid warnings on Sun CC 2.0.1
- *
- * Revision 1.1  2002/01/25 13:32:10  meichel
- * Initial release of new color quantization classes and
- *   the dcmquant tool in module dcmimage.
- *
- *
- */

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2022, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,17 +17,16 @@
  *
  *  Purpose: Implementation of class DcmCharString
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-20 16:44:16 $
- *  CVS/RCS Revision: $Revision: 1.15 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
+
+#include "dcmtk/dcmdata/dcspchrs.h"   /* for class DcmSpecificCharacterSet */
+#include "dcmtk/dcmdata/dcitem.h"     /* for class DcmItem */
+#include "dcmtk/dcmdata/dcdeftag.h"   /* for tag definitions */
+#include "dcmtk/dcmdata/dcjson.h"     /* json helper classes */
+#include "dcmtk/dcmdata/dcmatch.h"
 
 //
 // This implementation does not support 16 bit character sets. Since 8 bit
@@ -35,10 +34,10 @@
 // DcmCharString is derived from DcmByteString without any extensions.
 // No special implementation is necessary.
 //
-// If the extension for 16 bit character sets will be implemented this class
+// If the extension for > 8 bit character sets will be implemented this class
 // must be derived directly from DcmElement. This class is designed to support
-// the value representations (LO, LT, PN, SH, ST, UT). They are a problem because
-// their value width (1, 2, .. Bytes) is specified by the element
+// the value representations (LO, LT, PN, SH, ST, UC and UT). They are a problem
+// because their value width (1, 2, ... bytes) is specified by the element
 // SpecificCharacterSet (0008, 0005) and an implementation must support
 // different value widths that cannot be derived from the value representation.
 //
@@ -71,29 +70,85 @@ DcmCharString &DcmCharString::operator=(const DcmCharString &obj)
 
 OFCondition DcmCharString::copyFrom(const DcmObject& rhs)
 {
-  if (this != &rhs)
-  {
-    if (rhs.ident() != ident()) return EC_IllegalCall;
-    *this = OFstatic_cast(const DcmCharString &, rhs);
-  }
-  return EC_Normal;
+    if (this != &rhs)
+    {
+        if (rhs.ident() != ident()) return EC_IllegalCall;
+        *this = OFstatic_cast(const DcmCharString &, rhs);
+    }
+    return EC_Normal;
+}
+
+
+// ********************************
+
+
+OFCondition DcmCharString::verify(const OFBool autocorrect)
+{
+    const Uint32 maxLen = getMaxLength();
+    char *str = NULL;
+    Uint32 len = 0;
+    /* get string data */
+    errorFlag = getString(str, len);
+    /* check for non-empty string */
+    if ((str != NULL) && (len > 0))
+    {
+        const unsigned long vm = getVM();
+        /* check whether there is anything to verify at all */
+        if (maxLen != DCM_UndefinedLength)
+        {
+            /* TODO: is it really a good idea to create a copy of the string? */
+            OFString value(str, len);
+            size_t posStart = 0;
+            unsigned long vmNum = 0;
+            /* check all string components */
+            while (posStart != OFString_npos)
+            {
+                ++vmNum;
+                /* search for next component separator */
+                const size_t posEnd = (vm > 1) ? value.find('\\', posStart) : OFString_npos;
+                const size_t fieldLen = (posEnd == OFString_npos) ? value.length() - posStart : posEnd - posStart;
+                /* check size limit for each string component */
+                if (fieldLen > maxLen)
+                {
+                    DCMDATA_DEBUG("DcmCharString::verify() maximum length violated in element "
+                        << getTagName() << " " << getTag() << " value " << vmNum << ": "
+                        << fieldLen << " bytes found but only " << maxLen << " characters allowed");
+                    errorFlag = EC_MaximumLengthViolated;
+                    if (autocorrect)
+                    {
+                        /*  TODO: We are currently not removing any characters since we do not
+                         *        know whether a character consists of one or more bytes.
+                         *        This will be fixed in a future version.
+                         */
+                        DCMDATA_DEBUG("DcmCharString::verify() not correcting value length since "
+                            << "multi-byte character sets are not yet supported, so cannot decide");
+                    }
+                }
+                posStart = (posEnd == OFString_npos) ? posEnd : posEnd + 1;
+            }
+        }
+    }
+    /* report a debug message if an error occurred */
+    if (errorFlag.bad())
+    {
+        DCMDATA_WARN("DcmCharString: One or more illegal values in element "
+            << getTagName() << " " << getTag() << " with VM=" << getVM());
+        /* do not return with an error since we do not know whether there really is a violation */
+        errorFlag = EC_Normal;
+    }
+    return errorFlag;
 }
 
 
 OFBool DcmCharString::containsExtendedCharacters(const OFBool /*checkAllStrings*/)
 {
-    char *c = NULL;
-    if (getString(c).good() && c)
-    {
-        while (*c)
-        {
-            /* check for 8 bit characters */
-            if (OFstatic_cast(unsigned char, *c) > 127)
-                return OFTrue;
-            ++c;
-        }
-    }
-    return OFFalse;
+    OFBool result = OFFalse;
+    char *str = NULL;
+    Uint32 len = 0;
+    /* determine length in order to support possibly embedded NULL bytes */
+    if (getString(str, len).good())
+        result = DcmByteString::containsExtendedCharacters(str, len);
+    return result;
 }
 
 
@@ -103,45 +158,148 @@ OFBool DcmCharString::isAffectedBySpecificCharacterSet() const
 }
 
 
-/*
- * CVS/RCS Log:
- * $Log: dcchrstr.cc,v $
- * Revision 1.15  2010-10-20 16:44:16  joergr
- * Use type cast macros (e.g. OFstatic_cast) where appropriate.
- *
- * Revision 1.14  2010-10-14 13:14:06  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.13  2008-07-17 10:31:31  onken
- * Implemented copyFrom() method for complete DcmObject class hierarchy, which
- * permits setting an instance's value from an existing object. Implemented
- * assignment operator where necessary.
- *
- * Revision 1.12  2006-12-15 14:14:44  joergr
- * Added new method that checks whether a DICOM object or element is affected
- * by SpecificCharacterSet (0008,0005).
- *
- * Revision 1.11  2006/12/13 13:59:49  joergr
- * Added new optional parameter "checkAllStrings" to method containsExtended
- * Characters().
- *
- * Revision 1.10  2006/05/11 08:47:05  joergr
- * Moved checkForNonASCIICharacters() from application to library.
- *
- * Revision 1.9  2005/12/08 15:40:57  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.8  2002/12/06 13:08:18  joergr
- * Made source code formatting more consistent with other modules/files.
- *
- * Revision 1.7  2001/06/01 15:48:59  meichel
- * Updated copyright header
- *
- * Revision 1.6  2000/03/08 16:26:30  meichel
- * Updated copyright header.
- *
- * Revision 1.5  1999/03/31 09:25:17  meichel
- * Updated copyright header in module dcmdata
- *
- *
- */
+OFCondition DcmCharString::convertCharacterSet(DcmSpecificCharacterSet &converter)
+{
+    char *str = NULL;
+    Uint32 len = 0;
+    OFCondition status = getString(str, len);
+    // do nothing if string value is empty
+    if (status.good() && (str != NULL) && (len > 0))
+    {
+        OFString resultStr;
+        // convert string to selected character string and replace the element value
+        status = converter.convertString(str, len, resultStr, getDelimiterChars());
+        if (status.good())
+        {
+            // check whether the value has changed during the conversion (slows down the process?)
+            if (OFString(str, len) != resultStr)
+            {
+                DCMDATA_TRACE("DcmCharString::convertCharacterSet() updating value of element "
+                    << getTagName() << " " << getTag() << " after the conversion to "
+                    << converter.getDestinationEncoding() << " encoding");
+                // update the element value
+                status = putOFStringArray(resultStr);
+            } else {
+                DCMDATA_TRACE("DcmCharString::convertCharacterSet() not updating value of element "
+                    << getTagName() << " " << getTag() << " because the value has not changed");
+            }
+        }
+    }
+    return status;
+}
+
+
+// ********************************
+
+
+OFCondition DcmCharString::getSpecificCharacterSet(OFString &charset)
+{
+    OFCondition status = EC_CorruptedData;
+    // start with current dataset-level
+    DcmItem *item = getParentItem();
+    while ((item != NULL) && status.bad())
+    {
+        // check whether the attribute SpecificCharacterSet should be present at all
+        if (item->checkForSpecificCharacterSet())
+        {
+            // by default, the string components are normalized (i.e. padding is removed)
+            status = item->findAndGetOFStringArray(DCM_SpecificCharacterSet, charset);
+        }
+        // if element could not be found, go one level up
+        if (status.bad())
+            item = item->getParentItem();
+    }
+    // output some debug information
+    if (status.good())
+    {
+        DCMDATA_TRACE("DcmCharString::getSpecificCharacterSet() element " << getTagName()
+            << " " << getTag() << " uses character set \"" << charset << "\"");
+    }
+    return status;
+}
+
+
+// ********************************
+
+
+OFCondition DcmCharString::writeJson(STD_NAMESPACE ostream &out,
+    DcmJsonFormat &format)
+{
+    /* always write JSON Opener */
+    DcmElement::writeJsonOpener(out, format);
+    /* write element value (if non-empty) */
+    if (!isEmpty())
+    {
+        OFString value;
+        if (format.asBulkDataURI(getTag(), value))
+        {
+            format.printBulkDataURIPrefix(out);
+            DcmJsonFormat::printString(out, value);
+        }
+        else
+        {
+            OFCondition status = getOFString(value, 0L);
+            if (status.bad())
+                return status;
+            format.printValuePrefix(out);
+            DcmJsonFormat::printValueString(out, value);
+            const unsigned long vm = getVM();
+            for (unsigned long valNo = 1; valNo < vm; ++valNo)
+            {
+                status = getOFString(value, valNo);
+                if (status.bad())
+                    return status;
+                format.printNextArrayElementPrefix(out);
+                DcmJsonFormat::printValueString(out, value);
+            }
+            format.printValueSuffix(out);
+        }
+    }
+    /* write JSON Closer  */
+    DcmElement::writeJsonCloser(out, format);
+    /* always report success */
+    return EC_Normal;
+}
+
+
+// ********************************
+
+
+const OFString& DcmCharString::getDelimiterChars() const
+{
+    /* use actual VR of this class (including derived ones) */
+    return DcmVR(ident()).getDelimiterChars();
+}
+
+
+OFBool DcmCharString::isUniversalMatch(const OFBool normalize,
+                                       const OFBool enableWildCardMatching)
+{
+  if(!isEmpty(normalize))
+  {
+    if(enableWildCardMatching)
+    {
+      OFString value;
+      for(unsigned long valNo = 0; valNo < getVM(); ++valNo)
+      {
+        getOFString(value, valNo, normalize);
+        if(value.find_first_not_of( '*' ) != OFString_npos)
+          return OFFalse;
+      }
+    }
+    else
+      return OFFalse;
+  }
+  return OFTrue;
+}
+
+
+OFBool DcmCharString::matches(const OFString& key,
+                              const OFString& candidate,
+                              const OFBool enableWildCardMatching) const
+{
+  if (enableWildCardMatching)
+    return DcmAttributeMatching::wildCardMatching(key.c_str(), key.length(), candidate.c_str(), candidate.length());
+  else
+    return DcmByteString::matches(key, candidate, OFFalse);
+}

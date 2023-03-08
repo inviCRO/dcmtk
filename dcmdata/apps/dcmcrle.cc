@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2010, OFFIS e.V.
+ *  Copyright (C) 2002-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,25 +17,9 @@
  *
  *  Purpose: Compress DICOM file with RLE Transfer Syntax
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:13:30 $
- *  CVS/RCS Revision: $Revision: 1.22 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
-
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CSTDIO
-#define INCLUDE_CSTRING
-#include "dcmtk/ofstd/ofstdinc.h"
-
-#ifdef HAVE_GUSI_H
-#include <GUSI.h>
-#endif
 
 #include "dcmtk/dcmdata/dctk.h"
 #include "dcmtk/dcmdata/cmdlnarg.h"
@@ -62,11 +46,6 @@ static char rcsid[] = "$dcmtk: " OFFIS_CONSOLE_APPLICATION " v"
 
 int main(int argc, char *argv[])
 {
-
-#ifdef HAVE_GUSI_H
-  GUSISetup(GUSIwithSIOUXSockets);
-  GUSISetup(GUSIwithInternetSockets);
-#endif
 
   const char *opt_ifname = NULL;
   const char *opt_ofname = NULL;
@@ -147,7 +126,7 @@ int main(int argc, char *argv[])
 
     /* evaluate command line */
     prepareCmdLineArgs(argc, argv, OFFIS_CONSOLE_APPLICATION);
-    if (app.parseCommandLine(cmd, argc, argv, OFCommandLine::PF_ExpandWildcards))
+    if (app.parseCommandLine(cmd, argc, argv))
     {
       /* check exclusive options first */
       if (cmd.hasExclusiveOption())
@@ -226,16 +205,8 @@ int main(int argc, char *argv[])
       cmd.endOptionBlock();
 
       cmd.beginOptionBlock();
-      if (cmd.findOption("--enable-new-vr"))
-      {
-        dcmEnableUnknownVRGeneration.set(OFTrue);
-        dcmEnableUnlimitedTextVRGeneration.set(OFTrue);
-      }
-      if (cmd.findOption("--disable-new-vr"))
-      {
-        dcmEnableUnknownVRGeneration.set(OFFalse);
-        dcmEnableUnlimitedTextVRGeneration.set(OFFalse);
-      }
+      if (cmd.findOption("--enable-new-vr")) dcmEnableGenerationOfNewVRs();
+      if (cmd.findOption("--disable-new-vr")) dcmDisableGenerationOfNewVRs();
       cmd.endOptionBlock();
 
       cmd.beginOptionBlock();
@@ -266,7 +237,7 @@ int main(int argc, char *argv[])
 
     // register RLE compression codec
     DcmRLEEncoderRegistration::registerCodecs(opt_uidcreation,
-      opt_fragmentSize, opt_createOffsetTable, opt_secondarycapture);
+      OFstatic_cast(Uint32, opt_fragmentSize), opt_createOffsetTable, opt_secondarycapture);
 
     /* make sure data dictionary is loaded */
     if (!dcmDataDict.isDictionaryLoaded())
@@ -305,7 +276,7 @@ int main(int argc, char *argv[])
         return 1;
       }
     }
-    
+
     OFString sopClass;
     if (fileformat.getMetaInfo()->findAndGetOFString(DCM_MediaStorageSOPClassUID, sopClass).good())
     {
@@ -321,8 +292,7 @@ int main(int argc, char *argv[])
 
     DcmXfer opt_oxferSyn(opt_oxfer);
 
-    dataset->chooseRepresentation(opt_oxfer, NULL);
-    if (dataset->canWriteXfer(opt_oxfer))
+    if (dataset->chooseRepresentation(opt_oxfer, NULL).good() && dataset->canWriteXfer(opt_oxfer))
     {
         OFLOG_INFO(dcmcrleLogger, "Output transfer syntax " << opt_oxferSyn.getXferName() << " can be written");
     } else {
@@ -349,96 +319,3 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
-
-/*
- * CVS/RCS Log:
- * $Log: dcmcrle.cc,v $
- * Revision 1.22  2010-10-14 13:13:30  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.21  2009-11-13 13:20:23  joergr
- * Fixed minor issues in log output.
- *
- * Revision 1.20  2009-11-04 09:58:06  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.19  2009-08-21 09:24:07  joergr
- * Added parameter 'writeMode' to save/write methods which allows for specifying
- * whether to write a dataset or fileformat as well as whether to update the
- * file meta information or to create a new file meta information header.
- * Added check making sure that a DICOMDIR file is never compressed.
- * Use helper function checkConflict() where appropriate.
- * Made error messages more consistent with other compression tools.
- *
- * Revision 1.18  2009-08-05 10:52:49  joergr
- * Fixed various issues with syntax usage (e.g. layout and formatting).
- *
- * Revision 1.17  2009-04-21 14:02:49  joergr
- * Fixed minor inconsistencies in manpage / syntax usage.
- *
- * Revision 1.16  2009-03-19 12:06:42  joergr
- * Replaced '\n' by OFendl where appropriate.
- *
- * Revision 1.15  2008-09-25 14:38:48  joergr
- * Moved output of resource identifier in order to avoid printing the same
- * information twice.
- *
- * Revision 1.14  2008-09-25 11:19:48  joergr
- * Added support for printing the expanded command line arguments.
- * Always output the resource identifier of the command line tool in debug mode.
- *
- * Revision 1.13  2006/08/15 15:50:56  meichel
- * Updated all code in module dcmdata to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.12  2006/07/27 13:52:42  joergr
- * Changed parameter "exclusive" of method addOption() from type OFBool into an
- * integer parameter "flags". Prepended prefix "PF_" to parseLine() flags.
- * Option "--help" is no longer an exclusive option by default.
- *
- * Revision 1.11  2005/12/08 15:40:44  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.10  2005/12/02 09:01:30  joergr
- * Added new command line option that ignores the transfer syntax specified in
- * the meta header and tries to detect the transfer syntax automatically from
- * the dataset.
- * Added new command line option that checks whether a given file starts with a
- * valid DICOM meta header.
- *
- * Revision 1.9  2005/11/07 17:10:19  meichel
- * All tools that both read and write a DICOM file now call loadAllDataIntoMemory()
- *   to make sure they do not destroy a file when output = input.
- *
- * Revision 1.8  2004/02/25 13:34:41  meichel
- * Marked option --fragment-size as non-standard since it violates a rule defined
- *   in DICOM Part 5 A.4.2: "Each frame shall be encoded in one and only one fragment".
- *
- * Revision 1.7  2004/01/16 10:53:53  joergr
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- *
- * Revision 1.6  2002/11/27 12:07:16  meichel
- * Adapted module dcmdata to use of new header file ofstdinc.h
- *
- * Revision 1.5  2002/11/26 08:42:59  meichel
- * Replaced all includes for "zlib.h" with <zlib.h>
- *   to avoid inclusion of zlib.h in the makefile dependencies.
- *
- * Revision 1.4  2002/09/23 17:52:02  joergr
- * Prepared code for future support of 'config.guess' host identifiers.
- *
- * Revision 1.3  2002/09/23 13:50:40  joergr
- * Added new command line option "--version" which prints the name and version
- * number of external libraries used.
- *
- * Revision 1.2  2002/08/21 10:14:14  meichel
- * Adapted code to new loadFile and saveFile methods, thus removing direct
- *   use of the DICOM stream classes.
- *
- * Revision 1.1  2002/06/06 14:52:31  meichel
- * Initial release of the new RLE codec classes
- *   and the dcmcrle/dcmdrle tools in module dcmdata
- *
- *
- */

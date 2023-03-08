@@ -422,6 +422,11 @@ struct jpeg_compress_struct {
   struct jpeg_downsampler * downsample;
   jpeg_scan_info * script_space; /* workspace for jpeg_simple_progression */
   int script_space_size;
+
+  /* force the use of an extended sequential SOF1 marker even when a
+   * SOF0 marker could be used, to comply with DICOM CP 1447.
+   * This is only needed for 8 bits/sample. */
+  boolean force_extended_sequential_marker;
 };
 
 
@@ -653,6 +658,7 @@ struct jpeg_decompress_struct {
 
 /* constants for workaround_options in struct jpeg_decompress_struct */
 #define WORKAROUND_PREDICTOR6OVERFLOW 1
+#define WORKAROUND_BUGGY_CORNELL_16BIT_JPEG_ENCODER 2
 
 /* "Object" declarations for JPEG modules that may be supplied or called
  * directly by the surrounding application.
@@ -777,14 +783,6 @@ typedef struct jvirt_sarray_control * jvirt_sarray_ptr;
 typedef struct jvirt_barray_control * jvirt_barray_ptr;
 
 
-#ifdef C_LOSSLESS_SUPPORTED
-#define NEED_DARRAY
-#else
-#ifdef D_LOSSLESS_SUPPORTED
-#define NEED_DARRAY
-#endif
-#endif
-
 struct jpeg_memory_mgr {
   /* Method pointers */
   JMETHOD(void *, alloc_small, (j_common_ptr cinfo, int pool_id,
@@ -797,11 +795,9 @@ struct jpeg_memory_mgr {
   JMETHOD(JBLOCKARRAY, alloc_barray, (j_common_ptr cinfo, int pool_id,
 				      JDIMENSION blocksperrow,
 				      JDIMENSION numrows));
-#ifdef NEED_DARRAY
   JMETHOD(JDIFFARRAY, alloc_darray, (j_common_ptr cinfo, int pool_id,
 				     JDIMENSION diffsperrow,
 				     JDIMENSION numrows));
-#endif
   JMETHOD(jvirt_sarray_ptr, request_virt_sarray, (j_common_ptr cinfo,
 						  int pool_id,
 						  boolean pre_zero,

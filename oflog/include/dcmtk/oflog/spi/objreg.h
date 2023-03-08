@@ -1,10 +1,11 @@
+// -*- C++ -*-
 // Module:  Log4CPLUS
 // File:    objectregistry.h
 // Created: 3/2003
 // Author:  Tad E. Smith
 //
 //
-// Copyright 2003-2009 Tad E. Smith
+// Copyright 2003-2010 Tad E. Smith
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,19 +21,23 @@
 
 /** @file */
 
-#ifndef LOG4CPLUS_SPI_OBJECT_REGISTRY_HEADER_
-#define LOG4CPLUS_SPI_OBJECT_REGISTRY_HEADER_
+#ifndef DCMTK_LOG4CPLUS_SPI_OBJECT_REGISTRY_HEADER_
+#define DCMTK_LOG4CPLUS_SPI_OBJECT_REGISTRY_HEADER_
 
 #include "dcmtk/oflog/config.h"
+
+#if defined (DCMTK_LOG4CPLUS_HAVE_PRAGMA_ONCE)
+#pragma once
+#endif
+
 #include "dcmtk/oflog/tstring.h"
-#include "dcmtk/oflog/helpers/threads.h"
-#include "dcmtk/ofstd/oflist.h"
+#include "dcmtk/oflog/thread/syncprim.h"
 #include "dcmtk/ofstd/ofmap.h"
-//#include <map>
-//#include <memory>
-//#include <vector>
+#include <memory>
+#include "dcmtk/ofstd/ofvector.h"
 
 
+namespace dcmtk {
 namespace log4cplus {
     namespace spi {
 
@@ -40,7 +45,7 @@ namespace log4cplus {
          * This is the base class used to implement the functionality required
          * by the ObjectRegistry template class.
          */
-        class LOG4CPLUS_EXPORT ObjectRegistryBase {
+        class DCMTK_LOG4CPLUS_EXPORT ObjectRegistryBase {
         public:
           // public methods
             /**
@@ -52,7 +57,7 @@ namespace log4cplus {
             /**
              * Returns the names of all registered objects.
              */
-            OFList<log4cplus::tstring> getAllNames() const;
+            OFVector<log4cplus::tstring> getAllNames() const;
 
         protected:
           // Ctor and Dtor
@@ -86,13 +91,18 @@ namespace log4cplus {
             typedef OFMap<log4cplus::tstring, void*> ObjectMap;
 
           // Data
-            LOG4CPLUS_MUTEX_PTR_DECLARE mutex;
+            thread::Mutex mutex;
             ObjectMap data;
+
+        private:
+            ObjectRegistryBase (ObjectRegistryBase const &);
+            ObjectRegistryBase & operator = (ObjectRegistryBase const &);
         };
 
     }
 }
+} // end namespace dcmtk
 
 
-#endif // LOG4CPLUS_SPI_OBJECT_REGISTRY_HEADER_
+#endif // DCMTK_LOG4CPLUS_SPI_OBJECT_REGISTRY_HEADER_
 

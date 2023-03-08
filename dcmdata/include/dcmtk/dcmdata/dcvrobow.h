@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: Interface of class DcmOtherByteOtherWord
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:43 $
- *  CVS/RCS Revision: $Revision: 1.35 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -31,30 +24,58 @@
 #define DCVROBOW_H
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
+
 #include "dcmtk/dcmdata/dcelem.h"
 
 
-/** a class representing the DICOM value representations 'Other Byte String' (OB)
- *  and 'Other Word String' (OW)
+// forward declarations
+class DcmJsonFormat;
+
+
+/** a class representing the DICOM value representations 'Other Byte' (OB)
+ *  and 'Other Word' (OW)
  */
-class DcmOtherByteOtherWord
+class DCMTK_DCMDATA_EXPORT DcmOtherByteOtherWord
   : public DcmElement
 {
 
  public:
 
+    // Make friend with DcmItem which requires access to protected
+    // constructor allowing construction using an explicit value length.
+    friend class DcmItem;
+
     /** constructor.
-     *  Create new element from given tag and length.
+     *  Create new element from given tag.
      *  @param tag DICOM tag for the new element
-     *  @param len value length for the new element
      */
-    DcmOtherByteOtherWord(const DcmTag &tag,
-                          const Uint32 len = 0);
+    DcmOtherByteOtherWord(const DcmTag &tag);
 
     /** copy constructor
      *  @param old element to be copied
      */
     DcmOtherByteOtherWord(const DcmOtherByteOtherWord &old);
+
+    /** comparison operator that compares the normalized value of this object
+     *  with a given object of the same type. The tag of the element is also
+     *  considered as the first component that is compared, followed by the
+     *  object types (VR, i.e. DCMTK'S EVR) and the comparison of all value
+     *  components of the object, preferably in the order declared in the
+     *  object (if applicable). The implementation for DcmOtherByteOtherWord
+     *  does compare the values of two elements in local endianness.
+     *  @param  rhs the right hand side of the comparison
+     *  @return 0 if the object values are equal.
+     *    -1 if this element has fewer components than the rhs element.
+     *    Also -1 if the value of the first component that does not match
+     *    is lower in this object than in rhs. Also returned if rhs
+     *    cannot be casted to this object type or both objects are of
+     *    different VR (i.e. the DcmEVR returned by the element's ident()
+     *    call are different).
+     *    1 if either this element has more components than the rhs element, or
+     *    if the first component that does not match is greater in this object
+     *    than in rhs object.
+     */
+    virtual int compare(const DcmElement& rhs) const;
 
     /** destructor
      */
@@ -95,7 +116,7 @@ class DcmOtherByteOtherWord
 
     /** check whether stored value conforms to the VR and to the specified VM
      *  @param vm parameter not used for this VR
-     *  @param oldFormat parameter not used for this VR (only for DA, TM, PN)
+     *  @param oldFormat parameter not used for this VR (only for DA, TM)
      *  @return always returns EC_Normal, i.e. currently no checks are performed
      */
     virtual OFCondition checkValue(const OFString &vm = "",
@@ -106,11 +127,16 @@ class DcmOtherByteOtherWord
      */
     virtual unsigned long getVM();
 
+    /** get number of values stored in this element
+     *  @return number of values in this element
+     */
+    virtual unsigned long getNumberOfValues();
+
     /** set/change the current value representation
      *  @param vr new value representation to be set.  All VRs except for OW (Other
-     *    Word String) are treated as 8 bit data (OB).  This is particularily useful
+     *    Word String) are treated as 8 bit data (OB).  This is particularly useful
      *    for unknown (UN) or unsupported VRs.
-     *  @return status status, EC_Normal if successful, an error code otherwise
+     *  @return status, EC_Normal if successful, an error code otherwise
      */
     virtual OFCondition setVR(DcmEVR vr);
 
@@ -123,7 +149,7 @@ class DcmOtherByteOtherWord
      *  @param pixelFileName not used
      *  @param pixelCounter not used
      */
-    virtual void print(STD_NAMESPACE ostream&out,
+    virtual void print(STD_NAMESPACE ostream &out,
                        const size_t flags = 0,
                        const int level = 0,
                        const char *pixelFileName = NULL,
@@ -144,19 +170,26 @@ class DcmOtherByteOtherWord
      *  @param wcache pointer to write cache object, may be NULL
      *  @return status, EC_Normal if successful, an error code otherwise
      */
-    virtual OFCondition write(
-      DcmOutputStream &outStream,
-      const E_TransferSyntax oxfer,
-      const E_EncodingType enctype,
-      DcmWriteCache *wcache);
+    virtual OFCondition write(DcmOutputStream &outStream,
+                              const E_TransferSyntax oxfer,
+                              const E_EncodingType enctype,
+                              DcmWriteCache *wcache);
 
     /** write object in XML format to a stream
      *  @param out output stream to which the XML document is written
      *  @param flags optional flag used to customize the output (see DCMTypes::XF_xxx)
      *  @return status, EC_Normal if successful, an error code otherwise
      */
-    virtual OFCondition writeXML(STD_NAMESPACE ostream&out,
+    virtual OFCondition writeXML(STD_NAMESPACE ostream &out,
                                  const size_t flags = 0);
+
+    /** write object in JSON format to a stream
+     *  @param out output stream to which the JSON document is written
+     *  @param format used to format and customize the output
+     *  @return status, EC_Normal if successful, an error code otherwise
+     */
+    virtual OFCondition writeJson(STD_NAMESPACE ostream &out,
+                                  DcmJsonFormat &format);
 
     /** special write method for creation of digital signatures
      *  @param outStream DICOM output stream
@@ -165,11 +198,10 @@ class DcmOtherByteOtherWord
      *  @param wcache pointer to write cache object, may be NULL
      *  @return status, EC_Normal if successful, an error code otherwise
      */
-    virtual OFCondition writeSignatureFormat(
-      DcmOutputStream &outStream,
-      const E_TransferSyntax oxfer,
-      const E_EncodingType enctype,
-      DcmWriteCache *wcache);
+    virtual OFCondition writeSignatureFormat(DcmOutputStream &outStream,
+                                             const E_TransferSyntax oxfer,
+                                             const E_EncodingType enctype,
+                                             DcmWriteCache *wcache);
 
     /** get particular 8 bit value.
      *  This method is only applicable to non-OW data, e.g. OB.
@@ -184,7 +216,7 @@ class DcmOtherByteOtherWord
      *  This method is only applicable to OW data.
      *  @param wordVal reference to result variable (cleared in case of error)
      *  @param pos index of the value to be retrieved (0..vm-1)
-     *  @return status status, EC_Normal if successful, an error code otherwise
+     *  @return status, EC_Normal if successful, an error code otherwise
      */
     virtual OFCondition getUint16(Uint16 &wordVal,
                                   const unsigned long pos = 0);
@@ -192,14 +224,14 @@ class DcmOtherByteOtherWord
     /** get reference to stored 8 bit data.
      *  This method is only applicable to non-OW data, e.g. OB.
      *  @param byteVals reference to result variable
-     *  @return status status, EC_Normal if successful, an error code otherwise
+     *  @return status, EC_Normal if successful, an error code otherwise
      */
     virtual OFCondition getUint8Array(Uint8 *&byteVals);
 
     /** get reference to stored 16 bit data.
      *  This method is only applicable to OW data.
      *  @param wordVals reference to result variable
-     *  @return status status, EC_Normal if successful, an error code otherwise
+     *  @return status, EC_Normal if successful, an error code otherwise
      */
     virtual OFCondition getUint16Array(Uint16 *&wordVals);
 
@@ -220,7 +252,7 @@ class DcmOtherByteOtherWord
      *  The numeric values are converted to hex mode, i.e. an 8 bit value is
      *  represented by 2 characters (00..ff) and a 16 bit value by 4 characters
      *  (0000..ffff).
-     *  In case of VM > 1 the single values are separated by a backslash ('\').
+     *  In case of VM > 1 the individual values are separated by a backslash ('\').
      *  @param stringVal variable in which the result value is stored
      *  @param normalize not used
      *  @return status, EC_Normal if successful, an error code otherwise
@@ -248,7 +280,7 @@ class DcmOtherByteOtherWord
                                        const unsigned long numWords);
 
     /** create an empty Uint8 array of given number of bytes and set it.
-     *  All array elements are initialized with a value of 0 (using 'memzero').
+     *  All array elements are initialized with a value of 0 (using 'memset').
      *  This method is only applicable to non-OW data, e.g. OB.
      *  @param numBytes number of bytes (8 bit) to be created
      *  @param bytes stores the pointer to the resulting buffer
@@ -258,7 +290,7 @@ class DcmOtherByteOtherWord
                                          Uint8 *&bytes);
 
     /** create an empty Uint16 array of given number of words and set it.
-     *  All array elements are initialized with a value of 0 (using 'memzero').
+     *  All array elements are initialized with a value of 0 (using 'memset').
      *  This method is only applicable to OW data.
      *  @param numWords number of words (16 bit) to be created
      *  @param words stores the pointer to the resulting buffer
@@ -276,6 +308,20 @@ class DcmOtherByteOtherWord
      */
     virtual OFCondition putString(const char *stringVal);
 
+    /** set element value from the given character string.
+     *  The input string is expected to have the same format as described for
+     *  'getOFStringArray()' above, i.e. a backslash separated sequence of
+     *  hexa-decimal numbers.
+     *  The length of the string has to be specified explicitly. The string can, therefore,
+     *  also contain more than one NULL byte.
+     *  @param stringVal input character string
+     *  @param stringLen length of the string (number of characters without the
+     *    trailing NULL byte)
+     *  @return status, EC_Normal if successful, an error code otherwise
+     */
+    virtual OFCondition putString(const char *stringVal,
+                                  const Uint32 stringLen);
+
     /** check the currently stored element value
      *  @param autocorrect correct value padding (even length) if OFTrue
      *  @return status, EC_Normal if value length is correct, an error code otherwise
@@ -284,6 +330,20 @@ class DcmOtherByteOtherWord
 
 
  protected:
+
+    /** constructor. Create new element from given tag and length.
+     *  Only reachable from friend classes since construction with
+     *  length different from 0 leads to a state with length being set but
+     *  the element's value still being uninitialized. This can lead to crashes
+     *  when the value is read or written. Thus the method calling this
+     *  constructor with length > 0 must ensure that the element's value is
+     *  explicitly initialized, too.
+     *  Create new element from given tag and length.
+     *  @param tag DICOM tag for the new element
+     *  @param len value length for the new element
+     */
+    DcmOtherByteOtherWord(const DcmTag &tag,
+                          const Uint32 len);
 
     /** method is called after the element value has been loaded.
      *  Can be used to correct the value before it is used for the first time.
@@ -303,7 +363,7 @@ class DcmOtherByteOtherWord
      *  @param pixelFileName optional filename used to write the raw pixel data file
      *  @param pixelCounter optional counter used for automatic pixel data filename creation
      */
-    void printPixel(STD_NAMESPACE ostream&out,
+    void printPixel(STD_NAMESPACE ostream &out,
                     const size_t flags,
                     const int level,
                     const char *pixelFileName,
@@ -320,155 +380,3 @@ private:
 
 
 #endif // DCVROBOW_H
-
-
-/*
-** CVS/RCS Log:
-** $Log: dcvrobow.h,v $
-** Revision 1.35  2010-10-14 13:15:43  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.34  2010-04-23 15:26:13  joergr
-** Specify an appropriate default value for the "vm" parameter of checkValue().
-**
-** Revision 1.33  2010-04-23 14:25:27  joergr
-** Added new method to all VR classes which checks whether the stored value
-** conforms to the VR definition and to the specified VM.
-**
-** Revision 1.32  2008-08-15 09:26:31  meichel
-** Under certain conditions (odd length compressed pixel data fragments)
-**   class DcmOtherByteOtherWord needs to load the attribute value into main
-**   memory during a write() operation, in order to add a pad byte. A new flag
-**   compactAfterTransfer now makes sure that the memory is released once the
-**   write operation has finished, so that only a single fragment at a time
-**   needs to fully reside in memory.
-**
-** Revision 1.31  2008-07-17 11:19:49  onken
-** Updated copyFrom() documentation.
-**
-** Revision 1.30  2008-07-17 10:30:23  onken
-** Implemented copyFrom() method for complete DcmObject class hierarchy, which
-** permits setting an instance's value from an existing object. Implemented
-** assignment operator where necessary.
-**
-** Revision 1.29  2007-11-29 14:30:19  meichel
-** Write methods now handle large raw data elements (such as pixel data)
-**   without loading everything into memory. This allows very large images to
-**   be sent over a network connection, or to be copied without ever being
-**   fully in memory.
-**
-** Revision 1.28  2007/06/07 09:01:15  joergr
-** Added createUint8Array() and createUint16Array() methods.
-**
-** Revision 1.27  2006/08/15 15:49:56  meichel
-** Updated all code in module dcmdata to correctly compile when
-**   all standard C++ classes remain in namespace std.
-**
-** Revision 1.26  2005/12/08 16:29:03  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.25  2004/07/01 12:28:25  meichel
-** Introduced virtual clone method for DcmObject and derived classes.
-**
-** Revision 1.24  2003/07/09 12:13:13  meichel
-** Included dcmodify in MSVC build system, updated headers
-**
-** Revision 1.23  2003/06/12 13:29:28  joergr
-** Fixed inconsistent API documentation reported by Doxygen.
-**
-** Revision 1.22  2002/12/06 12:49:17  joergr
-** Enhanced "print()" function by re-working the implementation and replacing
-** the boolean "showFullData" parameter by a more general integer flag.
-** Added doc++ documentation.
-** Made source code formatting more consistent with other modules/files.
-**
-** Revision 1.21  2002/08/27 16:55:40  meichel
-** Initial release of new DICOM I/O stream classes that add support for stream
-**   compression (deflated little endian explicit VR transfer syntax)
-**
-** Revision 1.20  2002/04/25 10:03:45  joergr
-** Added getOFString() implementation.
-** Added/modified getOFStringArray() implementation.
-** Added support for XML output of DICOM objects.
-**
-** Revision 1.19  2001/10/02 11:47:34  joergr
-** Added getUint8/16 routines to class DcmOtherByteOtherWord.
-**
-** Revision 1.18  2001/09/25 17:19:32  meichel
-** Adapted dcmdata to class OFCondition
-**
-** Revision 1.17  2001/06/01 15:48:51  meichel
-** Updated copyright header
-**
-** Revision 1.16  2000/11/07 16:56:10  meichel
-** Initial release of dcmsign module for DICOM Digital Signatures
-**
-** Revision 1.15  2000/04/14 15:31:34  meichel
-** Removed default value from output stream passed to print() method.
-**   Required for use in multi-thread environments.
-**
-** Revision 1.14  2000/03/08 16:26:24  meichel
-** Updated copyright header.
-**
-** Revision 1.13  2000/03/03 14:05:27  meichel
-** Implemented library support for redirecting error messages into memory
-**   instead of printing them to stdout/stderr for GUI applications.
-**
-** Revision 1.12  2000/02/10 10:50:55  joergr
-** Added new feature to dcmdump (enhanced print method of dcmdata): write
-** pixel data/item value fields to raw files.
-**
-** Revision 1.11  1999/03/31 09:25:03  meichel
-** Updated copyright header in module dcmdata
-**
-** Revision 1.10  1998/11/12 16:47:51  meichel
-** Implemented operator= for all classes derived from DcmObject.
-**
-** Revision 1.9  1997/07/21 08:25:15  andreas
-** - Replace all boolean types (BOOLEAN, CTNBOOLEAN, DICOM_BOOL, BOOL)
-**   with one unique boolean type OFBool.
-**
-** Revision 1.8  1997/05/27 13:48:30  andreas
-** - Add method canWriteXfer to class DcmObject and all derived classes.
-**   This method checks whether it is possible to convert the original
-**   transfer syntax to an new transfer syntax. The check is used in the
-**   dcmconv utility to prohibit the change of a compressed transfer
-**   syntax to a uncompressed.
-**
-** Revision 1.7  1997/05/16 08:31:20  andreas
-** - Revised handling of GroupLength elements and support of
-**   DataSetTrailingPadding elements. The enumeratio E_GrpLenEncoding
-**   got additional enumeration values (for a description see dctypes.h).
-**   addGroupLength and removeGroupLength methods are replaced by
-**   computeGroupLengthAndPadding. To support Padding, the parameters of
-**   element and sequence write functions changed.
-**
-** Revision 1.6  1997/04/18 08:13:31  andreas
-** - The put/get-methods for all VRs did not conform to the C++-Standard
-**   draft. Some Compilers (e.g. SUN-C++ Compiler, Metroworks
-**   CodeWarrier, etc.) create many warnings concerning the hiding of
-**   overloaded get methods in all derived classes of DcmElement.
-**   So the interface of all value representation classes in the
-**   library are changed rapidly, e.g.
-**   OFCondition get(Uint16 & value, const unsigned long pos);
-**   becomes
-**   OFCondition getUint16(Uint16 & value, const unsigned long pos);
-**   All (retired) "returntype get(...)" methods are deleted.
-**   For more information see dcmdata/include/dcelem.h
-**
-** Revision 1.5  1996/08/05 08:45:33  andreas
-** new print routine with additional parameters:
-**         - print into files
-**         - fix output length for elements
-** corrected error in search routine with parameter ESM_fromStackTop
-**
-** Revision 1.4  1996/01/29 13:38:17  andreas
-** - new put method for every VR to put value as a string
-** - better and unique print methods
-**
-** Revision 1.3  1996/01/05 13:23:07  andreas
-** - changed to support new streaming facilities
-** - more cleanups
-** - merged read / write methods for block and file transfer
-**
-*/

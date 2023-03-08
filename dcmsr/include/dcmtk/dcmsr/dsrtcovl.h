@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2000-2010, OFFIS e.V.
+ *  Copyright (C) 2000-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose:
  *    classes: DSRTemporalCoordinatesValue
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:33 $
- *  CVS/RCS Revision: $Revision: 1.12 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -43,16 +36,16 @@
  *  class declaration  *
  *---------------------*/
 
-/** Class for spatial coordinate values
+/** Class for temporal coordinates values
  */
-class DSRTemporalCoordinatesValue
+class DCMTK_DCMSR_EXPORT DSRTemporalCoordinatesValue
 {
     // allow access to getValuePtr()
     friend class DSRContentItem;
 
   public:
 
-    /** default contructor
+    /** default constructor
      */
     DSRTemporalCoordinatesValue();
 
@@ -71,21 +64,35 @@ class DSRTemporalCoordinatesValue
     virtual ~DSRTemporalCoordinatesValue();
 
     /** assignment operator
-     ** @param  coordinatesValue  Temporal coordinates value to be copied (not checked !)
-     ** @return reference to this Temporal coordinates value after 'coordinatesValue' has
+     ** @param  coordinatesValue  temporal coordinates value to be copied (not checked !)
+     ** @return reference to this temporal coordinates value after 'coordinatesValue' has
      *          been copied
      */
     DSRTemporalCoordinatesValue &operator=(const DSRTemporalCoordinatesValue &coordinatesValue);
 
+    /** comparison operator "equal"
+     ** @param  coordinatesValue  temporal coordinates value that should be compared to the
+     *                            current one
+     ** @return OFTrue if both temporal coordinates values are equal, OFFalse otherwise
+     */
+    OFBool operator==(const DSRTemporalCoordinatesValue &coordinatesValue) const;
+
+    /** comparison operator "not equal"
+     ** @param  coordinatesValue  temporal coordinates value that should be compared to the
+     *                            current one
+     ** @return OFTrue if both temporal coordinates values are not equal, OFFalse otherwise
+     */
+    OFBool operator!=(const DSRTemporalCoordinatesValue &coordinatesValue) const;
+
     /** clear all internal variables.
-     *  Temporal range type is set to TRT_invalid.  Since an empty list of graphic data is
-     *  invalid the spatial coordinates value becomes invalid afterwards.
+     *  Temporal range type is set to DSRTypes::TRT_invalid.  Since an empty list of graphic data
+     *  is invalid the temporal coordinates value becomes invalid afterwards.
      */
     virtual void clear();
 
-    /** check whether the current spatial coordinates value is valid.
-     *  The value is valid if the temporal range type is not TRT_invalid and the other data
-     *  is valid (see checkData() for details).
+    /** check whether the current temporal coordinates value is valid.
+     *  The value is valid if the temporal range type is not DSRTypes::TRT_invalid and the other
+     *  data is valid.  See checkData() method for details.
      ** @return OFTrue if reference value is valid, OFFalse otherwise
      */
     virtual OFBool isValid() const;
@@ -111,14 +118,16 @@ class DSRTemporalCoordinatesValue
     /** read temporal coordinates value from XML document
      ** @param  doc     document containing the XML file content
      *  @param  cursor  cursor pointing to the starting node
+     *  @param  flags   flag used to customize the reading process (see DSRTypes::XF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
     virtual OFCondition readXML(const DSRXMLDocument &doc,
-                                DSRXMLCursor cursor);
+                                DSRXMLCursor cursor,
+                                const size_t flags);
 
     /** write temporal coordinates value in XML format
-     ** @param  stream     output stream to which the XML document is written
-     *  @param  flags      flag used to customize the output (see DSRTypes::XF_xxx)
+     ** @param  stream  output stream to which the XML document is written
+     *  @param  flags   flag used to customize the output (see DSRTypes::XF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
     virtual OFCondition writeXML(STD_NAMESPACE ostream &stream,
@@ -152,17 +161,21 @@ class DSRTemporalCoordinatesValue
     OFCondition getValue(DSRTemporalCoordinatesValue &coordinatesValue) const;
 
     /** set temporal coordinates value.
-     *  Before setting the value the temporal range type and other data are checked (see
-     *  checkData()).  If the value is invalid the current value is not replaced and remains
+     *  Before setting the value, the temporal range type and other data are checked (see
+     *  checkData()).  If the value is invalid, the current value is not replaced and remains
      *  unchanged.
      ** @param  coordinatesValue  value to be set
+     *  @param  check             if enabled, check values for validity before setting them.
+     *                            See checkData() method for details.  Empty values are only
+     *                            accepted for non-mandatory attributes.
      ** @return status, EC_Normal if successful, an error code otherwise
      */
-    OFCondition setValue(const DSRTemporalCoordinatesValue &coordinatesValue);
+    OFCondition setValue(const DSRTemporalCoordinatesValue &coordinatesValue,
+                         const OFBool check = OFTrue);
 
     /** get current temporal range type.
      *  This value represents the type of temporal extent of the region of interest.
-     ** @return region type (might be TRT_invalid)
+     ** @return region type (might be DSRTypes::TRT_invalid)
      */
     inline DSRTypes::E_TemporalRangeType getTemporalRangeType() const
     {
@@ -171,17 +184,20 @@ class DSRTemporalCoordinatesValue
 
     /** set current temporal range type.
      *  This value represents the type of temporal extent of the region of interest.
-     ** @param  temporalRangeType  temporal range type to be set (TRT_invalid is not allowed)
+     ** @param  temporalRangeType  temporal range type to be set (DSRTypes::TRT_invalid is not
+     *                             allowed)
+     *  @param  check              dummy parameter (currently not used)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
-    OFCondition setTemporalRangeType(const DSRTypes::E_TemporalRangeType temporalRangeType);
+    OFCondition setTemporalRangeType(const DSRTypes::E_TemporalRangeType temporalRangeType,
+                                     const OFBool check = OFTrue);
 
-    /** get reference to list of referenced datetime
+    /** get reference to list of referenced date/time
      ** @return reference to list
      */
-    inline DSRReferencedDatetimeList &getDatetimeList()
+    inline DSRReferencedDateTimeList &getDateTimeList()
     {
-        return DatetimeList;
+        return DateTimeList;
     }
 
     /** get reference to list of referenced sample positions
@@ -213,33 +229,39 @@ class DSRTemporalCoordinatesValue
 
     /** read temporal coordinates value from dataset.
      *  Please note that all three lists are (tried to) read from the dataset.  If more than
-     *  one list is present a warning messsage is reported.
-     ** @param  dataset    DICOM dataset from which the value should be read
+     *  one list is present a warning message is reported.
+     ** @param  dataset  DICOM dataset from which the value should be read
+     *  @param  flags    flag used to customize the reading process (see DSRTypes::RF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
-    virtual OFCondition read(DcmItem &dataset);
+    virtual OFCondition read(DcmItem &dataset,
+                             const size_t flags);
 
     /** write temporal coordinates reference value to dataset.
      *  Please note that only one of the three lists is actually written to the dataset.
-     ** @param  dataset    DICOM dataset to which the value should be written
+     ** @param  dataset  DICOM dataset to which the value should be written
      ** @return status, EC_Normal if successful, an error code otherwise
      */
     virtual OFCondition write(DcmItem &dataset) const;
 
     /** check the temporal range type and other data for validity.
      *  The data is valid if the 'temporalRangeType' is valid and at least one of the three
-     *  lists are non-empty.  If more the one list is non-empty a warning is reported since
-     *  they are mutually exclusive (type 1C).
+     *  lists are non-empty.  If more than one list is non-empty, a warning is reported (if
+     *  enabled) since they are mutually exclusive (type 1C).
      ** @param  temporalRangeType   temporal range type to be checked
      *  @param  samplePositionList  list of referenced sample positions to be checked
      *  @param  timeOffsetList      list of referenced time offsets to be checked
-     *  @param  datetimeList        list of referenced datetime to be checked
-     ** @return OFTrue if data is valid, OFFalse otherwise
+     *  @param  dateTimeList        list of referenced date/time to be checked
+     *  @param  reportWarnings      if enabled, report a warning message on each deviation
+     *                              from an expected value to the logger
+     ** @return status, EC_Normal if checked data is valid, an error code otherwise
      */
-    OFBool checkData(const DSRTypes::E_TemporalRangeType temporalRangeType,
-                     const DSRReferencedSamplePositionList &samplePositionList,
-                     const DSRReferencedTimeOffsetList &timeOffsetList,
-                     const DSRReferencedDatetimeList &datetimeList) const;
+    OFCondition checkData(const DSRTypes::E_TemporalRangeType temporalRangeType,
+                          const DSRReferencedSamplePositionList &samplePositionList,
+                          const DSRReferencedTimeOffsetList &timeOffsetList,
+                          const DSRReferencedDateTimeList &dateTimeList,
+                          const OFBool reportWarnings = OFFalse) const;
+
 
   private:
 
@@ -250,53 +272,9 @@ class DSRTemporalCoordinatesValue
     DSRReferencedSamplePositionList SamplePositionList;
     /// list of referenced time offsets (associated DICOM VR=DS, VM=1-n, type 1C)
     DSRReferencedTimeOffsetList     TimeOffsetList;
-    /// list of referenced datetime (associated DICOM VR=DT, VM=1-n, type 1C)
-    DSRReferencedDatetimeList       DatetimeList;
+    /// list of referenced date/time (associated DICOM VR=DT, VM=1-n, type 1C)
+    DSRReferencedDateTimeList       DateTimeList;
 };
 
 
 #endif
-
-
-/*
- *  CVS/RCS Log:
- *  $Log: dsrtcovl.h,v $
- *  Revision 1.12  2010-10-14 13:16:33  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.11  2009-10-13 14:57:50  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.10  2007-11-15 16:33:30  joergr
- *  Added support for output in XHTML 1.1 format.
- *
- *  Revision 1.9  2006/08/15 16:40:03  meichel
- *  Updated the code in module dcmsr to correctly compile when
- *    all standard C++ classes remain in namespace std.
- *
- *  Revision 1.8  2005/12/08 16:05:24  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.7  2003/08/07 18:01:42  joergr
- *  Removed libxml dependency from header files.
- *
- *  Revision 1.6  2003/08/07 12:53:13  joergr
- *  Added readXML functionality.
- *
- *  Revision 1.5  2001/09/26 13:04:12  meichel
- *  Adapted dcmsr to class OFCondition
- *
- *  Revision 1.4  2001/06/01 15:51:05  meichel
- *  Updated copyright header
- *
- *  Revision 1.3  2000/11/06 11:20:32  joergr
- *  Moved some protected methods to public part.
- *
- *  Revision 1.2  2000/11/01 16:23:26  joergr
- *  Added support for conversion to XML.
- *
- *  Revision 1.1  2000/10/26 14:23:26  joergr
- *  Added support for TCOORD content item.
- *
- *
- */

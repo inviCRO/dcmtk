@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: Interface of class DcmElement
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-11-05 09:34:11 $
- *  CVS/RCS Revision: $Revision: 1.49 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -37,16 +30,24 @@
 
 // forward declarations
 class DcmInputStreamFactory;
+class DcmJsonFormat;
 class DcmFileCache;
 class DcmItem;
 
 /** abstract base class for all DICOM elements
  */
-class DcmElement
+class DCMTK_DCMDATA_EXPORT DcmElement
   : public DcmObject
 {
 
   public:
+
+    // be friend with "greater than" and "less than" operators that are defined
+    // outside of this class
+    friend OFBool operator< (const DcmElement& lhs, const DcmElement& rhs);
+    friend OFBool operator> (const DcmElement& lhs, const DcmElement& rhs);
+    friend OFBool operator<=(const DcmElement& lhs, const DcmElement& rhs);
+    friend OFBool operator>=(const DcmElement& lhs, const DcmElement& rhs);
 
     /** constructor.
      *  Create new element from given tag and length.
@@ -71,6 +72,31 @@ class DcmElement
      */
     DcmElement &operator=(const DcmElement &obj);
 
+    /** comparison operator that compares the normalized value of this element
+     *  with a given element of the same type (e.g. an DcmUnsignedShort with a
+     *  DcmUnsignedShort). The tag of the element is also considered as the first
+     *  component that is compared, followed by the object types (VR, i.e. DCMTK'S EVR).
+     *  DcmElement's default implementation does only compare the tag and EVR while
+     *  the derived classes implement the value comparisons by comparing all the
+     *  components that make up the value, preferably in the order declared in
+     *  the object (if applicable).
+     *  @param  rhs the right hand side of the comparison
+     *  @return 0 if the object values are equal.
+     *    -1 if this element has fewer components than the rhs element.
+     *    Also -1 if the value of the first component that does not match
+     *    is lower in this object than in rhs. Also returned if rhs
+     *    cannot be casted to this object type or both objects are of
+     *    different VR (i.e. the DcmEVR returned by the element's ident()
+     *    call are different).
+     *    1 if either this element has more components than the rhs element, or
+     *    if the first component that does not match is greater in this object
+     *    than in rhs object.
+     *    If the function is overwritten by derived classes, the behaviour might
+     *    slightly change but all methods will return 0 on equality, and 1 or -1
+     *    if different.
+     */
+    virtual int compare(const DcmElement& rhs) const =0;
+
     /** Virtual object copying. This method can be used for DcmObject
      *  and derived classes to get a deep copy of an object. Internally
      *  the assignment operator is called if the given DcmObject parameter
@@ -85,15 +111,7 @@ class DcmElement
      */
     virtual OFCondition copyFrom(const DcmObject& rhs);
 
-    /** calculate the length of this DICOM element when encoded with the
-     *  given transfer syntax and the given encoding type for sequences.
-     *  For elements, the length includes the length of the tag, length field,
-     *  VR field and the value itself, for items and sequences it returns
-     *  the length of the complete item or sequence including delimitation tags
-     *  if applicable. Never returns undefined length.
-     *  @param xfer transfer syntax for length calculation
-     *  @param enctype sequence encoding type for length calculation
-     *  @return length of DICOM element
+    /** @copydoc DcmObject::calcElementLength()
      */
     virtual Uint32 calcElementLength(const E_TransferSyntax xfer,
                                      const E_EncodingType enctype);
@@ -105,8 +123,14 @@ class DcmElement
      *  @param enctype sequence encoding type for length calculation
      *  @return value length of DICOM element
      */
-    virtual Uint32 getLength(const E_TransferSyntax /*xfer*/ = EXS_LittleEndianImplicit,
-                             const E_EncodingType /*enctype*/ = EET_UndefinedLength)
+
+#ifdef DOXYGEN
+    virtual Uint32 getLength(const E_TransferSyntax xfer = EXS_LittleEndianImplicit,
+                             const E_EncodingType enctype = EET_UndefinedLength)
+#else
+    virtual Uint32 getLength(const E_TransferSyntax /* xfer */ = EXS_LittleEndianImplicit,
+                             const E_EncodingType /* enctype */ = EET_UndefinedLength)
+#endif
     {
         return getLengthField();
     }
@@ -192,6 +216,14 @@ class DcmElement
     virtual OFCondition writeXML(STD_NAMESPACE ostream &out,
                                  const size_t flags = 0);
 
+    /** write object in JSON format
+     *  @param out output stream to which the JSON document is written
+     *  @param format used to format and customize the output
+     *  @return status, EC_Normal if successful, an error code otherwise
+     */
+    virtual OFCondition writeJson(STD_NAMESPACE ostream &out,
+                                  DcmJsonFormat &format);
+
     /** special write method for creation of digital signatures
      *  @param outStream DICOM output stream
      *  @param oxfer output transfer syntax
@@ -211,9 +243,8 @@ class DcmElement
 
     /** check whether stored value conforms to the VR and to the specified VM
      *  @param vm value multiplicity (according to the data dictionary) to be checked for.
-     *    (valid values: "1", "1-2", "1-3", "1-8", "1-99", "1-n", "2", "2-n", "2-2n",
-     *                   "3", "3-n", "3-3n", "4", "6", "9", "16", "32"),
-     *    interpreted as cardinality (number of items) for sequence attributes
+     *    (See DcmElement::checkVM() for a list of valid values.)
+     *    Interpreted as cardinality (number of items) for sequence attributes.
      *  @param oldFormat support old ACR/NEMA format for certain VRs (DA, TM, PN) if OFTrue
      *  @return status of the check, EC_Normal if value is correct, an error code otherwise
      */
@@ -279,6 +310,22 @@ class DcmElement
      */
     virtual OFCondition getFloat32(Float32 &val, const unsigned long pos = 0);
 
+    /** retrieve a single value of type Sint64. Requires element to be of corresponding VR,
+     *  otherwise an error is returned.
+     *  @param val value returned in this parameter upon success
+     *  @param pos position in multi-valued attribute, default 0
+     *  @return EC_Normal upon success, an error code otherwise
+     */
+    virtual OFCondition getSint64(Sint64 &val, const unsigned long pos = 0);
+
+    /** retrieve a single value of type Uint64. Requires element to be of corresponding VR,
+     *  otherwise an error is returned.
+     *  @param val value returned in this parameter upon success
+     *  @param pos position in multi-valued attribute, default 0
+     *  @return EC_Normal upon success, an error code otherwise
+     */
+    virtual OFCondition getUint64(Uint64 &val, const unsigned long pos = 0);
+
     /** retrieve a single value of type Float64. Requires element to be of corresponding VR,
      *  otherwise an error is returned.
      *  @param val value returned in this parameter upon success
@@ -307,7 +354,7 @@ class DcmElement
                                     OFBool normalize = OFTrue);
 
     /** get entire element value as a character string.
-     *  In case of VM > 1 the single values are separated by a backslash ('\').
+     *  In case of VM > 1 the individual values are separated by a backslash ('\').
      *  This method implements a general approach by concatenating the results of
      *  getOFString() for each value component. Derived class may implement more
      *  sophisticated methods.
@@ -327,6 +374,18 @@ class DcmElement
      *  @return EC_Normal upon success, an error code otherwise
      */
     virtual OFCondition getString(char *&val);        // for strings
+
+    /** get a pointer to the element value of the current element as type string.
+     *  Requires element to be of corresponding VR, otherwise an error is returned.
+     *  This method does not copy, but returns a pointer to the element value,
+     *  which remains under control of this object and is valid only until the next
+     *  read, write or put operation.
+     *  @param val pointer to value returned in this parameter upon success
+     *  @param len length of the returned value (number of characters)
+     *  @return EC_Normal upon success, an error code otherwise
+     */
+    virtual OFCondition getString(char *&val,
+                                  Uint32 &len);
 
     /** get a pointer to the element value of the current element as type string.
      *  Requires element to be of corresponding VR, otherwise an error is returned.
@@ -388,6 +447,26 @@ class DcmElement
      */
     virtual OFCondition getFloat32Array(Float32 *&val);
 
+    /** get a pointer to the element value of the current element as type Sint64.
+     *  Requires element to be of corresponding VR, otherwise an error is returned.
+     *  This method does not copy, but returns a pointer to the element value,
+     *  which remains under control of this object and is valid only until the next
+     *  read, write or put operation.
+     *  @param val pointer to value returned in this parameter upon success
+     *  @return EC_Normal upon success, an error code otherwise
+     */
+    virtual OFCondition getSint64Array(Sint64 *&val);
+
+    /** get a pointer to the element value of the current element as type Uint64.
+     *  Requires element to be of corresponding VR, otherwise an error is returned.
+     *  This method does not copy, but returns a pointer to the element value,
+     *  which remains under control of this object and is valid only until the next
+     *  read, write or put operation.
+     *  @param val pointer to value returned in this parameter upon success
+     *  @return EC_Normal upon success, an error code otherwise
+     */
+    virtual OFCondition getUint64Array(Uint64 *&val);
+
     /** get a pointer to the element value of the current element as type Float64.
      *  Requires element to be of corresponding VR, otherwise an error is returned.
      *  This method does not copy, but returns a pointer to the element value,
@@ -402,35 +481,49 @@ class DcmElement
      *  After detaching the calling part of the application has total control
      *  over the element value, especially the value must be deleted from the
      *  heap after use. The DICOM element remains a copy of the value if the
-     *  copy parameter is OFTrue; otherwise the value is erased in the DICOM element.
-     *  @param copy if true, copy value field before detaching; if false, do not retain a copy.
+     *  copy parameter is OFTrue; otherwise the value is erased in the DICOM
+     *  element.
+     *  @param copy if true, copy value field before detaching; if false, do not
+     *    retain a copy.
      *  @return EC_Normal upon success, an error code otherwise
      */
     OFCondition detachValueField(OFBool copy = OFFalse);
 
     // PUT operations
 
-    /** replace the element value by a copy of the given string (which is possibly multi-valued).
-     *  Requires element to be of corresponding VR, otherwise an error is returned.
-     *  @param stringValue new attribute value
+    /** replace the element value by a copy of the given string (which is possibly
+     *  multi-valued). Requires element to be of corresponding VR, otherwise an error
+     *  is returned.
+     *  @param val new attribute value
      *  @return EC_Normal upon success, an error code otherwise
      */
-    virtual OFCondition putOFStringArray(const OFString &stringValue);
+    virtual OFCondition putOFStringArray(const OFString &val);
 
-    /** replace the element value by a copy of the given string (which is possibly multi-valued).
-     *  Requires element to be of corresponding VR, otherwise an error is returned.
+    /** replace the element value by a copy of the given string (which is possibly
+     *  multi-valued). Requires element to be of corresponding VR, otherwise an error
+     *  is returned.
      *  @param val new attribute value
      *  @return EC_Normal upon success, an error code otherwise
      */
     virtual OFCondition putString(const char *val);
 
+    /** replace the element value by a copy of the given string (which is possibly
+     *  multi-valued). Requires element to be of corresponding VR, otherwise an error
+     *  is returned.
+     *  @param val new attribute value
+     *  @param len length of the new attribute value (number of characters)
+     *  @return EC_Normal upon success, an error code otherwise
+     */
+    virtual OFCondition putString(const char *val,
+                                  const Uint32 len);
+
     /** insert into the element value a copy of the given Sint16 value. If the
      *  attribute is multi-valued, all other values remain untouched.
      *  Requires element to be of corresponding VR, otherwise an error is returned.
      *  @param val new value to be inserted
-     *  @param pos position for insert operation. Value: pos <= getVM(), i.e.
-     *  a value can be appended to the end of the current element or inserted within
-     *  the existing value field.
+     *  @param pos position for insert operation. Value: pos <= getVM(), i.e. a value
+     *    can be appended to the end of the current element or inserted within the
+     *    existing value field.
      *  @return EC_Normal upon success, an error code otherwise
      */
     virtual OFCondition putSint16(const Sint16 val, const unsigned long pos = 0);
@@ -439,9 +532,9 @@ class DcmElement
      *  attribute is multi-valued, all other values remain untouched.
      *  Requires element to be of corresponding VR, otherwise an error is returned.
      *  @param val new value to be inserted
-     *  @param pos position for insert operation. Value: pos <= getVM(), i.e.
-     *  a value can be appended to the end of the current element or inserted within
-     *  the existing value field.
+     *  @param pos position for insert operation. Value: pos <= getVM(), i.e. a value
+     *    can be appended to the end of the current element or inserted within the
+     *    existing value field.
      *  @return EC_Normal upon success, an error code otherwise
      */
     virtual OFCondition putUint16(const Uint16 val, const unsigned long pos = 0);
@@ -450,9 +543,9 @@ class DcmElement
      *  attribute is multi-valued, all other values remain untouched.
      *  Requires element to be of corresponding VR, otherwise an error is returned.
      *  @param val new value to be inserted
-     *  @param pos position for insert operation. Value: pos <= getVM(), i.e.
-     *  a value can be appended to the end of the current element or inserted within
-     *  the existing value field.
+     *  @param pos position for insert operation. Value: pos <= getVM(), i.e. a value
+     *    can be appended to the end of the current element or inserted within the
+     *    existing value field.
      *  @return EC_Normal upon success, an error code otherwise
      */
     virtual OFCondition putSint32(const Sint32 val, const unsigned long pos = 0);
@@ -461,9 +554,9 @@ class DcmElement
      *  attribute is multi-valued, all other values remain untouched.
      *  Requires element to be of corresponding VR, otherwise an error is returned.
      *  @param val new value to be inserted
-     *  @param pos position for insert operation. Value: pos <= getVM(), i.e.
-     *  a value can be appended to the end of the current element or inserted within
-     *  the existing value field.
+     *  @param pos position for insert operation. Value: pos <= getVM(), i.e. a value
+     *    can be appended to the end of the current element or inserted within the
+     *    existing value field.
      *  @return EC_Normal upon success, an error code otherwise
      */
     virtual OFCondition putUint32(const Uint32 val, const unsigned long pos = 0);
@@ -472,9 +565,9 @@ class DcmElement
      *  attribute is multi-valued, all other values remain untouched.
      *  Requires element to be of corresponding VR, otherwise an error is returned.
      *  @param val new value to be inserted
-     *  @param pos position for insert operation. Value: pos <= getVM(), i.e.
-     *  a value can be appended to the end of the current element or inserted within
-     *  the existing value field.
+     *  @param pos position for insert operation. Value: pos <= getVM(), i.e. a value
+     *    can be appended to the end of the current element or inserted within the
+     *    existing value field.
      *  @return EC_Normal upon success, an error code otherwise
      */
     virtual OFCondition putFloat32(const Float32 val, const unsigned long pos = 0);
@@ -483,9 +576,9 @@ class DcmElement
      *  attribute is multi-valued, all other values remain untouched.
      *  Requires element to be of corresponding VR, otherwise an error is returned.
      *  @param val new value to be inserted
-     *  @param pos position for insert operation. Value: pos <= getVM(), i.e.
-     *  a value can be appended to the end of the current element or inserted within
-     *  the existing value field.
+     *  @param pos position for insert operation. Value: pos <= getVM(), i.e. a value
+     *    can be appended to the end of the current element or inserted within the
+     *    existing value field.
      *  @return EC_Normal upon success, an error code otherwise
      */
     virtual OFCondition putFloat64(const Float64 val, const unsigned long pos = 0);
@@ -494,9 +587,9 @@ class DcmElement
      *  attribute is multi-valued, all other values remain untouched.
      *  Requires element to be of corresponding VR, otherwise an error is returned.
      *  @param attrTag new value to be inserted
-     *  @param pos position for insert operation. Value: pos <= getVM(), i.e.
-     *  a value can be appended to the end of the current element or inserted within
-     *  the existing value field.
+     *  @param pos position for insert operation. Value: pos <= getVM(), i.e. a value
+     *    can be appended to the end of the current element or inserted within the
+     *    existing value field.
      *  @return EC_Normal upon success, an error code otherwise
      */
     virtual OFCondition putTagVal(const DcmTagKey &attrTag, const unsigned long pos = 0);
@@ -581,7 +674,7 @@ class DcmElement
                                         E_ByteOrder byteOrder = gLocalByteOrder);
 
     /** create an empty Uint8 array of given number of bytes and set it.
-     *  All array elements are initialized with a value of 0 (using 'memzero').
+     *  All array elements are initialized with a value of 0 (using 'memset').
      *  This method is only applicable to certain VRs, e.g. OB.
      *  @param numBytes number of bytes (8 bit) to be created
      *  @param bytes stores the pointer to the resulting buffer
@@ -590,7 +683,7 @@ class DcmElement
     virtual OFCondition createUint8Array(const Uint32 numBytes, Uint8 *&bytes);
 
     /** create an empty Uint16 array of given number of words and set it.
-     *  All array elements are initialized with a value of 0 (using 'memzero').
+     *  All array elements are initialized with a value of 0 (using 'memset').
      *  This method is only applicable to OW data.
      *  @param numWords number of words (16 bit) to be created
      *  @param words stores the pointer to the resulting buffer
@@ -622,7 +715,8 @@ class DcmElement
      *  Note that the value returned by this method does not include the pad byte
      *  to even size needed for a buffer into which a frame is to be loaded.
      *  @param dataset dataset in which this pixel data element is contained
-     *  @param frameSize frame size in bytes (without padding) returned in this parameter upon success
+     *  @param frameSize frame size in bytes (without padding) returned in this
+     *    parameter upon success, otherwise set to 0
      *  @return EC_Normal if successful, an error code otherwise
      */
     virtual OFCondition getUncompressedFrameSize(DcmItem *dataset,
@@ -633,7 +727,7 @@ class DcmElement
      *  which must be large enough to contain a complete frame.
      *  @param dataset pointer to DICOM dataset in which this pixel data object is
      *    located. Used to access rows, columns, samples per pixel etc.
-     *  @param frameNo numer of frame, starting with 0 for the first frame.
+     *  @param frameNo number of frame, starting with 0 for the first frame.
      *  @param startFragment index of the compressed fragment that contains
      *    all or the first part of the compressed bitstream for the given frameNo.
      *    Upon successful return this parameter is updated to contain the index
@@ -674,7 +768,67 @@ class DcmElement
     virtual OFCondition getDecompressedColorModel(DcmItem *dataset,
                                                   OFString &decompressedColorModel);
 
-	/* --- static helper functions --- */
+    /** Determine if this element is universal matching.
+     *  @param normalize normalize each element value. Defaults to OFTrue.
+     *  @param enableWildCardMatching enable or disable wild card matching. Defaults to OFTrue,
+     *    which means wild card matching is performed if the element's VR supports it. Set to
+     *    OFFalse to force single value matching instead.
+     *  @return returns OFTrue if element is empty or if enableWildCardMatching is enabled and
+     *    the element contains only wildcard characters. Returns OFFalse otherwise.
+     */
+    virtual OFBool isUniversalMatch(const OFBool normalize = OFTrue,
+                                    const OFBool enableWildCardMatching = OFTrue);
+
+    /** perform attribute matching.
+     *  Perform attribute matching on a candidate element using this element as the matching
+     *  key.
+     *  @note The given candidate element must refer to the same attribute kind, i.e. have the
+     *    same tag and VR. The method will return OFFalse if it doesn't.
+     *  @param candidate the candidate element to compare this element with.
+     *  @param enableWildCardMatching enable or disable wild card matching. Defaults to OFTrue,
+     *    which means wild card matching is performed if the element's VR supports it. Set to
+     *    OFFalse to force single value matching instead.
+     *  @return OFTrue if the candidate matches this element, OFFalse otherwise.
+     */
+    virtual OFBool matches(const DcmElement& candidate,
+                           const OFBool enableWildCardMatching = OFTrue) const;
+
+    /** perform combined attribute matching.
+     *  Combine the given Attributes to one pair of matching key and candidate respectively
+     *  and perform attribute matching on the result.
+     *  @note The DICOM standard currently defines combined attribute matching for the VR
+     *    DA in combination with TM, such that two attributes can be combined into a single
+     *    attribute with VR=DT before matching against another pair of attributes with VR
+     *    DA and TM. The method will return OFFalse if this element's VR is not DA or the
+     *    given attributes are not of VR TM, DA and TM respectively.
+     *  @param keySecond the second part of the matching key that will be combined with this
+     *    element.
+     *  @param candidateFirst the first part of the candidate that will be matched against this
+     *    this element + keySecond.
+     *  @param candidateSecond the second part of the candidate that will be combined with
+     *    candidateFirst for matching against this elemement + keySecond.
+     *  @return OFTrue if the combination of this elemement and keySecond match with the
+     *    combination of candidateFirst and candidateSecond. OFFalse otherwise.
+     */
+    virtual OFBool combinationMatches(const DcmElement& keySecond,
+                                      const DcmElement& candidateFirst,
+                                      const DcmElement& candidateSecond) const;
+
+    /** returns a pointer to the input stream, if available, NULL otherwise.
+     *  In general, this pointer is available when the element is part of a dataset
+     *  that has been read from a DICOM file, the file is not encoded in deflate
+     *  transfer syntax, and the element value is large enough that loading the value
+     *  has been postponed to the first read access. The DcmInputStreamFactory object
+     *  can create an instance of a file stream seeked to the right position within
+     *  the DICOM file from where the element value can be read.
+     *  @return pointer to the input stream factory of the element, null if no object is available
+     */
+    inline const DcmInputStreamFactory* getInputStream() const
+    {
+        return fLoadValue;
+    }
+
+    /* --- static helper functions --- */
 
     /** scan string value for conformance with given value representation (VR)
      *  @param value string value to be scanned
@@ -688,11 +842,53 @@ class DcmElement
                          const size_t pos = 0,
                          const size_t num = OFString_npos);
 
+    /** scan string value for conformance with given value representation (VR)
+     *  @param vr two-character identifier of the VR to be checked (lower case)
+     *  @param value string value to be scanned
+     *  @param size number of characters to be scanned in 'value'
+     *  @return numeric identifier of the VR found, 16 in case of unknown VR
+     */
+    static int scanValue(const OFString &vr,
+                         const char* const value,
+                         const size_t size);
+
+    /** determine the number of values stored in a string, i.e.\ the value multiplicity (VM)
+     *  @param str character string
+     *  @param len length of the string (number of characters without the trailing NULL byte)
+     *  @return number of values separated by backslash characters in the given string
+     */
+    static unsigned long determineVM(const char *str,
+                                     const size_t len);
+
+    /** get the first value stored in the given string.  The individual values are separated by
+     *  a backslash.  Successive calls of this function allow for extracting all stored values.
+     *  @param str character string
+     *  @param pos position of the first character in the string to search from
+     *  @param len length of the string (number of characters without the trailing NULL byte)
+     *  @param val variable in which the result is stored (empty string in case of error)
+     *  @return position to be used for the next search, identical to 'pos' in case of error
+     */
+    static size_t getValueFromString(const char *str,
+                                     const size_t pos,
+                                     const size_t len,
+                                     OFString &val);
+
+    /** check for correct value multiplicity (VM)
+     *  @param vmNum value multiplicity of the value to be checked.
+     *    For empty values (vmNum=0), the status of the check is always EC_Normal (i.e. no error).
+     *  @param vmStr value multiplicity (according to the data dictionary) to be checked for.
+     *    (valid values: "1", "1-2", "1-3", "1-8", "1-99", "1-n", "2", "2-n", "2-2n",
+     *                   "3", "3-n", "3-3n", "4", "5", "5-n", "6", "7", "7-7n", "8", "9",
+     *                   "16", "24", "32", "256")
+     *  @return status of the check, EC_ValueMultiplicityViolated in case of error
+     */
+    static OFCondition checkVM(const unsigned long vmNum,
+                               const OFString &vmStr);
+
   protected:
 
-    /** This function returns this element's value. The returned value
-     *  corresponds to the byte ordering (little or big endian) that
-     *  was passed.
+    /** This function returns this element's value. The returned value corresponds to the
+     *   byte ordering (little or big endian) that was passed.
      *  @param newByteOrder The byte ordering that shall be accounted
      *                      for (little or big endian).
      */
@@ -704,9 +900,9 @@ class DcmElement
      *  attribute is multi-valued, all other values remain untouched.
      *  Only works for fixed-size VRs, not for strings.
      *  @param value new value to be inserted
-     *  @param position position for insert operation. Value: pos <= getVM(), i.e.
-     *  a value can be appended to the end of the current element or inserted within
-     *  the existing value field.
+     *  @param position position for insert operation. Value: pos <= getVM(), i.e.\ a value
+     *    can be appended to the end of the current element or inserted within the existing
+     *    value field.
      *  @param num number of bytes for each value in the value field.
      *  @return EC_Normal upon success, an error code otherwise
      */
@@ -748,6 +944,7 @@ class DcmElement
     /** This function creates a byte array of Length bytes and returns this
      *  array. In case Length is odd, an array of Length+1 bytes will be
      *  created and Length will be increased by 1.
+     *  @return pointer to created byte array
      */
     virtual Uint8 *newValueField();
 
@@ -773,6 +970,20 @@ class DcmElement
     virtual void writeXMLEndTag(STD_NAMESPACE ostream &out,
                                 const size_t flags);
 
+    /** write element start tag in JSON format
+     *  @param out output stream to which the JSON document is written
+     *  @param format used to format the output
+     */
+    virtual void writeJsonOpener(STD_NAMESPACE ostream &out,
+                                 DcmJsonFormat &format);
+
+    /** write element end tag in JSON format
+     *  @param out output stream to which the JSON document is written
+     *  @param format used to format the output
+     */
+    virtual void writeJsonCloser(STD_NAMESPACE ostream &out,
+                                 DcmJsonFormat &format);
+
     /** return the current byte order of the value field
      *  @return current byte order of the value field
      */
@@ -782,19 +993,6 @@ class DcmElement
      *  @param val byte order of the value field
      */
     void setByteOrder(E_ByteOrder val) { fByteOrder = val; }
-
-    /* --- static helper functions --- */
-
-    /** check for correct value multiplicity (VM)
-     *  @param vmNum value multiplicity of the value to be checked.
-     *    For empty values (vmNum=0), the status of the check is always EC_Normal (i.e. no error).
-     *  @param vmStr value multiplicity (according to the data dictionary) to be checked for.
-     *    (valid values: "1", "1-2", "1-3", "1-8", "1-99", "1-n", "2", "2-n", "2-2n",
-     *                   "3", "3-n", "3-3n", "4", "6", "9", "16", "32")
-     *  @return status of the check, EC_ValueMultiplicityViolated in case of error
-     */
-    static OFCondition checkVM(const unsigned long vmNum,
-                               const OFString &vmStr);
 
   private:
 
@@ -808,232 +1006,54 @@ class DcmElement
     Uint8 *fValue;
 };
 
+/** Checks whether left hand side element is smaller than right hand side
+ *  element. Uses DcmElement's compare() method in order to perform the
+ *  comparison. See DcmElement::compare() for details.
+ *  @param lhs left hand side of the comparison
+ *  @param rhs right hand side of the comparison
+ *  @return OFTrue if lhs is smaller than rhs, OFFalse otherwise
+ */
+inline OFBool operator< (const DcmElement& lhs, const DcmElement& rhs)
+{
+  return ( lhs.compare(rhs) < 0 );
+}
+
+/** Checks whether left hand side element is greater than right hand side
+ *  element. Uses DcmElement's compare() method in order to perform the
+ *  comparison. See DcmElement::compare() for details.
+ *  @param lhs left hand side of the comparison
+ *  @param rhs right hand side of the comparison
+ *  @return OFTrue if lhs is greater than rhs, OFFalse otherwise
+ */
+inline OFBool operator> (const DcmElement& lhs, const DcmElement& rhs)
+{
+    return rhs < lhs;
+}
+
+/** Checks whether left hand side element is smaller than or equal to right hand
+ *  side element. Uses DcmElement's compare() method in order to perform the
+ *  comparison. See DcmElement::compare() for details.
+ *  @param lhs left hand side of the comparison
+ *  @param rhs right hand side of the comparison
+ *  @return OFTrue if lhs is smaller than rhs or both are equal, OFFalse
+ *          otherwise
+ */
+inline OFBool operator<=(const DcmElement& lhs, const DcmElement& rhs)
+{
+    return !(lhs > rhs);
+}
+
+/** Checks whether left hand side element is greater than or equal to right hand
+ *  side element. Uses DcmElement's compare() method in order to perform the
+ *  comparison. See DcmElement::compare() for details.
+ *  @param lhs left hand side of the comparison
+ *  @param rhs right hand side of the comparison
+ *  @return OFTrue if lhs is greater than rhs or both are equal, OFFalse
+ *          otherwise
+ */
+inline OFBool operator>=(const DcmElement& lhs, const DcmElement& rhs)
+{
+    return !(lhs < rhs);
+}
 
 #endif // DCELEM_H
-
-
-/*
-** CVS/RCS Log:
-** $Log: dcelem.h,v $
-** Revision 1.49  2010-11-05 09:34:11  joergr
-** Added support for checking the value multiplicity "9" (see Supplement 131).
-**
-** Revision 1.48  2010-10-14 13:15:40  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.47  2010-04-23 15:28:17  joergr
-** Specify an appropriate default value for the "vm" parameter of checkValue().
-**
-** Revision 1.46  2010-04-23 14:28:00  joergr
-** Added new method to all VR classes which checks whether the stored value
-** conforms to the VR definition and to the specified VM.
-**
-** Revision 1.45  2010-04-22 09:01:18  joergr
-** Added support for further VM values ("1-8", "1-99", "16", "32") to be checked.
-**
-** Revision 1.44  2010-03-01 09:08:44  uli
-** Removed some unnecessary include directives in the headers.
-**
-** Revision 1.43  2009-11-17 16:36:51  joergr
-** Added new method that allows for determining the color model of the
-** decompressed image.
-**
-** Revision 1.42  2009-08-03 09:05:29  joergr
-** Added methods that check whether a given string value conforms to the VR and
-** VM definitions of the DICOM standards.
-**
-** Revision 1.41  2009-05-11 16:05:45  meichel
-** Minor fix in DcmElement::getUncompressedFrameSize for the rare case that
-**   BitsAllocated is not 8 or 16. Also the method now returns the true frame
-**   size without any pad byte.
-**
-** Revision 1.40  2009-02-04 17:52:17  joergr
-** Fixes various type mismatches reported by MSVC introduced with OFFile class.
-**
-** Revision 1.39  2008-07-17 11:19:48  onken
-** Updated copyFrom() documentation.
-**
-** Revision 1.38  2008-07-17 10:30:23  onken
-** Implemented copyFrom() method for complete DcmObject class hierarchy, which
-** permits setting an instance's value from an existing object. Implemented
-** assignment operator where necessary.
-**
-** Revision 1.37  2008-06-23 12:09:13  joergr
-** Fixed inconsistencies in Doxygen API documentation.
-**
-** Revision 1.36  2008-05-29 10:43:21  meichel
-** Implemented new method createValueFromTempFile that allows the content of
-**   a temporary file to be set as the new value of a DICOM element.
-**   Also added a new method compact() that removes the value field if the
-**   value field can still be reconstructed from file. For large attribute
-**   value the file reference is now kept in memory even when the value has
-**   been loaded once. Finally, added new helper method getUncompressedFrameSize
-**   that computes the size of an uncompressed frame for a given dataset.
-**
-** Revision 1.35  2007/11/29 14:30:19  meichel
-** Write methods now handle large raw data elements (such as pixel data)
-**   without loading everything into memory. This allows very large images to
-**   be sent over a network connection, or to be copied without ever being
-**   fully in memory.
-**
-** Revision 1.34  2007/07/11 08:50:23  meichel
-** Initial release of new method DcmElement::getPartialValue which gives access
-**   to partial attribute values without loading the complete attribute value
-**   into memory, if kept in file.
-**
-** Revision 1.33  2007/06/29 14:17:49  meichel
-** Code clean-up: Most member variables in module dcmdata are now private,
-**   not protected anymore.
-**
-** Revision 1.32  2007/06/07 09:01:15  joergr
-** Added createUint8Array() and createUint16Array() methods.
-**
-** Revision 1.31  2006/10/13 10:12:02  joergr
-** Fixed wrong formatting.
-**
-** Revision 1.30  2006/08/15 15:49:56  meichel
-** Updated all code in module dcmdata to correctly compile when
-**   all standard C++ classes remain in namespace std.
-**
-** Revision 1.29  2005/12/08 16:28:11  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.28  2004/07/01 12:28:25  meichel
-** Introduced virtual clone method for DcmObject and derived classes.
-**
-** Revision 1.27  2003/07/04 13:25:35  meichel
-** Replaced forward declarations for OFString with explicit includes,
-**   needed when compiling with HAVE_STD_STRING
-**
-** Revision 1.26  2002/12/09 09:31:14  wilkens
-** Modified/Added doc++ documentation.
-**
-** Revision 1.25  2002/12/06 12:49:09  joergr
-** Enhanced "print()" function by re-working the implementation and replacing
-** the boolean "showFullData" parameter by a more general integer flag.
-** Added doc++ documentation.
-** Made source code formatting more consistent with other modules/files.
-**
-** Revision 1.24  2002/08/27 16:55:31  meichel
-** Initial release of new DICOM I/O stream classes that add support for stream
-**   compression (deflated little endian explicit VR transfer syntax)
-**
-** Revision 1.23  2002/04/25 10:06:09  joergr
-** Added/modified getOFStringArray() implementation.
-** Added support for XML output of DICOM objects.
-**
-** Revision 1.22  2001/09/25 17:19:25  meichel
-** Adapted dcmdata to class OFCondition
-**
-** Revision 1.21  2001/06/01 15:48:39  meichel
-** Updated copyright header
-**
-** Revision 1.20  2001/05/10 12:50:21  meichel
-** Added protected createEmptyValue() method in class DcmElement.
-**
-** Revision 1.19  2000/11/07 16:56:06  meichel
-** Initial release of dcmsign module for DICOM Digital Signatures
-**
-** Revision 1.18  2000/03/08 16:26:14  meichel
-** Updated copyright header.
-**
-** Revision 1.17  2000/02/02 14:31:16  joergr
-** Replaced 'delete' statements by 'delete[]' for objects created with 'new[]'.
-**
-** Revision 1.16  1999/03/31 09:24:37  meichel
-** Updated copyright header in module dcmdata
-**
-** Revision 1.15  1998/11/12 16:47:38  meichel
-** Implemented operator= for all classes derived from DcmObject.
-**
-** Revision 1.14  1998/07/15 15:48:47  joergr
-** Removed several compiler warnings reported by gcc 2.8.1 with
-** additional options, e.g. missing copy constructors and assignment
-** operators, initialization of member variables in the body of a
-** constructor instead of the member initialization list, hiding of
-** methods by use of identical names, uninitialized member variables,
-** missing const declaration of char pointers. Replaced tabs by spaces.
-**
-** Revision 1.13  1997/09/11 15:13:10  hewett
-** Modified getOFString method arguments by removing a default value
-** for the pos argument.  By requiring the pos argument to be provided
-** ensures that callers realise getOFString only gets one component of
-** a multi-valued string.
-**
-** Revision 1.12  1997/08/29 08:32:38  andreas
-** - Added methods getOFString and getOFStringArray for all
-**   string VRs. These methods are able to normalise the value, i. e.
-**   to remove leading and trailing spaces. This will be done only if
-**   it is described in the standard that these spaces are not relevant.
-**   These methods do not test the strings for conformance, this means
-**   especially that they do not delete spaces where they are not allowed!
-**   getOFStringArray returns the string with all its parts separated by \
-**   and getOFString returns only one value of the string.
-**   CAUTION: Currently getString returns a string with trailing
-**   spaces removed (if dcmEnableAutomaticInputDataCorrection == OFTrue) and
-**   truncates the original string (since it is not copied!). If you rely on this
-**   behaviour please change your application now.
-**   Future changes will ensure that getString returns the original
-**   string from the DICOM object (NULL terminated) inclusive padding.
-**   Currently, if you call getOF... before calling getString without
-**   normalisation, you can get the original string read from the DICOM object.
-**
-** Revision 1.11  1997/07/31 06:57:59  andreas
-** new protected method swapValueField for DcmElement
-**
-** Revision 1.10  1997/07/21 07:57:53  andreas
-** - New method DcmElement::detachValueField to give control over the
-**   value field to the calling part (see dcelem.h)
-** - Replace all boolean types (BOOLEAN, CTNBOOLEAN, DICOM_BOOL, BOOL)
-**   with one unique boolean type OFBool.
-**
-** Revision 1.9  1997/05/27 13:48:26  andreas
-** - Add method canWriteXfer to class DcmObject and all derived classes.
-**   This method checks whether it is possible to convert the original
-**   transfer syntax to an new transfer syntax. The check is used in the
-**   dcmconv utility to prohibit the change of a compressed transfer
-**   syntax to a uncompressed.
-**
-** Revision 1.8  1997/05/16 08:23:46  andreas
-** - Revised handling of GroupLength elements and support of
-**   DataSetTrailingPadding elements. The enumeratio E_GrpLenEncoding
-**   got additional enumeration values (for a description see dctypes.h).
-**   addGroupLength and removeGroupLength methods are replaced by
-**   computeGroupLengthAndPadding. To support Padding, the parameters of
-**   element and sequence write functions changed.
-** - Added a new method calcElementLength to calculate the length of an
-**   element, item or sequence. For elements it returns the length of
-**   tag, length field, vr field, and value length, for item and
-**   sequences it returns the length of the whole item. sequence including
-**   the Delimitation tag (if appropriate).  It can never return
-**   UndefinedLength.
-**
-** Revision 1.7  1997/04/18 08:13:28  andreas
-** - The put/get-methods for all VRs did not conform to the C++-Standard
-**   draft. Some Compilers (e.g. SUN-C++ Compiler, Metroworks
-**   CodeWarrier, etc.) create many warnings concerning the hiding of
-**   overloaded get methods in all derived classes of DcmElement.
-**   So the interface of all value representation classes in the
-**   library are changed rapidly, e.g.
-**   OFCondition get(Uint16 & value, const unsigned long pos);
-**   becomes
-**   OFCondition getUint16(Uint16 & value, const unsigned long pos);
-**   All (retired) "returntype get(...)" methods are deleted.
-**   For more information see dcmdata/include/dcelem.h
-**
-** Revision 1.6  1996/07/17 12:38:58  andreas
-** new nextObject to iterate a DicomDataset, DicomFileFormat, Item, ...
-**
-** Revision 1.5  1996/04/16 16:01:36  andreas
-** - put methods for AttributeTag with DcmTagKey Parameter
-** - better support for NULL values
-**
-** Revision 1.4  1996/03/12 15:31:56  hewett
-** The base virtual get & put functions now support char*.
-**
-** Revision 1.3  1996/01/05 13:22:55  andreas
-** - changed to support new streaming facilities
-** - more cleanups
-** - merged read / write methods for block and file transfer
-**
-*/

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2010, OFFIS e.V.
+ *  Copyright (C) 1997-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: Codec class for decoding JPEG Spectral Selection (lossy, 8/12-bit)
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:17 $
- *  CVS/RCS Revision: $Revision: 1.3 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DJDECSPS_H
@@ -35,7 +28,7 @@
 
 /** Decoder class for JPEG Spectral Selection (lossy, 8/12-bit)
  */
-class DJDecoderSpectralSelection : public DJCodecDecoder
+class DCMTK_DCMJPEG_EXPORT DJDecoderSpectralSelection : public DJCodecDecoder
 {
 public: 
 
@@ -50,6 +43,12 @@ public:
    *  @return supported transfer syntax
    */
   virtual E_TransferSyntax supportedTransferSyntax() const;
+
+  /** returns true if the transfer syntax supported by this
+   *  codec is lossless.
+   *  @return lossless flag
+   */
+  virtual OFBool isLosslessProcess() const;
 
 private:
 
@@ -69,18 +68,3 @@ private:
 };
 
 #endif
-
-/*
- * CVS/RCS Log
- * $Log: djdecsps.h,v $
- * Revision 1.3  2010-10-14 13:17:17  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.2  2005-12-08 16:59:20  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.1  2001/11/13 15:56:21  meichel
- * Initial release of module dcmjpeg
- *
- *
- */

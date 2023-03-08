@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1996-2010, OFFIS e.V.
+ *  Copyright (C) 1996-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: Class for connecting to a file-based data source.
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:49 $
- *  CVS/RCS Revision: $Revision: 1.27 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 // ----------------------------------------------------------------------------
@@ -34,9 +27,13 @@ BEGIN_EXTERN_C
 #include <fcntl.h>     // for O_RDWR
 #endif
 END_EXTERN_C
-#include "dcmtk/dcmnet/dicom.h"
-#include "dcmtk/dcmwlm/wltypdef.h"
 #include "dcmtk/ofstd/oftypes.h"
+#include "dcmtk/ofstd/ofstd.h"
+#include "dcmtk/ofstd/ofdatime.h"
+#include "dcmtk/oflog/internal/env.h"
+#include "dcmtk/dcmnet/dicom.h"
+#include "dcmtk/dcmnet/dimse.h"
+#include "dcmtk/dcmwlm/wltypdef.h"
 #include "dcmtk/dcmdata/dcdatset.h"
 #include "dcmtk/dcmdata/dcsequen.h"
 #include "dcmtk/dcmdata/dcvrat.h"
@@ -45,7 +42,6 @@ END_EXTERN_C
 #include "dcmtk/dcmdata/dcvrcs.h"
 #include "dcmtk/dcmwlm/wlds.h"
 #include "dcmtk/dcmwlm/wlfsim.h"
-#include "dcmtk/ofstd/ofstd.h"
 
 #include "dcmtk/dcmwlm/wldsfs.h"
 
@@ -57,8 +53,7 @@ WlmDataSourceFileSystem::WlmDataSourceFileSystem()
 // Task         : Constructor.
 // Parameters   : none.
 // Return Value : none.
-  : fileSystemInteractionManager( ), dfPath( "" ), enableRejectionOfIncompleteWlFiles( OFTrue ),
-    handleToReadLockFile( 0 )
+  : fileSystemInteractionManager( ), dfPath( "" ), enableRejectionOfIncompleteWlFiles( OFTrue ), handleToReadLockFile( 0 )
 {
 }
 
@@ -83,7 +78,7 @@ OFCondition WlmDataSourceFileSystem::ConnectToDataSource()
 // Author       : Thomas Wilkens
 // Task         : Connects to the data source.
 // Parameters   : none.
-// Return Value : Indicates if the connection was established succesfully.
+// Return Value : Indicates if the connection was established successfully.
 {
   // set variables in fileSystemInteractionManager object
   fileSystemInteractionManager.SetEnableRejectionOfIncompleteWlFiles( enableRejectionOfIncompleteWlFiles );
@@ -102,7 +97,7 @@ OFCondition WlmDataSourceFileSystem::DisconnectFromDataSource()
 // Author       : Thomas Wilkens
 // Task         : Disconnects from the data source.
 // Parameters   : none.
-// Return Value : Indicates if the disconnection was completed succesfully.
+// Return Value : Indicates if the disconnection was completed successfully.
 {
   // disconnect from file system
   OFCondition cond = fileSystemInteractionManager.DisconnectFromFileSystem();
@@ -110,6 +105,7 @@ OFCondition WlmDataSourceFileSystem::DisconnectFromDataSource()
   // return result
   return( cond );
 }
+
 
 // ----------------------------------------------------------------------------
 
@@ -149,7 +145,7 @@ OFBool WlmDataSourceFileSystem::IsCalledApplicationEntityTitleSupported()
 //                OFFalse - The called application entity title is not supported or it is not given.
 {
   // Check if calledApplicationEntityTitle does not have a valid value
-  if( calledApplicationEntityTitle.length() == 0 )
+  if( calledApplicationEntityTitle.empty() )
     return( OFFalse );
   else
     return( fileSystemInteractionManager.IsCalledApplicationEntityTitleSupported( calledApplicationEntityTitle ) );
@@ -269,9 +265,9 @@ WlmDataSourceStatusType WlmDataSourceFileSystem::StartFindRequest( const DcmData
   delete offendingElements;
   delete errorElements;
   delete errorComment;
-  offendingElements = new DcmAttributeTag( DCM_OffendingElement, 0 );
-  errorElements = new DcmAttributeTag( DCM_OffendingElement, 0 );
-  errorComment = new DcmLongString( DCM_ErrorComment, 0 );
+  offendingElements = new DcmAttributeTag( DCM_OffendingElement);
+  errorElements = new DcmAttributeTag( DCM_OffendingElement);
+  errorComment = new DcmLongString( DCM_ErrorComment);
 
   // Initialize member variable identifiers; this variable will contain the search mask.
   ClearDataset( identifiers );
@@ -292,7 +288,7 @@ WlmDataSourceStatusType WlmDataSourceFileSystem::StartFindRequest( const DcmData
 
   // This member variable indicates if we encountered an unsupported
   // optional key attribute in the search mask; initialize it with false.
-  // It might be updated whithin CheckSearchMask().
+  // It might be updated within CheckSearchMask().
   foundUnsupportedOptionalKey = OFFalse;
 
   // Scrutinize the search mask.
@@ -310,14 +306,14 @@ WlmDataSourceStatusType WlmDataSourceFileSystem::StartFindRequest( const DcmData
     << "=============================");
 
   // Set a read lock on the worklist files which shall be read from.
-  if( !SetReadlock() )
-    return( WLM_REFUSED_OUT_OF_RESOURCES );
+  if (!SetReadlock())
+    return(WLM_REFUSED_OUT_OF_RESOURCES);
 
   // dump some information if required
   DCMWLM_INFO("Determining matching records from worklist files");
 
   // Determine records from worklist files which match the search mask
-  unsigned long numOfMatchingRecords = fileSystemInteractionManager.DetermineMatchingRecords( identifiers );
+  unsigned long numOfMatchingRecords = OFstatic_cast(unsigned long, fileSystemInteractionManager.DetermineMatchingRecords( identifiers ));
 
   // dump some information if required
   DCMWLM_INFO("Matching results: " << numOfMatchingRecords << " matching records found in worklist files");
@@ -387,7 +383,7 @@ WlmDataSourceStatusType WlmDataSourceFileSystem::StartFindRequest( const DcmData
         {
           cond = resultRecord->putAndInsertString( DCM_SpecificCharacterSet, "ISO_IR 100" );
         }
-        // third option: use charactet set from worklist file
+        // third option: use character set from worklist file
         else if( returnedCharacterSet == RETURN_CHARACTER_SET_FROM_FILE )
         {
           char *value = NULL;
@@ -430,10 +426,10 @@ DcmDataset *WlmDataSourceFileSystem::NextFindResponse( WlmDataSourceStatusType &
 // Date         : July 11, 2002
 // Author       : Thomas Wilkens
 // Task         : This function will return the next dataset that matches the given search mask, if
-//                there is one more resulting dataset to return. In such a case, rstatus will be set
+//                there is one more resulting dataset to return. In such a case, rStatus will be set
 //                to WLM_PENDING or WLM_PENDING_WARNING, depending on if an unsupported key attribute
 //                was encountered in the search mask or not. If there are no more datasets that match
-//                the search mask, this function will return an empty dataset and WLM_SUCCESS in rstatus.
+//                the search mask, this function will return an empty dataset and WLM_SUCCESS in rStatus.
 // Parameters   : rStatus - [out] A value of type WlmDataSourceStatusType that can be used to
 //                          decide if there are still elements that have to be returned.
 // Return Value : The next dataset that matches the given search mask, or an empty dataset if
@@ -502,7 +498,7 @@ void WlmDataSourceFileSystem::HandleNonSequenceElementInResultDataset( DcmElemen
     // value into an unsigned integer and set it correspondingly in the element variable)
     if( tag == DCM_PregnancyStatus )
     {
-      Uint16 uintValue = atoi( value );
+      Uint16 uintValue = OFstatic_cast(Uint16, atoi( value ));
       cond = element->putUint16( uintValue );
     }
     else
@@ -653,7 +649,7 @@ OFBool WlmDataSourceFileSystem::SetReadlock()
   int result;
 
   // if no path or no calledApplicationEntityTitle is specified, return
-  if( dfPath.length() == 0 || calledApplicationEntityTitle.length() == 0 )
+  if( dfPath.empty() || calledApplicationEntityTitle.empty() )
   {
     DCMWLM_ERROR("WlmDataSourceFileSystem::SetReadlock: Path to data source files not specified");
     return OFFalse;
@@ -669,12 +665,12 @@ OFBool WlmDataSourceFileSystem::SetReadlock()
   // assign path to a local variable
   OFString lockname = dfPath;
 
-  // if the given path does not show a PATH_SEPERATOR at the end, append one
-  if( lockname.length() > 0 && lockname[lockname.length()-1] != PATH_SEPARATOR )
+  // if the given path does not show a PATH_SEPARATOR at the end, append one
+  if( !lockname.empty() && lockname[lockname.length()-1] != PATH_SEPARATOR )
     lockname += PATH_SEPARATOR;
 
-  // append calledApplicationEntityTitle, another PATH_SEPERATOR,
-  // and LOCKFILENAME to the given path (and seperator)
+  // append calledApplicationEntityTitle, another PATH_SEPARATOR,
+  // and LOCKFILENAME to the given path (and separator)
   lockname += calledApplicationEntityTitle;
   lockname += PATH_SEPARATOR;
   lockname += LOCKFILENAME;
@@ -683,10 +679,9 @@ OFBool WlmDataSourceFileSystem::SetReadlock()
   handleToReadLockFile = open( lockname.c_str(), O_RDWR );
   if( handleToReadLockFile == -1 )
   {
-    char buf[256];
     handleToReadLockFile = 0;
     DCMWLM_ERROR("WlmDataSourceFileSystem::SetReadlock: Cannot open file " << lockname
-      << " (return code: " << OFStandard::strerror(errno, buf, sizeof(buf)) << ")");
+      << " (return code: " << OFStandard::getLastSystemErrorCode().message() << ")");
     return OFFalse;
   }
 
@@ -781,135 +776,3 @@ OFBool WlmDataSourceFileSystem::ReleaseReadlock()
   // return success
   return OFTrue;
 }
-
-// ----------------------------------------------------------------------------
-
-/*
-** CVS Log
-** $Log: wldsfs.cc,v $
-** Revision 1.27  2010-10-14 13:14:49  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.26  2010-06-03 10:31:21  joergr
-** Replaced calls to strerror() by new helper function OFStandard::strerror()
-** which results in using the thread safe version of strerror() if available.
-**
-** Revision 1.25  2010-05-31 09:21:45  joergr
-** Fixed incorrect handling of SpecificCharacterSet attribute in C-FIND request
-** and response messages.
-**
-** Revision 1.24  2010-05-18 16:43:01  joergr
-** Slightly modified log messages and log levels in order to be more consistent.
-** Replaced '\n' by OFendl in log messages.
-**
-** Revision 1.23  2009-11-24 10:40:01  uli
-** Switched to logging mechanism provided by the "new" oflog module.
-**
-** Revision 1.22  2007-08-10 14:25:21  meichel
-** Added new command line option --keep-char-set that returns
-**   any specific character set as encoded in the worklist file.
-**
-** Revision 1.21  2006/12/15 14:49:28  onken
-** Removed excessive use char* and C-array in favour of OFString and
-** OFList. Simplified some implementation details.
-**
-** Revision 1.20  2006/08/15 16:15:48  meichel
-** Updated the code in module dcmwlm to correctly compile when
-**   all standard C++ classes remain in namespace std.
-**
-** Revision 1.19  2005/12/08 15:48:33  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.18  2005/11/08 12:59:25  wilkens
-** Updated class WlmDataSourceFileSystem: function StartFindRequest will return
-** an error in case SetReadlock returns an error.
-**
-** Revision 1.17  2005/07/01 10:01:31  wilkens
-** Modified a couple of "delete" statements to "delete[]" in order to get rid of
-** valgrind's "Mismatched free() / delete / delete []" error messages.
-**
-** Revision 1.16  2005/05/04 11:32:51  wilkens
-** Modified handling of the attributes ScheduledProcedureStepDescription/
-** ScheduledProtocolCodeSequence and RequestedProcedureDescription/
-** RequestedProcedureCodeSequence in wlmscpfs: in case one of the two attributes
-** does not contain any information in a C-Find RSP message which is about to be
-** sent to an SCU, the empty attribute will be removed from the C-Find RSP message
-** before the message is sent, in order not to send an invalid RSP message.
-** Added two command line options --enable-file-reject (default) and
-** --disable-file-reject to wlmscpfs: these options can be used to enable or
-** disable a file rejection mechanism which makes sure only complete worklist files
-** will be used during the matching process. A worklist file is considered to be
-** complete if it contains all necessary type 1 information which the SCP might
-** have to return to an SCU in a C-Find response message.
-**
-** Revision 1.15  2004/05/26 10:36:55  meichel
-** Fixed minor bug in worklist server regarding failed read locks.
-**
-** Revision 1.14  2004/01/07 08:32:34  wilkens
-** Added new sequence type return key attributes to wlmscpfs. Fixed bug that for
-** equally named attributes in sequences always the same value will be returned.
-** Added functionality that also more than one item will be returned in sequence
-** type return key attributes.
-**
-** Revision 1.13  2003/08/21 13:40:01  wilkens
-** Moved declaration and initialization of member variables matchingDatasets and
-** numOfMatchingDatasets to base class.
-**
-** Revision 1.12  2003/08/21 09:33:24  wilkens
-** Function NextFindResponse() will not any longer return an empty dataset when
-** status WLM_SUCCESS is reached.
-**
-** Revision 1.11  2003/02/17 12:02:09  wilkens
-** Made some minor modifications to be able to modify a special variant of the
-** worklist SCP implementation (wlmscpki).
-**
-** Revision 1.10  2002/12/09 13:42:22  joergr
-** Renamed parameter to avoid name clash with global function index().
-**
-** Revision 1.9  2002/08/12 10:56:16  wilkens
-** Made some modifications in in order to be able to create a new application
-** which contains both wlmscpdb and ppsscpdb and another application which
-** contains both wlmscpfs and ppsscpfs.
-**
-** Revision 1.8  2002/08/05 09:10:11  wilkens
-** Modfified the project's structure in order to be able to create a new
-** application which contains both wlmscpdb and ppsscpdb.
-**
-** Revision 1.7  2002/07/17 13:10:16  wilkens
-** Corrected some minor logical errors in the wlmscpdb sources and completely
-** updated the wlmscpfs so that it does not use the original wlistctn sources
-** any more but standard wlm sources which are now used by all three variants
-** of wlmscps.
-**
-** Revision 1.6  2002/06/10 11:24:53  wilkens
-** Made some corrections to keep gcc 2.95.3 quiet.
-**
-** Revision 1.5  2002/06/05 10:29:27  wilkens
-** Changed call to readdir() so that readdir_r() is called instead.
-**
-** Revision 1.4  2002/05/08 13:20:38  wilkens
-** Added new command line option -nse to wlmscpki and wlmscpdb.
-**
-** Revision 1.2  2002/04/18 14:19:52  wilkens
-** Modified Makefiles. Updated latest changes again. These are the latest
-** sources. Added configure file.
-**
-** Revision 1.4  2002/01/08 19:14:53  joergr
-** Minor adaptations to keep the gcc compiler on Linux and Solaris happy.
-** Currently only the "file version" of the worklist SCP is supported on
-** Unix systems.
-**
-** Revision 1.3  2002/01/08 17:46:04  joergr
-** Reformatted source files (replaced Windows newlines by Unix ones, replaced
-** tabulator characters by spaces, etc.)
-**
-** Revision 1.2  2002/01/08 16:59:06  joergr
-** Added preliminary database support using OTL interface library (modified by
-** MC/JR on 2001-12-21).
-**
-** Revision 1.1  2002/01/08 16:32:47  joergr
-** Added new module "dcmwlm" developed by Thomas Wilkens (initial release for
-** Windows, dated 2001-12-20).
-**
-**
-*/

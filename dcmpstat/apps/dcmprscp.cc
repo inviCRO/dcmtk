@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2000-2010, OFFIS e.V.
+ *  Copyright (C) 2000-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,20 +17,9 @@
  *
  *  Purpose: Presentation State Viewer - Print Server
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:13:45 $
- *  CVS/RCS Revision: $Revision: 1.32 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
-
-#ifdef HAVE_GUSI_H
-#include <GUSI.h>
-#endif
 
 BEGIN_EXTERN_C
 #ifdef HAVE_FCNTL_H
@@ -77,7 +66,7 @@ static void cleanChildren()
 {
 #ifdef HAVE_WAITPID
     int stat_loc;
-#elif HAVE_WAIT3
+#elif defined(HAVE_WAIT3)
     struct rusage rusage;
 #if defined(__NeXT__)
     /* some systems need a union wait as argument to wait3 */
@@ -115,17 +104,9 @@ static void cleanChildren()
 
 int main(int argc, char *argv[])
 {
-
-#ifdef HAVE_GUSI_H
-    GUSISetup(GUSIwithSIOUXSockets);
-    GUSISetup(GUSIwithInternetSockets);
-#endif
-
-#ifdef HAVE_WINSOCK_H
-    WSAData winSockData;
-    /* we need at least version 1.1 */
-    WORD winSockVersionNeeded = MAKEWORD( 1, 1 );
-    WSAStartup(winSockVersionNeeded, &winSockData);
+    OFStandard::initializeNetwork();
+#ifdef WITH_OPENSSL
+    DcmTLSTransportLayer::initializeOpenSSL();
 #endif
 
     dcmDisableGethostbyaddr.set(OFTrue);  // disable hostname lookup
@@ -150,7 +131,7 @@ int main(int argc, char *argv[])
 
     /* evaluate command line */
     prepareCmdLineArgs(argc, argv, OFFIS_CONSOLE_APPLICATION);
-    if (app.parseCommandLine(cmd, argc, argv, OFCommandLine::PF_ExpandWildcards))
+    if (app.parseCommandLine(cmd, argc, argv))
     {
       /* check exclusive options first */
       if (cmd.hasExclusiveOption())
@@ -168,7 +149,7 @@ int main(int argc, char *argv[])
             COUT << "- ZLIB, Version " << zlibVersion() << OFendl;
 #endif
 #ifdef WITH_OPENSSL
-            COUT << "- " << OPENSSL_VERSION_TEXT << OFendl;
+            COUT << "- " << DcmTLSTransportLayer::getOpenSSLVersionName() << OFendl;
 #endif
             return 0;
          }
@@ -179,7 +160,7 @@ int main(int argc, char *argv[])
       {
         // Messages to the "dump" logger are always written with the debug log
         // level, thus enabling that logger for this level shows the dumps
-        log4cplus::Logger log = log4cplus::Logger::getInstance("dcmtk.dcmpstat.dump");
+        dcmtk::log4cplus::Logger log = dcmtk::log4cplus::Logger::getInstance("dcmtk.dcmpstat.dump");
         log.setLogLevel(OFLogger::DEBUG_LOG_LEVEL);
       }
 
@@ -253,11 +234,11 @@ int main(int argc, char *argv[])
       OFString logfilename = logfileprefix;
       logfilename += ".log";
 
-      OFauto_ptr<log4cplus::Layout> layout(new log4cplus::PatternLayout(pattern));
-      log4cplus::SharedAppenderPtr logfile(new log4cplus::FileAppender(logfilename));
-      log4cplus::Logger log = log4cplus::Logger::getRoot();
+      OFunique_ptr<dcmtk::log4cplus::Layout> layout(new dcmtk::log4cplus::PatternLayout(pattern));
+      dcmtk::log4cplus::SharedAppenderPtr logfile(new dcmtk::log4cplus::FileAppender(logfilename));
+      dcmtk::log4cplus::Logger log = dcmtk::log4cplus::Logger::getRoot();
 
-      logfile->setLayout(layout);
+      logfile->setLayout(OFmove(layout));
       log.removeAllAppenders();
       log.addAppender(logfile);
     }
@@ -289,14 +270,13 @@ int main(int argc, char *argv[])
 
     if (targetPort == 0)
     {
-        OFLOG_FATAL(dcmprscpLogger, "no or invalid port number for print scp '" << opt_printer << "'");
-        return 10;
+      OFLOG_FATAL(dcmprscpLogger, "no or invalid port number for print scp '" << opt_printer << "'");
+      return 10;
     }
 
     if (targetDisableNewVRs)
     {
-        dcmEnableUnknownVRGeneration.set(OFFalse);
-        dcmEnableUnlimitedTextVRGeneration.set(OFFalse);
+      dcmDisableGenerationOfNewVRs();
     }
 
     T_ASC_Network *net = NULL; /* the DICOM network and listen port */
@@ -360,51 +340,49 @@ int main(int argc, char *argv[])
     if (tlsCACertificateFolder==NULL) tlsCACertificateFolder = ".";
 
     /* key file format */
-    int keyFileFormat = SSL_FILETYPE_PEM;
-    if (! dvi.getTLSPEMFormat()) keyFileFormat = SSL_FILETYPE_ASN1;
-
-    /* ciphersuites */
-#if OPENSSL_VERSION_NUMBER >= 0x0090700fL
-    OFString tlsCiphersuites(TLS1_TXT_RSA_WITH_AES_128_SHA ":" SSL3_TXT_RSA_DES_192_CBC3_SHA);
-#else
-    OFString tlsCiphersuites(SSL3_TXT_RSA_DES_192_CBC3_SHA);
-#endif
-    Uint32 tlsNumberOfCiphersuites = dvi.getTargetNumberOfCipherSuites(opt_printer);
-    if (tlsNumberOfCiphersuites > 0)
-    {
-      tlsCiphersuites.clear();
-      OFString currentSuite;
-      const char *currentOpenSSL;
-      for (Uint32 ui=0; ui<tlsNumberOfCiphersuites; ui++)
-      {
-        dvi.getTargetCipherSuite(opt_printer, ui, currentSuite);
-        if (NULL == (currentOpenSSL = DcmTLSTransportLayer::findOpenSSLCipherSuiteName(currentSuite.c_str())))
-        {
-          OFLOG_WARN(dcmprscpLogger, "ciphersuite '" << currentSuite << "' is unknown. Known ciphersuites are:");
-          unsigned long numSuites = DcmTLSTransportLayer::getNumberOfCipherSuites();
-          for (unsigned long cs=0; cs < numSuites; cs++)
-          {
-            OFLOG_WARN(dcmprscpLogger, "    " << DcmTLSTransportLayer::getTLSCipherSuiteName(cs));
-          }
-          return 1;
-        } else {
-          if (tlsCiphersuites.length() > 0) tlsCiphersuites += ":";
-          tlsCiphersuites += currentOpenSSL;
-        }
-      }
-    }
+    DcmKeyFileFormat keyFileFormat = DCF_Filetype_PEM;
+    if (! dvi.getTLSPEMFormat()) keyFileFormat = DCF_Filetype_ASN1;
 
     DcmTLSTransportLayer *tLayer = NULL;
     if (targetUseTLS)
     {
-      tLayer = new DcmTLSTransportLayer(DICOM_APPLICATION_ACCEPTOR, tlsRandomSeedFile.c_str());
+      tLayer = new DcmTLSTransportLayer(NET_ACCEPTOR, tlsRandomSeedFile.c_str(), OFFalse);
       if (tLayer == NULL)
       {
         OFLOG_FATAL(dcmprscpLogger, "unable to create TLS transport layer");
         return 1;
       }
 
-      if (tlsCACertificateFolder && (TCS_ok != tLayer->addTrustedCertificateDir(tlsCACertificateFolder, keyFileFormat)))
+      // determine TLS profile
+      OFString profileName;
+      const char *profileNamePtr = dvi.getTargetTLSProfile(opt_printer);
+      if (profileNamePtr) profileName = profileNamePtr;
+      DcmTLSSecurityProfile tlsProfile = TSP_Profile_BCP195;  // default
+      if (profileName == "BCP195") tlsProfile = TSP_Profile_BCP195;
+      else if (profileName == "BCP195-ND") tlsProfile = TSP_Profile_BCP195_ND;
+      else if (profileName == "BCP195-EX") tlsProfile = TSP_Profile_BCP195_Extended;
+      else if (profileName == "AES") tlsProfile = TSP_Profile_AES;
+      else if (profileName == "BASIC") tlsProfile = TSP_Profile_Basic;
+      else if (profileName == "NULL") tlsProfile = TSP_Profile_IHE_ATNA_Unencrypted;
+      else
+      {
+        OFLOG_WARN(dcmprscpLogger, "unknown TLS profile '" << profileName << "', ignoring");
+      }
+
+      if (tLayer->setTLSProfile(tlsProfile).bad())
+      {
+        OFLOG_FATAL(dcmprscpLogger, "unable to select the TLS security profile");
+        return 1;
+      }
+
+      // activate cipher suites
+      if (tLayer->activateCipherSuites().bad())
+      {
+        OFLOG_FATAL(dcmprscpLogger, "unable to activate the selected list of TLS ciphersuites");
+        return 1;
+      }
+
+      if (tlsCACertificateFolder && (tLayer->addTrustedCertificateDir(tlsCACertificateFolder, keyFileFormat).bad()))
       {
         OFLOG_WARN(dcmprscpLogger, "unable to load certificates from directory '" << tlsCACertificateFolder << "', ignoring");
       }
@@ -414,12 +392,12 @@ int main(int argc, char *argv[])
       }
       tLayer->setPrivateKeyPasswd(tlsPrivateKeyPassword); // never prompt on console
 
-      if (TCS_ok != tLayer->setPrivateKeyFile(tlsPrivateKeyFile.c_str(), keyFileFormat))
+      if (tLayer->setPrivateKeyFile(tlsPrivateKeyFile.c_str(), keyFileFormat).bad())
       {
         OFLOG_FATAL(dcmprscpLogger, "unable to load private TLS key from '" << tlsPrivateKeyFile<< "'");
         return 1;
       }
-      if (TCS_ok != tLayer->setCertificateFile(tlsCertificateFile.c_str(), keyFileFormat))
+      if (tLayer->setCertificateFile(tlsCertificateFile.c_str(), keyFileFormat).bad())
       {
         OFLOG_FATAL(dcmprscpLogger, "unable to load certificate from '" << tlsCertificateFile << "'");
         return 1;
@@ -429,20 +407,14 @@ int main(int argc, char *argv[])
         OFLOG_FATAL(dcmprscpLogger, "private key '" << tlsPrivateKeyFile << "' and certificate '" << tlsCertificateFile << "' do not match");
         return 1;
       }
-      if (TCS_ok != tLayer->setCipherSuites(tlsCiphersuites.c_str()))
-      {
-        OFLOG_FATAL(dcmprscpLogger, "unable to set selected cipher suites");
-        return 1;
-      }
-
       tLayer->setCertificateVerification(tlsCertVerification);
 
     }
 #else
     if (targetUseTLS)
     {
-        OFLOG_FATAL(dcmprscpLogger, "not compiled with OpenSSL, cannot use TLS");
-        return 10;
+      OFLOG_FATAL(dcmprscpLogger, "not compiled with OpenSSL, cannot use TLS");
+      return 10;
     }
 #endif
 
@@ -468,14 +440,12 @@ int main(int argc, char *argv[])
     }
 #endif
 
-#if defined(HAVE_SETUID) && defined(HAVE_GETUID)
-    /* return to normal uid so that we can't do too much damage in case
-     * things go very wrong.   Only relevant if the program is setuid root,
-     * and run by another user.  Running as root user may be
-     * potentially disasterous if this program screws up badly.
-     */
-    setuid(getuid());
-#endif
+    /* drop root privileges now and revert to the calling user id (if we are running as setuid root) */
+    if (OFStandard::dropPrivileges().bad())
+    {
+        OFLOG_FATAL(dcmprscpLogger, "setuid() failed, maximum number of processes/threads for uid already running.");
+        return 1;
+    }
 
 #ifdef HAVE_FORK
     int timeout=1;
@@ -500,8 +470,8 @@ int main(int argc, char *argv[])
       connected = 0;
       while (!connected)
       {
-         connected = ASC_associationWaiting(net, timeout);
-         if (!connected) cleanChildren();
+        connected = ASC_associationWaiting(net, timeout);
+        if (!connected) cleanChildren();
       }
       switch (printSCP.negotiateAssociation(*net))
       {
@@ -525,9 +495,7 @@ int main(int argc, char *argv[])
     } // finished
     cleanChildren();
 
-#ifdef HAVE_WINSOCK_H
-    WSACleanup();
-#endif
+    OFStandard::shutdownNetwork();
 
 #ifdef DEBUG
     dcmDataDict.clear();  /* useful for debugging with dmalloc */
@@ -551,121 +519,3 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
-/*
- * CVS/RCS Log:
- * $Log: dcmprscp.cc,v $
- * Revision 1.32  2010-10-14 13:13:45  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.31  2010-06-03 10:32:58  joergr
- * Replaced calls to strerror() by new helper function OFStandard::strerror()
- * which results in using the thread safe version of strerror() if available.
- *
- * Revision 1.30  2010-04-29 10:36:52  joergr
- * Fixed typo in log message.
- *
- * Revision 1.29  2009-12-16 14:12:18  joergr
- * Slightly modified description of command line option --logfile.
- *
- * Revision 1.28  2009-12-15 14:50:49  uli
- * Fixes some issues with --logfile and the config's log options.
- *
- * Revision 1.27  2009-12-15 12:34:40  uli
- * Re-added and fixed the command line option --logfile.
- *
- * Revision 1.26  2009-12-11 15:23:25  joergr
- * Changed description of command line option --dump.
- *
- * Revision 1.25  2009-11-27 10:52:01  joergr
- * Fixed various issues with syntax usage (e.g. layout and formatting).
- * Sightly modifed log messages.
- *
- * Revision 1.24  2009-11-24 14:12:56  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.23  2008-09-25 16:30:24  joergr
- * Added support for printing the expanded command line arguments.
- * Always output the resource identifier of the command line tool in debug mode.
- *
- * Revision 1.22  2006/08/15 16:57:01  meichel
- * Updated the code in module dcmpstat to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.21  2006/07/27 14:36:27  joergr
- * Changed parameter "exclusive" of method addOption() from type OFBool into an
- * integer parameter "flags". Prepended prefix "PF_" to parseLine() flags.
- * Option "--help" is no longer an exclusive option by default.
- *
- * Revision 1.20  2005/12/08 15:46:05  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.19  2005/11/28 15:29:05  meichel
- * File dcdebug.h is not included by any other header file in the toolkit
- *   anymore, to minimize the risk of name clashes of macro debug().
- *
- * Revision 1.18  2005/11/23 16:10:32  meichel
- * Added support for AES ciphersuites in TLS module. All TLS-enabled
- *   tools now support the "AES TLS Secure Transport Connection Profile".
- *
- * Revision 1.17  2005/11/16 14:58:23  meichel
- * Set association timeout in ASC_initializeNetwork to 30 seconds. This improves
- *   the responsiveness of the tools if the peer blocks during assoc negotiation.
- *
- * Revision 1.16  2005/04/04 10:11:53  meichel
- * Module dcmpstat now uses the dcmqrdb API instead of imagectn for maintaining
- *   the index database
- *
- * Revision 1.15  2004/02/04 15:44:38  joergr
- * Removed acknowledgements with e-mail addresses from CVS log.
- *
- * Revision 1.14  2003/09/05 10:38:24  meichel
- * Print SCP now supports TLS connections and the Verification Service Class.
- *
- * Revision 1.13  2003/09/04 10:09:16  joergr
- * Fixed wrong use of OFBool/bool variable.
- *
- * Revision 1.12  2002/11/26 08:44:26  meichel
- * Replaced all includes for "zlib.h" with <zlib.h>
- *   to avoid inclusion of zlib.h in the makefile dependencies.
- *
- * Revision 1.11  2002/09/23 18:26:06  joergr
- * Added new command line option "--version" which prints the name and version
- * number of external libraries used (incl. preparation for future support of
- * 'config.guess' host identifiers).
- *
- * Revision 1.10  2002/06/14 10:44:17  meichel
- * Adapted log file handling to ofConsole singleton
- *
- * Revision 1.9  2002/04/16 14:01:26  joergr
- * Added configurable support for C++ ANSI standard includes (e.g. streams).
- *
- * Revision 1.8  2002/04/11 13:15:38  joergr
- * Replaced direct call of system routines by new standard date and time
- * functions.
- *
- * Revision 1.7  2001/10/12 13:46:48  meichel
- * Adapted dcmpstat to OFCondition based dcmnet module (supports strict mode).
- *
- * Revision 1.6  2001/06/01 15:50:07  meichel
- * Updated copyright header
- *
- * Revision 1.5  2001/06/01 11:02:05  meichel
- * Implemented global flag and command line option to disable reverse
- *   DNS hostname lookup using gethostbyaddr when accepting associations.
- *
- * Revision 1.4  2000/06/07 13:17:42  meichel
- * added binary and textual log facilities to Print SCP.
- *
- * Revision 1.3  2000/06/06 09:44:07  joergr
- * Moved configuration file entry "LogDirectory" from "[PRINT]" to new
- * (more general) section "[APPLICATION]".
- *
- * Revision 1.2  2000/06/02 16:00:38  meichel
- * Adapted all dcmpstat classes to use OFConsole for log and error output
- *
- * Revision 1.1  2000/05/31 12:59:28  meichel
- * Added initial Print SCP support
- *
- *
- */

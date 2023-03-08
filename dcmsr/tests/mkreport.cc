@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2000-2010, OFFIS e.V.
+ *  Copyright (C) 2000-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,22 +17,16 @@
  *
  *  Purpose: Create sample structured reports using the dcmsr API
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:11 $
- *  CVS/RCS Revision: $Revision: 1.29 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
+#include "dcmtk/ofstd/ofconsol.h"     /* for COUT */
 
-#include "dcmtk/ofstd/ofstream.h"
-#include "dcmtk/dcmsr/dsrdoc.h"
-#include "dcmtk/dcmdata/dcuid.h"
-#include "dcmtk/dcmdata/dcfilefo.h"
+#include "dcmtk/dcmsr/dsrdoc.h"       /* for main interface class DSRDocument */
+#include "dcmtk/dcmsr/codes/ucum.h"
+
+#include "dcmtk/dcmdata/dctk.h"       /* for typical set of "dcmdata" headers */
 
 
 // forward declarations
@@ -191,7 +185,8 @@ int main(int argc, char *argv[])
                             OFString filename = "report";
                             filename += array[i];
                             filename += ".dcm";
-                            fileformat->saveFile(filename.c_str(), EXS_LittleEndianExplicit);
+                            if (fileformat->saveFile(filename, EXS_LittleEndianExplicit).bad())
+                                CERR << "ERROR: could not save dataset to file '" << filename << "'" << OFendl;
                         } else
                             CERR << "ERROR: could not write SR document into dataset" << OFendl;
                     }
@@ -240,7 +235,7 @@ static void generate_ki(DSRDocument *doc,
 
     doc->getTree().addContentItem(DSRTypes::RT_contains, DSRTypes::VT_Image);
     doc->getTree().getCurrentContentItem().setConceptName(DSRCodedEntryValue("IHE.10", OFFIS_CODING_SCHEME_DESIGNATOR, "Image Reference"));
-    doc->getTree().getCurrentContentItem().setImageReference(DSRImageReferenceValue("0", "0"));
+    doc->getTree().getCurrentContentItem().setImageReference(DSRImageReferenceValue("0", "0", OFFalse /*check*/), OFFalse /*check*/);
 }
 
 
@@ -284,13 +279,13 @@ static void generate_si(DSRDocument *doc,
 
     doc->getTree().addContentItem(DSRTypes::RT_inferredFrom, DSRTypes::VT_Image, DSRTypes::AM_belowCurrent);
     doc->getTree().getCurrentContentItem().setConceptName(DSRCodedEntryValue("IHE.10", OFFIS_CODING_SCHEME_DESIGNATOR, "Image Reference"));
-    doc->getTree().getCurrentContentItem().setImageReference(DSRImageReferenceValue("0", "0"));
+    doc->getTree().getCurrentContentItem().setImageReference(DSRImageReferenceValue("0", "0", OFFalse /*check*/), OFFalse /*check*/);
 
     doc->getTree().goUp();
 
     doc->getTree().addContentItem(DSRTypes::RT_contains, DSRTypes::VT_Image);
     doc->getTree().getCurrentContentItem().setConceptName(DSRCodedEntryValue("IHE.10", OFFIS_CODING_SCHEME_DESIGNATOR, "Image Reference"));
-    doc->getTree().getCurrentContentItem().setImageReference(DSRImageReferenceValue("0", "0"));
+    doc->getTree().getCurrentContentItem().setImageReference(DSRImageReferenceValue("0", "0", OFFalse /*check*/), OFFalse /*check*/);
 }
 
 
@@ -522,7 +517,7 @@ static void generate_02(DSRDocument *doc, OFString &studyUID_01)
 
     doc->getTree().addContentItem(DSRTypes::RT_contains, DSRTypes::VT_Num);
     doc->getTree().getCurrentContentItem().setConceptName(DSRCodedEntryValue("M-02550", "SNM3", "Diameter"));
-    doc->getTree().getCurrentContentItem().setNumericValue(DSRNumericMeasurementValue("1.5", DSRCodedEntryValue("cm", "UCUM", "1.4", "centimeter")));
+    doc->getTree().getCurrentContentItem().setNumericValue(DSRNumericMeasurementValue("1.5", CODE_UCUM_Centimeter));
 
     doc->getTree().addContentItem(DSRTypes::RT_contains, DSRTypes::VT_Text);
     doc->getTree().getCurrentContentItem().setConceptName(DSRCodedEntryValue("CODE_01", OFFIS_CODING_SCHEME_DESIGNATOR, "Description"));
@@ -538,12 +533,11 @@ static void generate_02(DSRDocument *doc, OFString &studyUID_01)
     doc->getTree().getCurrentContentItem().setConceptName(DSRCodedEntryValue("CODE_03", OFFIS_CODING_SCHEME_DESIGNATOR, "Treatment"));
     doc->getTree().getCurrentContentItem().setStringValue("The plan of treatment is as follows: 4500 rad, 15 treatment sessions, using 100 kV radiation.\nThe reason for treatment, expected acute reaction, and remote possibility of complication was discussed with this patient at some length, and he accepted therapy as outlined.");
 
-    // add additional information on UCUM coding scheme (UID from CP 372)
-    doc->getCodingSchemeIdentification().addItem("UCUM");
-    doc->getCodingSchemeIdentification().setCodingSchemeUID("2.16.840.1.113883.6.8");
-    doc->getCodingSchemeIdentification().setCodingSchemeName("Unified Code for Units of Measure");
-    doc->getCodingSchemeIdentification().setCodingSchemeVersion("1.4");
-    doc->getCodingSchemeIdentification().setResponsibleOrganization("Regenstrief Institute for Health Care, Indianapolis");
+    // add additional information on UCUM coding scheme
+    doc->getCodingSchemeIdentification().addItem(CODE_UCUM_CodingSchemeDesignator);
+    doc->getCodingSchemeIdentification().setCodingSchemeUID(CODE_UCUM_CodingSchemeUID);
+    doc->getCodingSchemeIdentification().setCodingSchemeName(CODE_UCUM_CodingSchemeDescription);
+    doc->getCodingSchemeIdentification().setCodingSchemeResponsibleOrganization("Regenstrief Institute for Health Care, Indianapolis");
 }
 
 
@@ -676,7 +670,7 @@ static void generate_05(DSRDocument *doc)
 
     doc->getTree().addContentItem(DSRTypes::RT_contains, DSRTypes::VT_Text);
     doc->getTree().getCurrentContentItem().setConceptName(DSRCodedEntryValue("CODE_20", OFFIS_CODING_SCHEME_DESIGNATOR, "History of present Illness"));
-    doc->getTree().getCurrentContentItem().setStringValue("This 19-year-old black female, nulligravida, was admitted to the hospital on June 14, 1999 with fever of 102°, left lower quadrant pain, vaginal discharge, constipation, and a tender left adnexal mass. Her past history and family history were unremarkable. Present pain had started 2 to 3 weeks prior (starting on May 30, 1999) and lasted for 6 days. She had taken contraceptive pills in the past, but had stopped because she was not sexually active.");
+    doc->getTree().getCurrentContentItem().setStringValue("This 19-year-old black female, nulligravida, was admitted to the hospital on June 14, 1999 with fever of 102\260, left lower quadrant pain, vaginal discharge, constipation, and a tender left adnexal mass. Her past history and family history were unremarkable. Present pain had started 2 to 3 weeks prior (starting on May 30, 1999) and lasted for 6 days. She had taken contraceptive pills in the past, but had stopped because she was not sexually active.");
 
     doc->getTree().addContentItem(DSRTypes::RT_contains, DSRTypes::VT_Text);
     doc->getTree().getCurrentContentItem().setConceptName(DSRCodedEntryValue("CODE_21", OFFIS_CODING_SCHEME_DESIGNATOR, "Physical Examination"));
@@ -692,7 +686,7 @@ static void generate_05(DSRDocument *doc)
 
     doc->getTree().addContentItem(DSRTypes::RT_contains, DSRTypes::VT_Text);
     doc->getTree().getCurrentContentItem().setConceptName(DSRCodedEntryValue("CODE_24", OFFIS_CODING_SCHEME_DESIGNATOR, "Hospital Course and Treatment"));
-    doc->getTree().getCurrentContentItem().setStringValue("Initially, she was given cephalothin 2 gm IV q6h, and kanamycin 0.5 gm IM b.i.d. Over the next 2 days the patient's condition improved. Her pain decreased, and her temperature came down to normal int he morning and spiked to 101° in the evening. Repeat CBC showed Hb 7.8, Hct 23.5. The pregnancy test was negative. On the second night following the admission, her temperature spiked to 104º. The patient was started on antituberculosis treatment, consisting of isoniazid 300 mg/day, ethambutol 600 mg b.i.d., and rifampin 600 mg daily. She became afebrile on the sixth postoperative day and was discharged on July 15, 1999, in good condition. She will be seen in the office in one week.");
+    doc->getTree().getCurrentContentItem().setStringValue("Initially, she was given cephalothin 2 gm IV q6h, and kanamycin 0.5 gm IM b.i.d. Over the next 2 days the patient's condition improved. Her pain decreased, and her temperature came down to normal int he morning and spiked to 101\260 in the evening. Repeat CBC showed Hb 7.8, Hct 23.5. The pregnancy test was negative. On the second night following the admission, her temperature spiked to 104\260. The patient was started on antituberculosis treatment, consisting of isoniazid 300 mg/day, ethambutol 600 mg b.i.d., and rifampin 600 mg daily. She became afebrile on the sixth postoperative day and was discharged on July 15, 1999, in good condition. She will be seen in the office in one week.");
 
     doc->getTree().addContentItem(DSRTypes::RT_contains, DSRTypes::VT_Text);
     doc->getTree().getCurrentContentItem().setConceptName(DSRCodedEntryValue("CODE_25", OFFIS_CODING_SCHEME_DESIGNATOR, "Surgical Procedures"));
@@ -1145,7 +1139,7 @@ static void generate_17(DSRDocument *doc)
     doc->setStudyDescription("OFFIS Structured Reporting Samples");
     doc->setSeriesDescription("RSNA '95, Siemens, DR");
 
-    doc->setPatientName("Offenmüller^Peter");
+    doc->setPatientName("Offenm\374ller^Peter");
     doc->setPatientSex("M");
     doc->setPatientBirthDate("19280302");
     doc->setPatientID("SMS280302");
@@ -1263,80 +1257,3 @@ static void generate_19(DSRDocument *doc)
     doc->getTree().getCurrentContentItem().setImageReference(DSRImageReferenceValue(UID_RETIRED_UltrasoundImageStorage, "1.2.840.113663.19950725083017.0.0.0"));
     doc->getCurrentRequestedProcedureEvidence().addItem("1.2.840.113663.19950725.1.0", "1.2.840.113663.19950725.1.0.0", UID_RETIRED_UltrasoundImageStorage, "1.2.840.113663.19950725083017.0.0.0");
 }
-
-
-/*
- *  CVS/RCS Log:
- *  $Log: mkreport.cc,v $
- *  Revision 1.29  2010-10-14 13:15:11  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.28  2010-08-09 13:27:21  joergr
- *  Updated data dictionary to 2009 edition of the DICOM standard. From now on,
- *  the official "keyword" is used for the attribute name which results in a
- *  number of minor changes (e.g. "PatientsName" is now called "PatientName").
- *
- *  Revision 1.27  2009-10-13 14:57:52  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.26  2006-08-15 16:40:03  meichel
- *  Updated the code in module dcmsr to correctly compile when
- *    all standard C++ classes remain in namespace std.
- *
- *  Revision 1.25  2005/12/08 15:48:27  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.24  2004/01/05 14:38:05  joergr
- *  Removed acknowledgements with e-mail addresses from CVS log.
- *
- *  Revision 1.23  2003/10/09 17:48:35  joergr
- *  Added identification information on UCUM coding scheme (see CP 372).
- *
- *  Revision 1.22  2003/09/10 13:19:05  joergr
- *  Replaced PrivateCodingSchemeUID by new CodingSchemeIdenticationSequence as
- *  required by CP 324.
- *
- *  Revision 1.21  2003/08/07 14:19:12  joergr
- *  Adapted for use of OFListConstIterator, needed for compiling with HAVE_STL.
- *
- *  Revision 1.20  2002/05/14 08:17:47  joergr
- *  Added new command line option to create "all" reports with one call.
- *
- *  Revision 1.19  2002/05/07 13:02:12  joergr
- *  Added support for the Current Requested Procedure Evidence Sequence and the
- *  Pertinent Other Evidence Sequence to the dcmsr module.
- *
- *  Revision 1.18  2002/04/16 13:51:59  joergr
- *  Added configurable support for C++ ANSI standard includes (e.g. streams).
- *
- *  Revision 1.17  2002/04/11 13:06:08  joergr
- *  Use the new loadFile() and saveFile() routines from the dcmdata library.
- *
- *  Revision 1.16  2001/12/14 10:37:53  joergr
- *  Re-structured test program to "co-operate" with gcc on Irix 5.
- *
- *  Revision 1.15  2001/10/10 15:31:46  joergr
- *  Additonal adjustments for new OFCondition class.
- *
- *  Revision 1.14  2001/09/28 14:15:01  joergr
- *  Replaced "cerr" by "CERR". Replaced "cout" by "COUT".
- *
- *  Revision 1.13  2001/09/26 13:19:11  meichel
- *  Adapted dcmsr to class OFCondition
- *
- *  Revision 1.12  2001/09/26 13:04:34  meichel
- *  Adapted dcmsr to class OFCondition
- *
- *  Revision 1.11  2001/07/02 12:58:04  joergr
- *  Replaced non-standard characters in report "05" and "15".
- *
- *  Revision 1.10  2001/06/13 13:44:47  joergr
- *  Added check for data dictionary to command line tool.
- *
- *  Revision 1.9  2001/06/13 10:09:55  joergr
- *  Added SpecificCharacterSet attribute to report "05".
- *
- *  Revision 1.8  2001/03/28 09:05:44  joergr
- *  Added new sample report (valid structured report with cycle/loop).
- *
- */

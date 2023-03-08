@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: Interface for a dictionary entry in the loadable DICOM data dictionary
  *
- *  Last Update:      $Author: meichel $
- *  Update Date:      $Date: 2010-11-17 15:17:51 $
- *  CVS/RCS Revision: $Revision: 1.26 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCDICENT_H
@@ -32,9 +25,6 @@
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 #include "dcmtk/dcmdata/dctagkey.h"
 #include "dcmtk/dcmdata/dcvr.h"
-
-#define INCLUDE_CSTRING               /* for strcmp() */
-#include "dcmtk/ofstd/ofstdinc.h"
 
 /// constant describing an unlimited VM
 #define DcmVariableVM   -1
@@ -62,7 +52,7 @@ enum DcmDictRangeRestriction
 /** each object of this class manages one entry of the
  *  global DICOM data dictionary.
  */
-class DcmDictEntry: public DcmTagKey
+class DCMTK_DCMDATA_EXPORT DcmDictEntry: public DcmTagKey
 {
 public:
 
@@ -100,7 +90,9 @@ public:
         const char* vers, OFBool doCopyStrings,
         const char* pcreator);
 
-    /// copy constructor
+    /** copy constructor
+     * @param e the entry to copy
+     */
     DcmDictEntry(const DcmDictEntry& e);
 
     /// destructor
@@ -269,7 +261,9 @@ public:
         return groupRangeRestriction;
     }
 
-    /// sets group range restriction
+    /** sets group range restriction
+     * @param rr the new range restriction
+     */
     void setGroupRangeRestriction(DcmDictRangeRestriction rr)
     {
         groupRangeRestriction = rr;
@@ -281,7 +275,9 @@ public:
         return elementRangeRestriction;
     }
 
-    /// sets element range restriction
+    /** sets element range restriction
+    * @param rr the new range restriction
+    */
     void setElementRangeRestriction(DcmDictRangeRestriction rr)
     {
         elementRangeRestriction = rr;
@@ -363,8 +359,12 @@ public:
             );
     }
 
-    /// friend operator<<
-    friend STD_NAMESPACE ostream& operator<<(STD_NAMESPACE ostream& s, const DcmDictEntry& e);
+    /** friend operator<<
+     * @param s the ostream to append upon
+     * @param e the dictionary entry
+     * @return the appended on ostream
+     */
+    friend DCMTK_DCMDATA_EXPORT STD_NAMESPACE ostream& operator<<(STD_NAMESPACE ostream& s, const DcmDictEntry& e);
 
 private:
 
@@ -405,95 +405,3 @@ private:
 };
 
 #endif /* !DCDICENT_H */
-
-
-/*
-** CVS/RCS Log:
-** $Log: dcdicent.h,v $
-** Revision 1.26  2010-11-17 15:17:51  meichel
-** Fixed issue with data dictionary causing private tags with group number
-**   range and flexible element number not to be found in the dictionary.
-**
-** Revision 1.25  2010-10-14 13:15:40  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.24  2010-06-25 09:15:19  uli
-** Fixed issues with compiling with HAVE_STD_STRING.
-**
-** Revision 1.23  2010-03-01 09:08:44  uli
-** Removed some unnecessary include directives in the headers.
-**
-** Revision 1.22  2009-11-04 09:58:07  uli
-** Switched to logging mechanism provided by the "new" oflog module
-**
-** Revision 1.21  2006-08-15 15:49:56  meichel
-** Updated all code in module dcmdata to correctly compile when
-**   all standard C++ classes remain in namespace std.
-**
-** Revision 1.20  2005/12/08 16:28:08  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.19  2004/01/16 14:07:03  joergr
-** Removed acknowledgements with e-mail addresses from CVS log.
-**
-** Revision 1.18  2003/08/14 09:00:56  meichel
-** Adapted type casts to new-style typecast operators defined in ofcast.h
-**
-** Revision 1.17  2002/11/27 12:07:21  meichel
-** Adapted module dcmdata to use of new header file ofstdinc.h
-**
-** Revision 1.16  2002/07/23 14:21:25  meichel
-** Added support for private tag data dictionaries to dcmdata
-**
-** Revision 1.15  2002/04/16 13:41:44  joergr
-** Added configurable support for C++ ANSI standard includes (e.g. streams).
-**
-** Revision 1.14  2001/06/01 15:48:36  meichel
-** Updated copyright header
-**
-** Revision 1.13  2000/03/08 16:26:13  meichel
-** Updated copyright header.
-**
-** Revision 1.12  1999/03/31 09:24:35  meichel
-** Updated copyright header in module dcmdata
-**
-** Revision 1.11  1998/07/15 15:48:45  joergr
-** Removed several compiler warnings reported by gcc 2.8.1 with
-** additional options, e.g. missing copy constructors and assignment
-** operators, initialization of member variables in the body of a
-** constructor instead of the member initialization list, hiding of
-** methods by use of identical names, uninitialized member variables,
-** missing const declaration of char pointers. Replaced tabs by spaces.
-**
-** Revision 1.10  1997/08/26 13:44:59  hewett
-** Modified constructors to take const parameters.
-**
-** Revision 1.9  1997/07/31 14:40:35  meichel
-** Created copy constructor for class DcmDictEntry, required by dcmcheck.
-**
-** Revision 1.8  1997/07/21 08:25:07  andreas
-** - Replace all boolean types (BOOLEAN, CTNBOOLEAN, DICOM_BOOL, BOOL)
-**   with one unique boolean type OFBool.
-**
-** Revision 1.7  1997/04/18 08:04:39  andreas
-** - Minor corrections: correct some warnings of the SUN-C++ Compiler
-**   concerning the assignments of wrong types and inline compiler
-**   errors
-**
-** Revision 1.6  1997/04/15 16:25:05  hewett
-** Corrected data dictionary bug whereby the even/odd range restrictions
-** were not being taken into consideration when searching the dictionary.
-**
-** Revision 1.5  1996/09/24 16:24:58  hewett
-** Added preliminary support for the Macintosh environment (GUSI library).
-**
-** Revision 1.4  1996/09/18 16:37:09  hewett
-** Added capability to search data dictionary by tag name.
-**
-** Revision 1.3  1996/03/20 16:43:49  hewett
-** Updated for revised data dictionary.  Repeating tags are now handled better.
-** A linear list of repeating tags has been introduced with a subset ordering
-** mechanism to ensure that dictionary searches locate the most precise
-** dictionary entry.
-**
-*/

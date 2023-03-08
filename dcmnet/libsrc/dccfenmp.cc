@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2003-2010, OFFIS e.V.
+ *  Copyright (C) 2003-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose:
  *    class DcmExtendedNegotiationItem
  *    class DcmExtendedNegotiationMap
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:28 $
- *  CVS/RCS Revision: $Revision: 1.8 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -65,6 +58,26 @@ DcmExtendedNegotiationItem::DcmExtendedNegotiationItem(const DcmExtendedNegotiat
 DcmExtendedNegotiationItem::~DcmExtendedNegotiationItem()
 {
   delete[] raw_;
+  raw_ = NULL;
+  length_ = 0;
+}
+
+DcmExtendedNegotiationItem& DcmExtendedNegotiationItem::operator=(const DcmExtendedNegotiationItem& arg)
+{
+  if (raw_)
+    delete[] raw_;
+  if (arg.length_ && arg.raw_)
+  {
+    length_ = arg.length_;
+    raw_ = new unsigned char[length_];
+    (void) memcpy(raw_, arg.raw_, OFstatic_cast(size_t, length_));
+  }
+  else
+  {
+    raw_ = NULL;
+    length_ = 0;
+  }
+  return *this;
 }
 
 OFBool DcmExtendedNegotiationItem::operator==(const DcmExtendedNegotiationItem& arg) const
@@ -81,14 +94,50 @@ DcmExtendedNegotiationMap::DcmExtendedNegotiationMap()
 {
 }
 
-DcmExtendedNegotiationMap::~DcmExtendedNegotiationMap()
+DcmExtendedNegotiationMap::DcmExtendedNegotiationMap(const DcmExtendedNegotiationMap& arg)
 {
-  OFListIterator(DcmKeyValuePair<DcmExtendedNegotiationList *> *) first = map_.begin();
-  OFListIterator(DcmKeyValuePair<DcmExtendedNegotiationList *> *) last = map_.end();
+  /* Copy all map entries */
+  OFMap<OFString, DcmExtendedNegotiationList *>::const_iterator first = arg.map_.begin();
+  OFMap<OFString, DcmExtendedNegotiationList *>::const_iterator last = arg.map_.end();
   while (first != last)
   {
-    delete (*first)->value();
+    DcmExtendedNegotiationList* copy = new DcmExtendedNegotiationList( *(*first).second );
+    map_.insert( OFPair<const OFString, DcmExtendedNegotiationList*>( (*first).first, copy ) );
     ++first;
+  }
+}
+
+DcmExtendedNegotiationMap& DcmExtendedNegotiationMap::operator=(const DcmExtendedNegotiationMap& arg)
+{
+  if (this != &arg)
+  {
+    this->clear();
+    /* Clear old and copy all map entries */
+    OFMap<OFString, DcmExtendedNegotiationList *>::const_iterator first = arg.map_.begin();
+    OFMap<OFString, DcmExtendedNegotiationList *>::const_iterator last = arg.map_.end();
+    while (first != last)
+    {
+      DcmExtendedNegotiationList* copy = new DcmExtendedNegotiationList( *(*first).second );
+      map_.insert( OFPair<const OFString, DcmExtendedNegotiationList*>( (*first).first, copy ) );
+      ++first;
+    }
+  }
+  return *this;
+}
+
+
+DcmExtendedNegotiationMap::~DcmExtendedNegotiationMap()
+{
+  clear();
+}
+
+void DcmExtendedNegotiationMap::clear()
+{
+  while (map_.size () != 0)
+  {
+    OFMap<OFString, DcmExtendedNegotiationList *>::iterator first = map_.begin();
+    delete (*first).second;
+    map_.erase(first);
   }
 }
 
@@ -110,15 +159,19 @@ OFCondition DcmExtendedNegotiationMap::add(
   }
 
   OFString skey(key);
-  DcmExtendedNegotiationList * const *value = OFconst_cast(DcmExtendedNegotiationList * const *, map_.lookup(skey));
-  if (value == NULL)
+  OFMap<OFString, DcmExtendedNegotiationList*>::iterator it = map_.find(skey);
+
+  DcmExtendedNegotiationList * const *value = NULL;
+  DcmExtendedNegotiationList *newentry = NULL;
+  if (it == map_.end())
   {
-    DcmExtendedNegotiationList *newentry = new DcmExtendedNegotiationList();
-    map_.add(skey, OFstatic_cast(DcmExtendedNegotiationList *, newentry));
+    newentry = new DcmExtendedNegotiationList();
+    map_.insert(OFPair<OFString, DcmExtendedNegotiationList*>(skey, newentry));
     value = &newentry;
   }
   else
   {
+    value = & ((*it).second);
     // check if abstract syntax is already in list
     OFListIterator(DcmExtendedNegotiationItem) first = (*value)->begin();
     OFListIterator(DcmExtendedNegotiationItem) last = (*value)->end();
@@ -143,7 +196,7 @@ OFCondition DcmExtendedNegotiationMap::add(
 OFBool DcmExtendedNegotiationMap::isKnownKey(const char *key) const
 {
   if (!key) return OFFalse;
-  if (map_.lookup(OFString(key))) return OFTrue;
+  if (map_.find(OFString(key)) != map_.end()) return OFTrue;
   return OFFalse;
 }
 
@@ -154,11 +207,14 @@ OFCondition DcmExtendedNegotiationMap::checkConsistency(
 {
   if ((!key)||(!pckey)) return EC_IllegalCall;
 
-  DcmExtendedNegotiationList * const *entry = OFconst_cast(DcmExtendedNegotiationList * const *, map_.lookup(OFString(key)));
-  if (!entry)
+  // DcmExtendedNegotiationList * const *entry = OFconst_cast(DcmExtendedNegotiationList * const *, map_.lookup(OFString(key)));
+  DcmExtendedNegotiationList * const *entry = NULL;
+  OFMap<OFString, DcmExtendedNegotiationList*>::const_iterator it = map_.find(OFString(key));
+
+  if (it == map_.end())
   {
     // error: key undefined
-    OFString s("extended negotation key undefined: ");
+    OFString s("extended negotiation key undefined: ");
     s += key;
     return makeOFCondition(OFM_dcmnet, 1039, OF_error, s.c_str());
   }
@@ -167,6 +223,16 @@ OFCondition DcmExtendedNegotiationMap::checkConsistency(
   {
     // error: key undefined
     OFString s("presentation context key undefined: ");
+    s += pckey;
+    return makeOFCondition(OFM_dcmnet, 1040, OF_error, s.c_str());
+  }
+
+  // continue with entry found
+  entry = &(*it).second;
+  if (entry == NULL)
+  {
+    // error: key undefined
+    OFString s("presentation context NULL entry for key: ");
     s += pckey;
     return makeOFCondition(OFM_dcmnet, 1040, OF_error, s.c_str());
   }
@@ -197,43 +263,9 @@ const DcmExtendedNegotiationList *DcmExtendedNegotiationMap::getExtendedNegotiat
   const DcmExtendedNegotiationList *result = NULL;
   if (key)
   {
-    DcmExtendedNegotiationList * const *value = OFconst_cast(DcmExtendedNegotiationList * const *, map_.lookup(OFString(key)));
-    if (value) result = *value;
+    OFMap<OFString, DcmExtendedNegotiationList*>::const_iterator it = map_.find(OFString(key));
+    if (it != map_.end())
+      result = (*it).second;
   }
   return result;
 }
-
-
-/*
- * CVS/RCS Log
- * $Log: dccfenmp.cc,v $
- * Revision 1.8  2010-10-14 13:14:28  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.7  2009-09-28 13:28:15  joergr
- * Moved general purpose definition file from module dcmdata to ofstd, and
- * added new defines in order to make the usage easier.
- *
- * Revision 1.6  2005/12/08 15:44:28  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.5  2004/05/06 16:36:30  joergr
- * Added typecasts to keep Sun CC 2.0.1 quiet.
- *
- * Revision 1.4  2004/05/05 12:57:58  meichel
- * Simplified template class DcmSimpleMap<T>, needed for Sun CC 2.0.1
- *
- * Revision 1.3  2004/04/14 11:59:50  joergr
- * Added explicit type cast to keep Sun CC 2.0.1 quiet.
- *
- * Revision 1.2  2003/06/18 08:16:17  meichel
- * Added comparison operators to keep MSVC5 compiler happy
- *
- * Revision 1.1  2003/06/10 14:30:15  meichel
- * Initial release of class DcmAssociationConfiguration and support
- *   classes. This class maintains a list of association negotiation
- *   profiles that can be addressed by symbolic keys. The profiles may
- *   be read from a configuration file.
- *
- *
- */

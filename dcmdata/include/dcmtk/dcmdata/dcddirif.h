@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2010, OFFIS e.V.
+ *  Copyright (C) 2002-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: Interface class for simplified creation of a DICOMDIR
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-11-05 13:11:11 $
- *  CVS/RCS Revision: $Revision: 1.23 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -35,13 +28,13 @@
 #include "dcmtk/dcmdata/dcdicdir.h"
 
 
-/*-----------------------------------*
- *  contant declarations and macros  *
- *-----------------------------------*/
+/*------------------------------------*
+ *  constant declarations and macros  *
+ *------------------------------------*/
 
-// default fileset ID
+// default file-set ID
 #define DEFAULT_FILESETID "DCMTK_MEDIA_DEMO"
-// default specific character set of fileset descriptor file
+// default specific character set of file-set descriptor file
 #define DEFAULT_DESCRIPTOR_CHARSET "ISO_IR 100"
 
 
@@ -54,7 +47,7 @@
  *  images from the DicomDirInterface.  The implementation can be found
  *  in dcmjpeg/libsrc/ddpiimpl.cc (incl. JPEG support).
  */
-class DicomDirImagePlugin
+class DCMTK_DCMDATA_EXPORT DicomDirImagePlugin
 {
   public:
 
@@ -106,9 +99,12 @@ class DicomDirImagePlugin
 };
 
 
-/** An interface class for simplified creation of a DICOMDIR
+/** An interface class for simplified creation of a DICOMDIR.
+ *  @note Please make sure that for all OFFilename parameters, passed to the various
+ *    methods of this class, at least the 8-bit version of the string value is present
+ *    since in some cases only this version is (can be) used.
  */
-class DicomDirInterface
+class DCMTK_DCMDATA_EXPORT DicomDirInterface
 {
 
   public:
@@ -119,14 +115,36 @@ class DicomDirInterface
     {
         /// General Purpose Interchange on CD-R or DVD-RAM Media (STD-GEN-CD/DVD-RAM)
         AP_GeneralPurpose,
-        /// default application profile: GeneralPurpose
+        /// default application profile: General Purpose Interchange on CD-R or DVD-RAM Media
         AP_Default = AP_GeneralPurpose,
-        /// General Purpose DVD with Compression Interchange (STD-GEN-DVD)
-        AP_GeneralPurposeDVD,
+        /// General Purpose DVD Interchange with JPEG (STD-GEN-DVD-JPEG)
+        AP_GeneralPurposeDVDJPEG,
+        /// General Purpose DVD Interchange with JPEG 2000 (STD-GEN-DVD-J2K)
+        AP_GeneralPurposeDVDJPEG2000,
+        /// General Purpose BD Interchange with JPEG (STD-GEN-BD-JPEG)
+        AP_GeneralPurposeBDJPEG,
+        /// General Purpose BD Interchange with JPEG 2000 (STD-GEN-BD-J2K)
+        AP_GeneralPurposeBDJPEG2000,
+        /// General Purpose BD Interchange with MPEG2 MP\@ML (STD-GEN-BD-MPEG2-MPML)
+        AP_GeneralPurposeBDMPEG2MPatML,
+        /// General Purpose BD Interchange with MPEG2 MP\@HL (STD-GEN-BD-MPEG2-MPHL)
+        AP_GeneralPurposeBDMPEG2MPatHL,
+        /// General Purpose BD Interchange with MPEG-4 AVC/H.264 HiP\@Level4.1 (STD-GEN-BD-MPEG4-HPLV41)
+        AP_GeneralPurposeBDMPEG4HPatLV41,
+        /// General Purpose BD Interchange with MPEG-4 AVC/H.264 BD-Compatible HiP\@Level4.1 (STD-GEN-BD-MPEG4-HPLV41BD)
+        AP_GeneralPurposeBDMPEG4HPatLV41BD,
+        /// General Purpose BD Interchange with MPEG-4 AVC/H.264 HiP\@Level4.2 for 2D video (STD-GEN-BD-MPEG4-HPLV42-2D)
+        AP_GeneralPurposeBDMPEG4HPatLV42_2D,
+        /// General Purpose BD Interchange with MPEG-4 AVC/H.264 HiP\@Level4.2 for 3D video (STD-GEN-BD-MPEG4-HPLV42-3D)
+        AP_GeneralPurposeBDMPEG4HPatLV42_3D,
+        /// General Purpose BD Interchange with MPEG-4 AVC/H.264 Stereo HiP\@Level4.2 (STD-GEN-BD-MPEG4-SHPLV42)
+        AP_GeneralPurposeBDMPEG4StereoHPatLV42,
+        /// General Purpose USB and Flash Memory Interchange with JPEG (STD-GEN-USB/MMC/CF/SD-JPEG)
+        AP_USBandFlashJPEG,
+        /// General Purpose USB and Flash Memory Interchange with JPEG 2000 (STD-GEN-USB/MMC/CF/SD-J2K)
+        AP_USBandFlashJPEG2000,
         /// General Purpose MIME Interchange Profile (STD-GEN-MIME)
         AP_GeneralPurposeMIME,
-        /// General Purpose USB and Flash Memory with Compression Interchange (STD-GEN-USB/MMC/CF/SD-JPEG/J2K)
-        AP_USBandFlash,
         /// DVD Interchange with MPEG2 MP\@ML (STD-DVD-MPEG2-MPML)
         AP_MPEG2MPatMLDVD,
         /// Basic Cardiac X-Ray Angiographic Studies on CD-R Media (STD-XABC-CD)
@@ -158,8 +176,8 @@ class DicomDirInterface
     };
 
     /** constructor (default).
-     *  No DICOMDIR object is created by default (see methods createNewDicomDir,
-     *  appendToDicomDir and updateDicomDir).
+     *  No DICOMDIR object is created by default (see methods createNewDicomDir(),
+     *  appendToDicomDir() and updateDicomDir()).
      */
     DicomDirInterface();
 
@@ -181,22 +199,23 @@ class DicomDirInterface
 
     /** create a new DICOMDIR object.
      *  This function replaces any previously existing DICOMDIR file with the specified
-     *  'filename'.  If the backup mode (see 'enableBackupMode') is enabled a backup
+     *  'filename'.  If the backup mode (see disableBackupMode()) is enabled, a backup
      *  copy ('filename' + ".BAK") is created from the existing file and automatically
      *  deleted after the new file has been written without any errors.
      *  @param profile media storage application profile to be used for the DICOMDIR
      *  @param filename name of the DICOMDIR file to be created (default: 'DICOMDIR').
      *    The filename may include a fully qualified pathname.
-     *  @param filesetID value of the attribute FileSetID (default: 'DCMTK_MEDIA_DEMO')
+     *  @param filesetID value of the attribute FileSetID (default: 'DCMTK_MEDIA_DEMO',
+     *    might be empty)
      *  @return EC_Normal upon success, an error code otherwise
      */
     OFCondition createNewDicomDir(const E_ApplicationProfile profile = AP_GeneralPurpose,
-                                  const char *filename = DEFAULT_DICOMDIR_NAME,
-                                  const char *filesetID = DEFAULT_FILESETID);
+                                  const OFFilename &filename = OFFilename(DEFAULT_DICOMDIR_NAME),
+                                  const OFString &filesetID = DEFAULT_FILESETID);
 
     /** create a DICOMDIR object based on an existing DICOMDIR file (append).
      *  This function can be used to append new entries to an existing DICOMDIR file.
-     *  If the backup mode (see 'enableBackupMode') is enabled a backup copy ('filename'
+     *  If the backup mode (see disableBackupMode()) is enabled, a backup copy ('filename'
      *  + ".BAK") is created from the existing file and automatically deleted after the
      *  new file has been written without any errors.
      *  @param profile media storage application profile to be used for the DICOMDIR.
@@ -206,21 +225,21 @@ class DicomDirInterface
      *  @return EC_Normal upon success, an error code otherwise
      */
     OFCondition appendToDicomDir(const E_ApplicationProfile profile,
-                                 const char *filename);
+                                 const OFFilename &filename);
 
     /** create a DICOMDIR object based on an existing DICOMDIR file (update).
      *  This function can be used to append new entries to and update existing entries
      *  in an existing DICOMDIR file.
-     *  If the backup mode (see 'enableBackupMode') is enabled a backup copy ('filename'
+     *  If the backup mode (see disableBackupMode()) is enabled, a backup copy ('filename'
      *  + ".BAK") is created from the existing file and automatically deleted after the
      *  new file has been written without any errors.
      *  @param profile media storage application profile to be used for the DICOMDIR
-     *  @param filename name of the DICOMDIR file to be appended.  The filename may
+     *  @param filename name of the DICOMDIR file to be updated.  The filename may
      *    include a fully qualified pathname.
      *  @return EC_Normal upon success, an error code otherwise
      */
     OFCondition updateDicomDir(const E_ApplicationProfile profile,
-                               const char *filename);
+                               const OFFilename &filename);
 
     /** write the current DICOMDIR object to file.
      *  NB: The filename has already been specified for the object creation (see above).
@@ -240,7 +259,7 @@ class DicomDirInterface
      *  @param allowEmpty empty filename (zero length) allowed if OFTrue
      *  @return OFTrue if filename is valid, OFFalse otherwise
      */
-    OFBool isFilenameValid(const char *filename,
+    OFBool isFilenameValid(const OFFilename &filename,
                            const OFBool allowEmpty = OFFalse);
 
     /** check whether given charset identifier is valid.
@@ -260,10 +279,15 @@ class DicomDirInterface
      *  @param directory directory where the DICOM file is stored (optional).
      *    This parameter might be useful in cases where the DICOM file is not (yet)
      *    stored in the final directory (i.e. "relative" to the DICOMDIR location).
+     *  @param checkFilename flag indicating whether to check the filename with
+     *    isFilenameValid() or not. In case where the DICOM file is copied or
+     *    renamed after this method is called, it might be useful to disable
+     *    this check.
      *  @return EC_Normal upon success, an error code otherwise
      */
-    OFCondition checkDicomFile(const char *filename,
-                               const char *directory = NULL);
+    OFCondition checkDicomFile(const OFFilename &filename,
+                               const OFFilename &directory = OFFilename(),
+                               const OFBool checkFilename = OFTrue);
 
     /** add specified DICOM file to the current DICOMDIR.
      *  This method loads the given file, checks whether it conforms to the current
@@ -274,15 +298,16 @@ class DicomDirInterface
      *    stored in the final directory (i.e. "relative" to the DICOMDIR location).
      *  @return EC_Normal upon success, an error code otherwise
      */
-    OFCondition addDicomFile(const char *filename,
-                             const char *directory = NULL);
+    OFCondition addDicomFile(const OFFilename &filename,
+                             const OFFilename &directory = OFFilename());
 
-    /** set the fileset descriptor file ID and character set.
+    /** set the file-set descriptor file ID and character set.
      *  Prior to any internal modification both 'filename' and 'charset' are checked
      *  using the above checking routines.  Existence of 'filename' is not checked.
-     *  NB: Requires a DICOMDIR to exist (see createNewDicomDir and appendToDicomDir).
-     *  @param filename name of the fileset descriptor file to be set
-     *  @param charset character set of the fileset descriptor file to be set.
+     *  Requires a DICOMDIR object to exist (see createNewDicomDir(), appendToDicomDir()
+     *  or updateDicomDir()).
+     *  @param filename name of the file-set descriptor file to be set
+     *  @param charset character set of the file-set descriptor file to be set.
      *    default: ISO Latin 1 ("ISO_IR 100"), use NULL or empty string to omit value.
      *  @return EC_Normal upon success, an error code otherwise
      */
@@ -290,7 +315,7 @@ class DicomDirInterface
                                      const char *charset = DEFAULT_DESCRIPTOR_CHARSET);
 
     /** set preferred size of the icon images.
-     *  NB: some application profiles require a particicular icon size.
+     *  NB: some application profiles require a particular icon size.
      *      In those cases this manual setting is implicitly ignored.
      *  @param size size of the icon images in pixels (1..256, initial: 64)
      *  @return EC_Normal upon success, an error code otherwise
@@ -302,10 +327,10 @@ class DicomDirInterface
      *  externally stored PGM (portable gray map, 8 bit binary) file instead of the
      *  DICOM image file.  The PGM filename is: 'prefix' + 'dicom_filename'.  The
      *  image does not need to have the correct size as it is scaled automatically.
-     *  @param prefix filename prefix (NULL to disable = default)
+     *  @param prefix filename prefix (empty value to disable = default)
      *  @return always returns EC_Normal
      */
-    OFCondition setIconPrefix(const char *prefix);
+    OFCondition setIconPrefix(const OFFilename &prefix);
 
     /** set filename of default icon image.
      *  For cases that the icon image cannot be created (neither from PGM nor from
@@ -314,7 +339,7 @@ class DicomDirInterface
      *  @param filename name of the default PGM file
      *  @return always returns EC_Normal
      */
-    OFCondition setDefaultIcon(const char *filename);
+    OFCondition setDefaultIcon(const OFFilename &filename);
 
     /** get current status of the "abort on first error" mode.
      *  See enableAbortMode() for more details.
@@ -371,7 +396,7 @@ class DicomDirInterface
     }
 
     /** get current status of the "create backup" mode.
-     *  See enableBackupMode() for more details.
+     *  See disableBackupMode() for more details.
      *  @return OFTrue if mode is enabled, OFFalse otherwise
      */
     OFBool backupMode() const
@@ -406,8 +431,17 @@ class DicomDirInterface
         return TransferSyntaxCheck;
     }
 
+    /** get current status of the "DICOM file format check" mode.
+     *  See disableFileFormatCheck() for more details.
+     *  @return OFTrue if check is enabled, OFFalse otherwise
+     */
+    OFBool fileFormatCheck() const
+    {
+        return FileFormatCheck;
+    }
+
     /** get current status of the "consistency check" mode.
-     *  See enableConsistencyCheck() for more details.
+     *  See disableConsistencyCheck() for more details.
      *  @return OFTrue if check is enabled, OFFalse otherwise
      */
     OFBool consistencyCheck() const
@@ -416,7 +450,7 @@ class DicomDirInterface
     }
 
     /** enable/disable the "abort on first error" mode.
-     *  If the mode is enabled addDicomFile() reports an error message and
+     *  If the mode is enabled, addDicomFile() reports an error message and
      *  returns with an error status code if something went wrong.
      *  Default: off, do not abort
      *  @param newMode enable mode if OFTrue, disable if OFFalse
@@ -425,7 +459,7 @@ class DicomDirInterface
     OFBool enableAbortMode(const OFBool newMode = OFTrue);
 
     /** enable/disable the "map filenames" mode.
-     *  If the mode is enabled filenames are automatically mapped to DICOM format
+     *  If the mode is enabled, filenames are automatically mapped to DICOM format
      *  (convert lower case to upper case characters and remove trailing period).
      *  Default: off, do not map filenames
      *  @param newMode enable mode if OFTrue, disable if OFFalse
@@ -434,7 +468,7 @@ class DicomDirInterface
     OFBool enableMapFilenamesMode(const OFBool newMode = OFTrue);
 
     /** enable/disable the "invent missing values" mode.
-     *  If the mode is enabled required DICOMDIR attributes (type 1) are
+     *  If the mode is enabled, required DICOMDIR attributes (type 1) are
      *  invented when missing in the DICOM file.
      *  Default: off, do not invent attribute values
      *  @param newMode enable mode if OFTrue, disable if OFFalse
@@ -443,7 +477,7 @@ class DicomDirInterface
     OFBool enableInventMode(const OFBool newMode = OFTrue);
 
     /** enable/disable the "invent new patient ID" mode.
-     *  If the mode is enabled a new PatientID is invented in case of
+     *  If the mode is enabled, a new PatientID is invented in case of
      *  inconsistent PatientName attributes, i.e. when different patients
      *  share the same ID.
      *  Default: off, do not invent new patient ID
@@ -453,7 +487,7 @@ class DicomDirInterface
     OFBool enableInventPatientIDMode(const OFBool newMode = OFTrue);
 
     /** enable/disable the "retired SOP class support" mode.
-     *  If the mode is enabled retired SOP classes defined in previous editions
+     *  If the mode is enabled, retired SOP classes defined in previous editions
      *  of the DICOM standard are also accepted.
      *  Default: off, do not accept retired SOP classes
      *  @param newMode enable mode if OFTrue, disable if OFFalse
@@ -462,7 +496,7 @@ class DicomDirInterface
     OFBool enableRetiredSOPClassSupport(const OFBool newMode = OFTrue);
 
     /** enable/disable the "create icon images" mode.
-     *  If the mode is enabled icon images are created for each IMAGE record.
+     *  If the mode is enabled, icon images are created for each IMAGE record.
      *  Please note that particular application profiles (e.g. Basic Cardiac)
      *  require an icon images to be present.  Therefore, this mode does not
      *  affect the icon images creation of such profiles.
@@ -473,7 +507,7 @@ class DicomDirInterface
     OFBool enableIconImageMode(const OFBool newMode = OFTrue);
 
     /** disable/enable the "create backup file" mode.
-     *  If this mode is disabled no backup file of an existing DICOMDIR is created.
+     *  If this mode is disabled, no backup file of an existing DICOMDIR is created.
      *  However, when appending new files to an existing DICOMDIR a _temporary_
      *  backup file "<dicomdir>.$$$" is always created.
      *  Default: on, create a backup file "<dicomdir>.BAK"
@@ -483,41 +517,53 @@ class DicomDirInterface
     OFBool disableBackupMode(const OFBool newMode = OFFalse);
 
     /** disable/enable the "pixel encoding check".
-     *  If this mode is disabled the pixel encoding is not check for compliance
-     *  with the selected application profile.  Please use this switch with care
-     *  since the resulting DICOMDIR will probably violate the rules for the
-     *  selected application profile.
+     *  If this mode is disabled, the pixel encoding is not check for compliance
+     *  with the selected application profile.
      *  Default: on, check pixel encoding (bits allocated/stored, high bit)
+     *  @warning Please use this switch with care since the resulting DICOMDIR will
+     *    probably violate the rules for the selected application profile.
      *  @param newMode disable check if OFFalse, enable if OFTrue
      *  @return previously stored value
      */
     OFBool disableEncodingCheck(const OFBool newMode = OFFalse);
 
     /** disable/enable the "spatial resolution check".
-     *  If this mode is disabled the spatial resolution is not check for compliance
-     *  with the selected application profile.  Please use this switch with care
-     *  since the resulting DICOMDIR will probably violate the rules for the
-     *  selected application profile.
+     *  If this mode is disabled, the spatial resolution is not check for compliance
+     *  with the selected application profile.
      *  Default: on, check spatial resolution
+     *  @warning Please use this switch with care since the resulting DICOMDIR will
+     *    probably violate the rules for the selected application profile.
      *  @param newMode disable check if OFFalse, enable if OFTrue
      *  @return previously stored value
      */
     OFBool disableResolutionCheck(const OFBool newMode = OFFalse);
 
     /** disable/enable the "transfer syntax check".
-     *  If this mode is disabled the transfer syntax is not check for compliance
-     *  with the selected application profile.  Please use this switch with care
-     *  since the resulting DICOMDIR will probably violate the rules for the
-     *  selected application profile.
+     *  If this mode is disabled, the transfer syntax is not check for compliance
+     *  with the selected application profile.
      *  Default: on, check transfer syntax
+     *  @warning Please use this switch with care since the resulting DICOMDIR will
+     *    probably violate the rules for the selected application profile.
      *  @param newMode disable check if OFFalse, enable if OFTrue
      *  @return previously stored value
      */
     OFBool disableTransferSyntaxCheck(const OFBool newMode = OFFalse);
 
+    /** disable/enable the "DICOM file format check".
+     *  If this mode is disabled, it is not checked whether the file to be added
+     *  contains file meta information (according to DICOM part 10).
+     *  Default: on, check DICOM file format
+     *  @warning Please use this switch with care since the resulting DICOMDIR will
+     *    violate the rules of the DICOM standard if it references files that are
+     *    missing the file meta information.
+     *  @param newMode disable check if OFFalse, enable if OFTrue
+     *  @return previously stored value
+     */
+    OFBool disableFileFormatCheck(const OFBool newMode = OFFalse);
+
     /** disable/enable the "consistency check".
-     *  If this mode is disabled the consistency of newly added records with
-     *  already existing ones is not checked (see 'warnAboutInconsistentAttributes'
+     *  If this mode is disabled, the consistency of newly added records with
+     *  already existing ones is not checked (see warnAboutInconsistentAttributes()
      *  for details).
      *  Default: on, perform consistency check
      *  @param newMode disable check if OFFalse, enable if OFTrue
@@ -541,6 +587,11 @@ class DicomDirInterface
      */
     static const char *getProfileName(const E_ApplicationProfile profile);
 
+    /** get string associated with the given directory record entry type.
+     *  @param recordType record type
+     *  @return text string representing the record type
+     */
+    static OFString recordTypeToName(const E_DirRecType recordType);
 
   protected:
 
@@ -554,11 +605,14 @@ class DicomDirInterface
      *  @param filename name of the DICOM file to be checked
      *  @param directory directory where the DICOM file is stored (optional)
      *  @param fileformat object in which the loaded data is stored
+     *  @param checkFilename flag indicating whether to check the filename with
+     *    isFilenameValid() or not
      *  @return EC_Normal upon success, an error code otherwise
      */
-    OFCondition loadAndCheckDicomFile(const char *filename,
-                                      const char *directory,
-                                      DcmFileFormat &fileformat);
+    OFCondition loadAndCheckDicomFile(const OFFilename &filename,
+                                      const OFFilename &directory,
+                                      DcmFileFormat &fileformat,
+                                      const OFBool checkFilename = OFTrue);
 
     /** check SOP class and transfer syntax for compliance with current profile
      *  @param metainfo object where the DICOM file meta information is stored
@@ -568,7 +622,7 @@ class DicomDirInterface
      */
     OFCondition checkSOPClassAndXfer(DcmMetaInfo *metainfo,
                                      DcmItem *dataset,
-                                     const char *filename);
+                                     const OFFilename &filename);
 
     /** check attributes for compliance with Basic Cardiac application profile
      *  @param dataset object where the DICOM dataset is stored
@@ -576,7 +630,7 @@ class DicomDirInterface
      *  @return EC_Normal upon success, an error code otherwise
      */
     OFCondition checkBasicCardiacAttributes(DcmItem *dataset,
-                                            const char *filename);
+                                            const OFFilename &filename);
 
     /** check attributes for compliance with X-ray Angiography application profile
      *  @param dataset object where the DICOM dataset is stored
@@ -586,7 +640,7 @@ class DicomDirInterface
      */
     OFCondition checkXrayAngiographicAttributes(DcmItem *dataset,
                                                 const OFString &sopClass,
-                                                const char *filename);
+                                                const OFFilename &filename);
 
     /** check attributes for compliance with dental radiograph application profile
      *  @param dataset object where the DICOM dataset is stored
@@ -594,7 +648,7 @@ class DicomDirInterface
      *  @return EC_Normal upon success, an error code otherwise
      */
     OFCondition checkDentalRadiographAttributes(DcmItem *dataset,
-                                                const char *filename);
+                                                const OFFilename &filename);
 
     /** check attributes for compliance with CT and MR application profile
      *  @param dataset object where the DICOM dataset is stored
@@ -604,7 +658,7 @@ class DicomDirInterface
      */
     OFCondition checkCTandMRAttributes(DcmItem *dataset,
                                        const OFString &sopClass,
-                                       const char *filename);
+                                       const OFFilename &filename);
 
     /** check attributes for compliance with Ultrasound application profiles
      *  @param dataset object where the DICOM dataset is stored
@@ -614,9 +668,9 @@ class DicomDirInterface
      */
     OFCondition checkUltrasoundAttributes(DcmItem *dataset,
                                           const OFString &transferSyntax,
-                                          const char *filename);
+                                          const OFFilename &filename);
 
-    /** check attributes for comliance with current application profile
+    /** check attributes for compliance with current application profile
      *  @param metainfo object where the DICOM file meta information is stored
      *  @param dataset object where the DICOM dataset is stored
      *  @param filename name of the DICOM file to be checked
@@ -624,7 +678,7 @@ class DicomDirInterface
      */
     OFCondition checkMandatoryAttributes(DcmMetaInfo *metainfo,
                                          DcmItem *dataset,
-                                         const char *filename);
+                                         const OFFilename &filename);
 
     /** check whether given directory record matches dataset.
      *  The check depends on the record type and is performed mainly based on
@@ -650,369 +704,441 @@ class DicomDirInterface
 
     /** create or update patient record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildPatientRecord(DcmDirectoryRecord *record,
-                                           DcmItem *dataset,
-                                           const OFString &sourceFilename);
+                                           DcmFileFormat *fileformat,
+                                           const OFFilename &sourceFilename);
 
     /** create or update study record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildStudyRecord(DcmDirectoryRecord *record,
-                                         DcmItem *dataset,
-                                         const OFString &sourceFilename);
+                                         DcmFileFormat *fileformat,
+                                         const OFFilename &sourceFilename);
 
     /** create or update new series record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildSeriesRecord(DcmDirectoryRecord *record,
-                                          DcmItem *dataset,
-                                          const OFString &sourceFilename);
+                                          DcmFileFormat *fileformat,
+                                          const OFFilename &sourceFilename);
 
     /** create or update overlay record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildOverlayRecord(DcmDirectoryRecord *record,
-                                           DcmItem *dataset,
+                                           DcmFileFormat *fileformat,
                                            const OFString &referencedFileID,
-                                           const OFString &sourceFilename);
+                                           const OFFilename &sourceFilename);
 
     /** create or update modality LUT record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildModalityLutRecord(DcmDirectoryRecord *record,
-                                               DcmItem *dataset,
+                                               DcmFileFormat *fileformat,
                                                const OFString &referencedFileID,
-                                               const OFString &sourceFilename);
+                                               const OFFilename &sourceFilename);
 
     /** create or update VOI LUT record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildVoiLutRecord(DcmDirectoryRecord *record,
-                                          DcmItem *dataset,
+                                          DcmFileFormat *fileformat,
                                           const OFString &referencedFileID,
-                                          const OFString &sourceFilename);
+                                          const OFFilename &sourceFilename);
 
     /** create or update curve record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildCurveRecord(DcmDirectoryRecord *record,
-                                         DcmItem *dataset,
+                                         DcmFileFormat *fileformat,
                                          const OFString &referencedFileID,
-                                         const OFString &sourceFilename);
+                                         const OFFilename &sourceFilename);
 
     /** create or update structure reporting record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildStructReportRecord(DcmDirectoryRecord *record,
-                                                DcmItem *dataset,
+                                                DcmFileFormat *fileformat,
                                                 const OFString &referencedFileID,
-                                                const OFString &sourceFilename);
+                                                const OFFilename &sourceFilename);
 
     /** create or update presentation state record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildPresentationRecord(DcmDirectoryRecord *record,
-                                                DcmItem *dataset,
+                                                DcmFileFormat *fileformat,
                                                 const OFString &referencedFileID,
-                                                const OFString &sourceFilename);
+                                                const OFFilename &sourceFilename);
 
     /** create or update waveform record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildWaveformRecord(DcmDirectoryRecord *record,
-                                            DcmItem *dataset,
+                                            DcmFileFormat *fileformat,
                                             const OFString &referencedFileID,
-                                            const OFString &sourceFilename);
+                                            const OFFilename &sourceFilename);
 
     /** create or update RT dose record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildRTDoseRecord(DcmDirectoryRecord *record,
-                                          DcmItem *dataset,
+                                          DcmFileFormat *fileformat,
                                           const OFString &referencedFileID,
-                                          const OFString &sourceFilename);
+                                          const OFFilename &sourceFilename);
 
     /** create or update RT structure set record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildRTStructureSetRecord(DcmDirectoryRecord *record,
-                                                  DcmItem *dataset,
+                                                  DcmFileFormat *fileformat,
                                                   const OFString &referencedFileID,
-                                                  const OFString &sourceFilename);
+                                                  const OFFilename &sourceFilename);
 
     /** create or update RT plan record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildRTPlanRecord(DcmDirectoryRecord *record,
-                                          DcmItem *dataset,
+                                          DcmFileFormat *fileformat,
                                           const OFString &referencedFileID,
-                                          const OFString &sourceFilename);
+                                          const OFFilename &sourceFilename);
 
     /** create or update RT treatment record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildRTTreatmentRecord(DcmDirectoryRecord *record,
-                                               DcmItem *dataset,
+                                               DcmFileFormat *fileformat,
                                                const OFString &referencedFileID,
-                                               const OFString &sourceFilename);
+                                               const OFFilename &sourceFilename);
 
     /** create or update stored print record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildStoredPrintRecord(DcmDirectoryRecord *record,
-                                               DcmItem *dataset,
+                                               DcmFileFormat *fileformat,
                                                const OFString &referencedFileID,
-                                               const OFString &sourceFilename);
+                                               const OFFilename &sourceFilename);
 
     /** create or update key object doc record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildKeyObjectDocRecord(DcmDirectoryRecord *record,
-                                                DcmItem *dataset,
+                                                DcmFileFormat *fileformat,
                                                 const OFString &referencedFileID,
-                                                const OFString &sourceFilename);
+                                                const OFFilename &sourceFilename);
 
     /** create or update registration record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildRegistrationRecord(DcmDirectoryRecord *record,
-                                                DcmItem *dataset,
+                                                DcmFileFormat *fileformat,
                                                 const OFString &referencedFileID,
-                                                const OFString &sourceFilename);
+                                                const OFFilename &sourceFilename);
 
     /** create or update fiducial record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildFiducialRecord(DcmDirectoryRecord *record,
-                                            DcmItem *dataset,
+                                            DcmFileFormat *fileformat,
                                             const OFString &referencedFileID,
-                                            const OFString &sourceFilename);
+                                            const OFFilename &sourceFilename);
 
     /** create or update raw data record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildRawDataRecord(DcmDirectoryRecord *record,
-                                           DcmItem *dataset,
+                                           DcmFileFormat *fileformat,
                                            const OFString &referencedFileID,
-                                           const OFString &sourceFilename);
+                                           const OFFilename &sourceFilename);
 
     /** create or update spectroscopy record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildSpectroscopyRecord(DcmDirectoryRecord *record,
-                                                DcmItem *dataset,
+                                                DcmFileFormat *fileformat,
                                                 const OFString &referencedFileID,
-                                                const OFString &sourceFilename);
+                                                const OFFilename &sourceFilename);
 
     /** create or update encap doc record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildEncapDocRecord(DcmDirectoryRecord *record,
-                                            DcmItem *dataset,
+                                            DcmFileFormat *fileformat,
                                             const OFString &referencedFileID,
-                                            const OFString &sourceFilename);
+                                            const OFFilename &sourceFilename);
 
     /** create or update value map record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildValueMapRecord(DcmDirectoryRecord *record,
-                                            DcmItem *dataset,
+                                            DcmFileFormat *fileformat,
                                             const OFString &referencedFileID,
-                                            const OFString &sourceFilename);
+                                            const OFFilename &sourceFilename);
 
     /** create or update hanging protocol record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildHangingProtocolRecord(DcmDirectoryRecord *record,
-                                                   DcmItem *dataset,
+                                                   DcmFileFormat *fileformat,
                                                    const OFString &referencedFileID,
-                                                   const OFString &sourceFilename);
+                                                   const OFFilename &sourceFilename);
 
     /** create or update stereometric record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildStereometricRecord(DcmDirectoryRecord *record,
-                                                DcmItem *dataset,
+                                                DcmFileFormat *fileformat,
                                                 const OFString &referencedFileID,
-                                                const OFString &sourceFilename);
+                                                const OFFilename &sourceFilename);
 
     /** create or update palette record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildPaletteRecord(DcmDirectoryRecord *record,
-                                           DcmItem *dataset,
+                                           DcmFileFormat *fileformat,
                                            const OFString &referencedFileID,
-                                           const OFString &sourceFilename);
+                                           const OFFilename &sourceFilename);
 
     /** create or update surface record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildSurfaceRecord(DcmDirectoryRecord *record,
-                                           DcmItem *dataset,
+                                           DcmFileFormat *fileformat,
                                            const OFString &referencedFileID,
-                                           const OFString &sourceFilename);
+                                           const OFFilename &sourceFilename);
 
     /** create or update measurement record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildMeasurementRecord(DcmDirectoryRecord *record,
-                                               DcmItem *dataset,
+                                               DcmFileFormat *fileformat,
                                                const OFString &referencedFileID,
-                                               const OFString &sourceFilename);
+                                               const OFFilename &sourceFilename);
 
     /** create or update implant record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildImplantRecord(DcmDirectoryRecord *record,
-                                           DcmItem *dataset,
+                                           DcmFileFormat *fileformat,
                                            const OFString &referencedFileID,
-                                           const OFString &sourceFilename);
+                                           const OFFilename &sourceFilename);
 
     /** create or update implant group record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildImplantGroupRecord(DcmDirectoryRecord *record,
-                                                DcmItem *dataset,
+                                                DcmFileFormat *fileformat,
                                                 const OFString &referencedFileID,
-                                                const OFString &sourceFilename);
+                                                const OFFilename &sourceFilename);
 
     /** create or update implant assy record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildImplantAssyRecord(DcmDirectoryRecord *record,
-                                               DcmItem *dataset,
+                                               DcmFileFormat *fileformat,
                                                const OFString &referencedFileID,
-                                               const OFString &sourceFilename);
+                                               const OFFilename &sourceFilename);
+
+    /** create or update plan record and copy required values from dataset
+     *  @param record record to be updated, use NULL to create a new one
+     *  @param fileformat DICOM dataset of the current file
+     *  @param referencedFileID value of the Referenced File ID attribute
+     *  @param sourceFilename name of the source DICOM file
+     *  @return pointer to new or updated record, NULL if an error occurred
+     */
+    DcmDirectoryRecord *buildPlanRecord(DcmDirectoryRecord *record,
+                                        DcmFileFormat *fileformat,
+                                        const OFString &referencedFileID,
+                                        const OFFilename &sourceFilename);
+
+    /** create or update surface scan record and copy required values from dataset
+     *  @param record record to be updated, use NULL to create a new one
+     *  @param fileformat DICOM dataset of the current file
+     *  @param referencedFileID value of the Referenced File ID attribute
+     *  @param sourceFilename name of the source DICOM file
+     *  @return pointer to new or updated record, NULL if an error occurred
+     */
+    DcmDirectoryRecord *buildSurfaceScanRecord(DcmDirectoryRecord *record,
+                                               DcmFileFormat *fileformat,
+                                               const OFString &referencedFileID,
+                                               const OFFilename &sourceFilename);
+
+    /** create or update tract record and copy required values from dataset
+     *  @param record record to be updated, use NULL to create a new one
+     *  @param fileformat DICOM dataset of the current file
+     *  @param referencedFileID value of the Referenced File ID attribute
+     *  @param sourceFilename name of the source DICOM file
+     *  @return pointer to new or updated record, NULL if an error occurred
+     */
+    DcmDirectoryRecord *buildTractRecord(DcmDirectoryRecord *record,
+                                         DcmFileFormat *fileformat,
+                                         const OFString &referencedFileID,
+                                         const OFFilename &sourceFilename);
+
+    /** create or update assessment record and copy required values from dataset
+     *  @param record record to be updated, use NULL to create a new one
+     *  @param fileformat DICOM dataset of the current file
+     *  @param referencedFileID value of the Referenced File ID attribute
+     *  @param sourceFilename name of the source DICOM file
+     *  @return pointer to new or updated record, NULL if an error occurred
+     */
+    DcmDirectoryRecord *buildAssessmentRecord(DcmDirectoryRecord *record,
+                                              DcmFileFormat *fileformat,
+                                              const OFString &referencedFileID,
+                                              const OFFilename &sourceFilename);
+
+    /** create or update radiotherapy record and copy required values from dataset
+     *  @param record record to be updated, use NULL to create a new one
+     *  @param fileformat DICOM dataset of the current file
+     *  @param referencedFileID value of the Referenced File ID attribute
+     *  @param sourceFilename name of the source DICOM file
+     *  @return pointer to new or updated record, NULL if an error occurred
+     */
+    DcmDirectoryRecord *buildRadiotherapyRecord(DcmDirectoryRecord *record,
+                                                DcmFileFormat *fileformat,
+                                                const OFString &referencedFileID,
+                                                const OFFilename &sourceFilename);
+
+    /** create or update annotation record and copy required values from dataset
+     *  @param record record to be updated, use NULL to create a new one
+     *  @param fileformat DICOM dataset of the current file
+     *  @param referencedFileID value of the Referenced File ID attribute
+     *  @param sourceFilename name of the source DICOM file
+     *  @return pointer to new or updated record, NULL if an error occurred
+     */
+    DcmDirectoryRecord *buildAnnotationRecord(DcmDirectoryRecord *record,
+                                              DcmFileFormat *fileformat,
+                                              const OFString &referencedFileID,
+                                              const OFFilename &sourceFilename);
 
     /** create or update image record and copy required values from dataset
      *  @param record record to be updated, use NULL to create a new one
-     *  @param dataset DICOM dataset of the current file
+     *  @param fileformat DICOM dataset of the current file
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new or updated record, NULL if an error occurred
      */
     DcmDirectoryRecord *buildImageRecord(DcmDirectoryRecord *record,
-                                         DcmItem *dataset,
+                                         DcmFileFormat *fileformat,
                                          const OFString &referencedFileID,
-                                         const OFString &sourceFilename);
+                                         const OFFilename &sourceFilename);
 
     /** create icon image from given PGM (portable gray map) file.
      *  Please note that only grayscale images in binary format are currently
@@ -1024,7 +1150,7 @@ class DicomDirInterface
      *  @param height height of the scaled icon image (in pixels)
      *  @return OFTrue if successful, OFFalse otherwise
      */
-    OFBool getIconFromFile(const OFString &filename,
+    OFBool getIconFromFile(const OFFilename &filename,
                            Uint8 *pixel,
                            const unsigned long count,
                            const unsigned int width,
@@ -1058,33 +1184,34 @@ class DicomDirInterface
     OFCondition addIconImage(DcmDirectoryRecord *record,
                              DcmItem *dataset,
                              const unsigned int size,
-                             const OFString &sourceFilename);
+                             const OFFilename &sourceFilename);
 
     /** add child record to a given parent record.
      *  A new record is only added if it does not already exist.
      *  @param parent parent record (add new record as a child of this one)
      *  @param recordType type of directory record to be created
-     *  @param dataset DICOM dataset containing data of the new record
+     *  @param fileformat DICOM dataset containing data of the new record
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
      *  @return pointer to new/existing record, NULL if an error occurred
      */
     DcmDirectoryRecord *addRecord(DcmDirectoryRecord *parent,
                                   const E_DirRecType recordType,
-                                  DcmItem *dataset,
+                                  DcmFileFormat *fileformat,
                                   const OFString &referencedFileID,
-                                  const OFString &sourceFilename);
+                                  const OFFilename &sourceFilename);
 
     /** check referenced SOP instance for consistency with a new directory record
      *  @param record directory record to be checked
      *  @param dataset DICOM dataset containing data of the new record
      *  @param referencedFileID value of the Referenced File ID attribute
      *  @param sourceFilename name of the source DICOM file
+     *  @return OFTrue if the data is consistent, OFFalse otherwise
      */
     OFBool checkReferencedSOPInstance(DcmDirectoryRecord *record,
                                       DcmItem *dataset,
                                       const OFString &referencedFileID,
-                                      const OFString &sourceFilename);
+                                      const OFFilename &sourceFilename);
 
     /** invent missing type 1 attributes for all child records (from patient level)
      *  @param parent invent missing attributes for all children of this record (root)
@@ -1112,37 +1239,37 @@ class DicomDirInterface
     /** create backup of a given file
      *  @param filename name of the file to be backuped
      */
-    void createDicomDirBackup(const char *filename);
+    void createDicomDirBackup(const OFFilename &filename);
 
     /** delete backup file if one has been created
      */
     void deleteDicomDirBackup();
 
     /** print a message that the value of a given tag is unexpected.
-     *  The output format is: "{Error|Warning}: attribute \<key.tagName()\> \<key\>
-     *  has other value than expected[ in file: \<filename\>]"
+     *  The output format is: "{Error|Warning}: attribute <key.tagName()> <key>
+     *  has other value than expected[ in file: <filename>]"
      *  @param key affected tag
-     *  @param filename name of the file (optional, might be NULL)
+     *  @param filename name of the file (optional, might be empty)
      *  @param errorMsg print error message if OFTrue, a warning message otherwise
      */
     void printUnexpectedValueMessage(const DcmTagKey &key,
-                                     const char *filename = NULL,
+                                     const OFFilename &filename = OFFilename(),
                                      const OFBool errorMsg = OFTrue);
 
     /** print an error message that a required attribute is missing/empty.
-     *  The output format is: "Error: <error.text()>: required attribute \<key.tagName()\>
-     *  \<key>\ {empty|missing}[ in file: \<filename\>]"
+     *  The output format is: "Error: <error.text()>: required attribute <key.tagName()>
+     *  <key> {empty|missing}[ in file: <filename>]"
      *  @param key affected tag
-     *  @param filename name of the file (optional, might be NULL)
+     *  @param filename name of the file (optional, might be empty)
      *  @param emptyMsg print "empty" if OFTrue, "missing" otherwise
      */
     void printRequiredAttributeMessage(const DcmTagKey &key,
-                                       const char *filename = NULL,
+                                       const OFFilename &filename = OFFilename(),
                                        const OFBool emptyMsg = OFFalse);
 
     /** print an error message that something went wrong with an attribute.
-     *  The output format is: "Error: \<error.text()\>: [cannot \<operation\> ]\<key.tagName()\>
-     *  \<key\>"
+     *  The output format is: "Error: <error.text()>: [cannot <operation> ]<key.tagName()>
+     *  <key>"
      *  @param key affected tag
      *  @param error status to be reported (only if ".bad()")
      *  @param operation name of the operation that failed (optional, might be NULL)
@@ -1152,7 +1279,7 @@ class DicomDirInterface
                                     const char *operation);
 
     /** print an error message that something went wrong with a given record.
-     *  The output format is: "Error: \<error.text()\>: [cannot \<operation\> ]\<recordType\>
+     *  The output format is: "Error: <error.text()>: [cannot <operation> ]<recordType>
      *  directory record"
      *  @param error status to be reported (only if ".bad()")
      *  @param recordType type of directory record which caused the error
@@ -1167,10 +1294,10 @@ class DicomDirInterface
      *  @param toFilename name of the new file (copy of 'fromFilename')
      *  @return OFTrue if successful, OFFalse otherwise
      */
-    OFBool copyFile(const char *fromFilename,
-                    const char *toFilename);
+    OFBool copyFile(const OFFilename &fromFilename,
+                    const OFFilename &toFilename);
 
-    /** see if all the attributes in record match the values in dataset and warn if not
+    /** check if all the attributes in record match the values in dataset and warn if not
      *  @param record directory record to be checked
      *  @param dataset DICOM dataset to be compared with the directory record
      *  @param sourceFilename name of the source DICOM file
@@ -1179,11 +1306,11 @@ class DicomDirInterface
      */
     OFBool warnAboutInconsistentAttributes(DcmDirectoryRecord *record,
                                            DcmItem *dataset,
-                                           const OFString &sourceFilename,
+                                           const OFFilename &sourceFilename,
                                            const OFBool abortCheck = OFFalse);
 
-    /** check whether given fileset ID is valid
-     *  @param filesetID fileset ID to be checked
+    /** check whether given file-set ID is valid
+     *  @param filesetID file-set ID to be checked
      *  @return OFTrue if ID is valid, OFFalse otherwise
      */
     OFBool checkFilesetID(const OFString &filesetID);
@@ -1191,55 +1318,56 @@ class DicomDirInterface
     /** check whether given tag exists in the DICOM dataset
      *  @param dataset DICOM dataset to be checked
      *  @param key tag to be searched for
-     *  @param filename of the file (optional, report any error if specified)
+     *  @param filename of the file (optional, report any error if non-empty)
      *  @return OFTrue if tag exists, OFFalse otherwise
      */
     OFBool checkExists(DcmItem *dataset,
                        const DcmTagKey &key,
-                       const char *filename = NULL);
+                       const OFFilename &filename = OFFilename());
 
     /** check whether given tag exists with a value in the DICOM dataset
      *  @param dataset DICOM dataset to be checked
      *  @param key tag to be searched for
-     *  @param filename of the file (optional, report any error if specified)
+     *  @param filename of the file (optional, report any error if non-empty)
      *  @return OFTrue if tag exists with value, OFFalse otherwise
      */
     OFBool checkExistsWithValue(DcmItem *dataset,
                                 const DcmTagKey &key,
-                                const char *filename = NULL);
+                                const OFFilename &filename = OFFilename());
 
     /** check whether given tag exists in the DICOM dataset and has the expected string value
      *  @param dataset DICOM dataset to be checked
      *  @param key tag to be searched for
      *  @param value expected string value
-     *  @param filename of the file (optional, report any error if specified)
+     *  @param filename of the file (optional, report any error if non-empty)
      *  @return OFTrue if tag exists with given string value, OFFalse otherwise
      */
     OFBool checkExistsWithStringValue(DcmItem *dataset,
                                       const DcmTagKey &key,
                                       const OFString &value,
-                                      const char *filename = NULL);
+                                      const OFFilename &filename = OFFilename());
 
     /** check whether given tag exists in the DICOM dataset and has the expected integer value
      *  @param dataset DICOM dataset to be checked
      *  @param key tag to be searched for
      *  @param value expected integer value
-     *  @param filename of the file (optional, report any error if specified)
+     *  @param filename of the file (optional, report any error if non-empty)
      *  @param reject report an "Error" if OFTrue, a "Warning" if OFFalse
      *  @return OFTrue if tag exists with given string value, OFFalse otherwise
      */
     OFBool checkExistsWithIntegerValue(DcmItem *dataset,
                                        const DcmTagKey &key,
                                        const long value,
-                                       const char *filename = NULL,
+                                       const OFFilename &filename = OFFilename(),
                                        const OFBool reject = OFTrue);
 
-    /** check whether given tag exists in the DICOM dataset and has an integer value in the expected range
+    /** check whether given tag exists in the DICOM dataset and has an integer value in the
+     *  expected range
      *  @param dataset DICOM dataset to be checked
      *  @param key tag to be searched for
      *  @param min minimum integer value of the expected range
      *  @param max maximum integer value of the expected range
-     *  @param filename of the file (optional, report any error if specified)
+     *  @param filename of the file (optional, report any error if non-empty)
      *  @param reject report an "Error" if OFTrue, a "Warning" if OFFalse
      *  @return OFTrue if tag exists with given string value, OFFalse otherwise
      */
@@ -1247,7 +1375,7 @@ class DicomDirInterface
                                       const DcmTagKey &key,
                                       const long min,
                                       const long max,
-                                      const char *filename = NULL,
+                                      const OFFilename &filename = OFFilename(),
                                       const OFBool reject = OFTrue);
 
     /** get string value from dataset and report an error (if any)
@@ -1283,12 +1411,12 @@ class DicomDirInterface
      *  @param searchIntoSub flag indicating whether to do a deep search or not
      *  @return reference to the resulting string value (parameter 'result')
      */
-    OFString &getStringFromFile(const char *filename,
+    OFString &getStringFromFile(const OFFilename &filename,
                                 const DcmTagKey &key,
                                 OFString &result,
                                 OFBool searchIntoSub = OFFalse);
 
-    /** copy element from dataset to directory record
+    /** copy element from given dataset to directory record
      *  @param dataset DICOM dataset containing the original data
      *  @param key tag of the element to be copied
      *  @param record directory record to which the element is to be copied
@@ -1299,11 +1427,27 @@ class DicomDirInterface
     void copyElement(DcmItem *dataset,
                      const DcmTagKey &key,
                      DcmDirectoryRecord *record,
-                     const OFString &sourceFilename,
+                     const OFFilename &sourceFilename,
                      const OFBool optional = OFFalse,
                      const OFBool copyEmpty = OFTrue);
 
-    /** copy type 1 element from dataset to directory record
+    /** copy type 1C element from given dataset or first item of the given sequence
+     *  to directory record.  Typically, the SharedFunctionalGroupsSequence is used
+     *  with this method.
+     *  @param dataset DICOM dataset containing the original data
+     *  @param elementKey tag of the element to be copied
+     *  @param sequenceKey tag of the sequence element to be used in case the element
+     *    cannot be found on the main dataset level
+     *  @param record directory record to which the element is to be copied
+     *  @param sourceFilename name of the source DICOM file
+     */
+    void copyElementType1CFromDatasetOrSequenceItem(DcmItem *dataset,
+                                                    const DcmTagKey &elementKey,
+                                                    const DcmTagKey &sequenceKey,
+                                                    DcmDirectoryRecord *record,
+                                                    const OFFilename &sourceFilename);
+
+    /** copy type 1 element from given dataset to directory record
      *  @param dataset DICOM dataset containing the original data
      *  @param key tag of the element to be copied
      *  @param record directory record to which the element is to be copied
@@ -1312,12 +1456,12 @@ class DicomDirInterface
     void copyElementType1(DcmItem *dataset,
                           const DcmTagKey &key,
                           DcmDirectoryRecord *record,
-                          const OFString &sourceFilename)
+                          const OFFilename &sourceFilename)
     {
         copyElement(dataset, key, record, sourceFilename, OFFalse /*optional*/, OFFalse /*copyEmpty*/);
     }
 
-    /** copy type 1C element from dataset to directory record
+    /** copy type 1C element from given dataset to directory record
      *  @param dataset DICOM dataset containing the original data
      *  @param key tag of the element to be copied
      *  @param record directory record to which the element is to be copied
@@ -1326,12 +1470,12 @@ class DicomDirInterface
     void copyElementType1C(DcmItem *dataset,
                           const DcmTagKey &key,
                           DcmDirectoryRecord *record,
-                          const OFString &sourceFilename)
+                          const OFFilename &sourceFilename)
     {
         copyElement(dataset, key, record, sourceFilename, OFTrue /*optional*/, OFFalse /*copyEmpty*/);
     }
 
-    /** copy type 2 element from dataset to directory record
+    /** copy type 2 element from given dataset to directory record
      *  @param dataset DICOM dataset containing the original data
      *  @param key tag of the element to be copied
      *  @param record directory record to which the element is to be copied
@@ -1340,12 +1484,12 @@ class DicomDirInterface
     void copyElementType2(DcmItem *dataset,
                           const DcmTagKey &key,
                           DcmDirectoryRecord *record,
-                          const OFString &sourceFilename)
+                          const OFFilename &sourceFilename)
     {
         copyElement(dataset, key, record, sourceFilename, OFFalse /*optional*/, OFTrue /*copyEmpty*/);
     }
 
-    /** copy type 3 element from dataset to directory record
+    /** copy type 3 element from given dataset to directory record
      *  @param dataset DICOM dataset containing the original data
      *  @param key tag of the element to be copied
      *  @param record directory record to which the element is to be copied
@@ -1354,12 +1498,12 @@ class DicomDirInterface
     void copyElementType3(DcmItem *dataset,
                           const DcmTagKey &key,
                           DcmDirectoryRecord *record,
-                          const OFString &sourceFilename)
+                          const OFFilename &sourceFilename)
     {
         copyElement(dataset, key, record, sourceFilename, OFTrue /*optional*/, OFTrue /*copyEmpty*/);
     }
 
-    /** copy optional string value from dataset to directory record
+    /** copy optional string value from given dataset to directory record
      *  @param dataset DICOM dataset containing the original data
      *  @param key tag of the element value to be copied
      *  @param record directory record to which the element value is to be copied
@@ -1371,7 +1515,7 @@ class DicomDirInterface
     void copyStringWithDefault(DcmItem *dataset,
                                const DcmTagKey &key,
                                DcmDirectoryRecord *record,
-                               const OFString &sourceFilename,
+                               const OFFilename &sourceFilename,
                                const char *defaultValue = "",
                                const OFBool printWarning = OFFalse);
 
@@ -1388,7 +1532,7 @@ class DicomDirInterface
                                    const DcmTagKey &datKey,
                                    DcmDirectoryRecord *record,
                                    const DcmTagKey &recKey,
-                                   const OFString &sourceFilename,
+                                   const OFFilename &sourceFilename,
                                    const OFBool errorMsg = OFFalse);
 
     /** compare sequence attribute from dataset and record and report any deviation
@@ -1401,11 +1545,11 @@ class DicomDirInterface
     OFBool compareSequenceAttributes(DcmItem *dataset,
                                      DcmTagKey &key,
                                      DcmDirectoryRecord *record,
-                                     const OFString &sourceFilename);
+                                     const OFFilename &sourceFilename);
 
     /** set default value (number or prefix and number) to a given tag
      *  @param record directory record where the elements are stored
-     *  @param key tag of the element to be modifed
+     *  @param key tag of the element to be modified
      *  @param number numeric value to be set as a the element value
      *  @param prefix optional prefix to be added to the numeric value
      */
@@ -1444,24 +1588,26 @@ class DicomDirInterface
     OFBool ResolutionCheck;
     /// check transfer syntax
     OFBool TransferSyntaxCheck;
+    /// check DICOM file format
+    OFBool FileFormatCheck;
     /// check consistency of newly added record
     OFBool ConsistencyCheck;
     /// create icon images
     OFBool IconImageMode;
-    /// update existing fileset
+    /// update existing file-set
     OFBool FilesetUpdateMode;
 
     /// name of the DICOMDIR backup file
-    OFString BackupFilename;
+    OFFilename BackupFilename;
     /// flag indicating whether a backup has been created
     OFBool BackupCreated;
 
     /// size of the optional icon image in pixels
     unsigned int IconSize;
     /// filename prefix for the external icon images
-    OFString IconPrefix;
+    OFFilename IconPrefix;
     /// filename of the default icon (if any)
-    OFString DefaultIcon;
+    OFFilename DefaultIcon;
 
     /// flag indicating whether RLE decompression is supported
     OFBool RLESupport;
@@ -1494,99 +1640,3 @@ class DicomDirInterface
 
 
 #endif
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: dcddirif.h,v $
- * Revision 1.23  2010-11-05 13:11:11  joergr
- * Added support for new directory record types IMPLANT, IMPLANT GROUP and
- * IMPLANT ASSY from Supplement 131 (Implant Templates).
- *
- * Revision 1.22  2010-10-14 13:15:40  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.21  2010-10-04 16:14:53  joergr
- * Fixed various Doxygen API documentation issues.
- *
- * Revision 1.20  2010-10-01 08:09:31  joergr
- * Added support for new non-image Storage SOP Classes that require the new
- * directory record type MEASUREMENT. Also fixed issues with other record types.
- *
- * Revision 1.19  2010-09-30 17:18:10  joergr
- * Added support for new non-image Storage SOP Classes that require the new
- * directory record types PALETTE and SURFACE. Also updated existing records.
- *
- * Revision 1.18  2010-08-10 11:02:58  uli
- * Removed undefined function printFileErrorMessage().
- *
- * Revision 1.17  2010-08-09 13:02:56  joergr
- * Updated data dictionary to 2009 edition of the DICOM standard. From now on,
- * the official "keyword" is used for the attribute name which results in a
- * number of minor changes (e.g. "PatientsName" is now called "PatientName").
- *
- * Revision 1.16  2009-11-25 13:31:05  joergr
- * Adapted code for new approach to access individual frames of a DICOM image.
- *
- * Revision 1.15  2009-11-04 09:58:07  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.14  2009-01-15 10:16:40  joergr
- * Added check whether (possibly required) JPEG 2000 decoder is registered.
- *
- * Revision 1.13  2008-06-23 12:05:37  joergr
- * Added check on value representation of data elements copied from the
- * referenced DICOM file to the DICOMDIR (compare VR with data dictionary).
- *
- * Revision 1.12  2007/02/02 16:01:51  joergr
- * Added error message when existing SOP instance is inconsistent with new
- * directory record in update mode (e.g. different SOP class UID).
- * Fixed incomplete warning message in update mode (filename was missing).
- *
- * Revision 1.11  2007/01/10 13:02:59  joergr
- * Added new option that enables support for retired SOP classes.
- *
- * Revision 1.10  2006/12/15 14:56:57  joergr
- * Added new option that allows to update existing entries in a DICOMDIR. This
- * also adds support for mixed media stored application profiles.
- * Changed name of enum value for the MPEG2-DVD application profile in order to
- * be more consistent with other names.
- * Slightly revised handling of type 1, 1C and 2 elements in Directory Records.
- * Fixed small bug in cardiac application profiles when checking the ImageType
- * (0008,0008).
- *
- * Revision 1.9  2006/07/27 13:05:05  joergr
- * Added support for DICOMDIR record type "STEREOMETRIC" (CP 628).
- *
- * Revision 1.8  2005/12/15 15:40:48  joergr
- * Removed unsused parameter.
- *
- * Revision 1.7  2005/12/08 16:28:03  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.6  2005/10/27 13:31:21  joergr
- * Added support for Encapsulated Document, Real World Value Mapping and
- * Hanging Protocol objects to DICOMDIR tools.
- *
- * Revision 1.5  2005/06/13 14:36:41  joergr
- * Added new options to disable check on pixel encoding and transfer syntax.
- *
- * Revision 1.4  2005/03/09 17:53:34  joergr
- * Added support for new Media Storage Application Profiles according to DICOM
- * PS 3.12-2004. Removed support for non-standard conformant "No profile".
- * Added support for UTF-8 for the contents of the fileset descriptor file.
- *
- * Revision 1.3  2004/02/13 17:36:46  joergr
- * Added support for new directory records RAW DATA and SPECTROSCOPY introduced
- * with CP 343.
- *
- * Revision 1.2  2004/02/13 14:11:15  joergr
- * Added support for new directory records REGISTRATION and FIDUCIAL introduced
- * with supplement 73 (Spatial Registration Storage SOP Classes).
- *
- * Revision 1.1  2003/08/12 14:35:00  joergr
- * Added new interface class for simplified creation of a DICOMDIR.
- *
- *
- */

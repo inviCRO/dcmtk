@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2022, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were partly developed by
@@ -57,9 +57,6 @@
 ** Intent:        This file defines the public structures and constants
 **                and the function prototypes for the DUL (DICOM Upper
 **                Layer) facility.
-** Last Update:   $Author: joergr $, $Date: 2010-12-01 08:26:10 $
-** Revision:      $Revision: 1.31 $
-** Status:        $State: Exp $
 */
 
 
@@ -74,10 +71,17 @@
 #include "dcmtk/dcmnet/extneg.h"
 #include "dcmtk/dcmnet/dicom.h"
 #include "dcmtk/dcmnet/dcuserid.h"
+#include "dcmtk/dcmnet/dntypes.h"
 
 class DcmTransportConnection;
 class DcmTransportLayer;
 class LST_HEAD;
+
+// include this file in doxygen documentation
+
+/** @file dul.h
+ *  @brief type definitions, constants, global variables and functions for the dcmnet/dul module
+ */
 
 /** Global flag to enable/disable reverse DNS lookup when accepting associations.
  *  If disabled, the numerical IP address instead of the symbolic hostname is
@@ -85,25 +89,18 @@ class LST_HEAD;
  *  structure.  Most DICOM applications (except imagectn) don't need the symbolic
  *  hostname anyway, and the reverse DNS lookup can cause a long timeout.
  */
-extern OFGlobal<OFBool> dcmDisableGethostbyaddr;   /* default OFFalse */
+extern DCMTK_DCMNET_EXPORT OFGlobal<OFBool> dcmDisableGethostbyaddr;   /* default: OFFalse */
 
-/** Global flag specifying whether to reject presentation contexts in case of an
- *  unsuccessful SCP/SCU role selection (strict) or to return the corresponding
- *  user data item with appropriate values (default). This applies to association
- *  acceptors only.
+/** Global timeout in seconds for connecting to remote hosts.
+ *  Default value is -1, which selects infinite timeout, i.e. blocking connect().
  */
-extern OFGlobal<OFBool> dcmStrictRoleSelection;   /* default OFFalse */
-
-/**  Global timeout (seconds) for connecting to remote hosts.
- *   Default value is -1 which selects infinite timeout, i.e. blocking connect().
- */
-extern OFGlobal<Sint32> dcmConnectionTimeout;   /* default -1 */
+extern DCMTK_DCMNET_EXPORT OFGlobal<Sint32> dcmConnectionTimeout;   /* default: -1 */
 
 /** This global flag allows to set an already opened socket file descriptor which
  *  will be used by dcmnet the next time receiveTransportConnectionTCP() is called.
  *  Useful for use with proxy applications, but inherently thread unsafe!
  */
-extern OFGlobal<int> dcmExternalSocketHandle;   /* default -1 */
+extern DCMTK_DCMNET_EXPORT OFGlobal<DcmNativeSocketType> dcmExternalSocketHandle;   /* default: platform specific value that denotes <i>invalid</i> */
 
 /** When compiled with WITH_TCPWRAPPER, DCMTK server processes may use the TCP
  *  wrapper library to enforce access control - see hosts_access(5).  If this
@@ -111,19 +108,28 @@ extern OFGlobal<int> dcmExternalSocketHandle;   /* default -1 */
  *  to is used as the daemon name.  If the flag is NULL, no access control is
  *  performed.
  */
-extern OFGlobal<const char *> dcmTCPWrapperDaemonName;   /* default NULL */
+extern DCMTK_DCMNET_EXPORT OFGlobal<const char *> dcmTCPWrapperDaemonName;   /* default: NULL */
 
 /* Global option flag for compatibility with DCMTK releases prior to version 3.0.
  * Default (0) is automatic handling, which should work in most cases.
  */
-extern OFGlobal<unsigned long> dcmEnableBackwardCompatibility;
+extern DCMTK_DCMNET_EXPORT OFGlobal<unsigned long> dcmEnableBackwardCompatibility;
 
-#ifndef DUL_KEYS
-#define DUL_KEYS 1
+/** Maximum size (in bytes) of incoming A-ASSOCIATE-RQ or A-ASSOCIATE-AC PDUs
+ *  that we are willing to accept. Under normal conditions, valid A-ASSOCIATE PDUs
+ *  will never be larger than 64 kBytes, so the default of 1 MByte should be safe.
+ *  We should limit the maximum accepted PDU size to avoid denial of service
+ *  attacks through faulty PDUs that cause the network layer to allocate up
+ *  to 4 GByte of memory for one PDU.
+ *
+ *  Note: This limit can be disabled by setting a value of zero, which
+ *  causes the behaviour to revert to that of DCMTK releases up to 3.6.3.
+ */
+extern DCMTK_DCMNET_EXPORT OFGlobal<size_t> dcmAssociatePDUSizeLimit;   /* default: 1 MB */
+
 typedef void DUL_NETWORKKEY;
 typedef void DUL_ASSOCIATIONKEY;
 typedef unsigned char DUL_PRESENTATIONCONTEXTID;
-#endif
 
 /** pure virtual base class for DUL mode callbacks
  */
@@ -154,7 +160,7 @@ typedef unsigned char DUL_PRESENTATIONCONTEXTID;
 
 #define DUL_MAXTYPE          OFstatic_cast(unsigned char, 0x07)
 
-class DUL_ModeCallback
+class DCMTK_DCMNET_EXPORT DUL_ModeCallback
 {
 public:
 
@@ -195,6 +201,48 @@ typedef struct {
     OFBool useSecureLayer;
 }   DUL_ASSOCIATESERVICEPARAMETERS;
 
+/** Enum describing the possible role settings for role negotiation sub items.
+ *  DCMTK implements the following role negotiation behaviour for association
+ *  acceptors:
+ *  @verbatim
+ *  +--------------------+------------------+---------+
+ *  | Requestor Proposal | Acceptor Setting | Result  |
+ *  +--------------------+------------------+---------+
+ *  | SCU                | SCP              | NONE    |
+ *  | SCU                | SCU              | SCU     |
+ *  | SCU                | SCU/SCP          | SCU     |
+ *  | SCU                | DEFAULT          | DEFAULT |
+ *  | SCP                | SCP              | SCP     |
+ *  | SCP                | SCU              | NONE    |
+ *  | SCP                | SCU/SCP          | SCP     |
+ *  | SCP                | DEFAULT          | DEFAULT |
+ *  | SCU/SCP            | SCP              | SCP     |
+ *  | SCU/SCP            | SCU              | SCU     |
+ *  | SCU/SCP            | SCU/SCP          | SCU/SCP |
+ *  | SCU/SCP            | DEFAULT          | DEFAULT |
+ *  | DEFAULT            | SCP              | Reject  |
+ *  | DEFAULT            | SCU              | DEFAULT |
+ *  | DEFAULT            | SCU/SCP          | DEFAULT |
+ *  | DEFAULT            | DEFAULT          | DEFAULT |
+ *  +--------------------+------------------+---------+
+ *  @endverbatim
+ *  NONE, SCU, SCP as well as SCU/SCP denote the related flags in the
+ *  association role selection user items. The "Reject" case denotes that
+ *  such a presentation context will be rejected by the association acceptor:
+ *  If the requestor connects with default role but the acceptor explicitly
+ *  requires the SCP role (only) then the presentation context
+ *  will be rejected. All other cases do not lead to rejection but to actual
+ *  "negotiation".
+ *
+ *  The Reject case can be avoided by setting a related option available in
+ *  association acceptance code like ASC_acceptPresentationContext() or DcmSCP.
+ *  to OFTrue (reading something like "alwaysAcceptDefaultRole" since when enabled,
+ *  with the Reject being disabled all Default role proposals will be accepted).
+ *  This can make sense for faulty Requestors, e.g. faulty Storage Commitment Servers
+ *  connecting on a second connection for delivering an N-EVENT-REPORT, or broken
+ *  Retrieve requestors proposing GET-based SOP Classes for retrieval using the Default
+ *  role instead of the required SCP role.
+ */
 typedef enum {
     DUL_SC_ROLE_NONE,
     DUL_SC_ROLE_DEFAULT,
@@ -354,7 +402,7 @@ typedef enum {
 */
 
 #define DUL_DULCOMPAT     2768240730UL
-#define DUL_DIMSECOMPAT   655360UL
+#define DUL_DIMSECOMPAT   1114095UL
 #define DUL_MAXPDUCOMPAT  4278190335UL
 
 /* Define the function prototypes for this facility.
@@ -362,13 +410,13 @@ typedef enum {
 ** First set of functions are for establishing the network and associations.
 */
 
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 DUL_AcknowledgeAssociationRQ(
   DUL_ASSOCIATIONKEY ** association,
   DUL_ASSOCIATESERVICEPARAMETERS * params,
   int activatePDUStorage);
 
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 DUL_InitializeNetwork(
   const char *mode,
   void *param,
@@ -377,64 +425,66 @@ DUL_InitializeNetwork(
   options,
   DUL_NETWORKKEY ** network);
 
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 DUL_ReceiveAssociationRQ(
-  DUL_NETWORKKEY ** net,
-  DUL_BLOCKOPTIONS blk,
+  DUL_NETWORKKEY ** network,
+  DUL_BLOCKOPTIONS block,
   int timeout,
   DUL_ASSOCIATESERVICEPARAMETERS * parameters,
   DUL_ASSOCIATIONKEY ** association,
   int activatePDUStorage);
 
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 DUL_RejectAssociationRQ(
   DUL_ASSOCIATIONKEY ** association,
   DUL_ABORTITEMS * params,
   int activatePDUStorage);
 
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 DUL_RequestAssociation(
   DUL_NETWORKKEY ** network,
+  DUL_BLOCKOPTIONS block,
+  int timeout,
   DUL_ASSOCIATESERVICEPARAMETERS * params,
   DUL_ASSOCIATIONKEY ** association,
   int activatePDUStorage);
 
 /* Define functions for releasing/aborting Associations.
 */
-OFCondition DUL_AbortAssociation(DUL_ASSOCIATIONKEY ** association);
-OFCondition DUL_DropAssociation(DUL_ASSOCIATIONKEY ** association);
-OFCondition DUL_DropNetwork(DUL_NETWORKKEY ** network);
-OFCondition DUL_ReleaseAssociation(DUL_ASSOCIATIONKEY ** association);
-OFCondition DUL_AcknowledgeRelease(DUL_ASSOCIATIONKEY ** association);
+DCMTK_DCMNET_EXPORT OFCondition DUL_AbortAssociation(DUL_ASSOCIATIONKEY ** association);
+DCMTK_DCMNET_EXPORT OFCondition DUL_DropAssociation(DUL_ASSOCIATIONKEY ** association);
+DCMTK_DCMNET_EXPORT OFCondition DUL_CloseTransportConnection(DUL_ASSOCIATIONKEY ** association);
+DCMTK_DCMNET_EXPORT OFCondition DUL_DropNetwork(DUL_NETWORKKEY ** network);
+DCMTK_DCMNET_EXPORT OFCondition DUL_ReleaseAssociation(DUL_ASSOCIATIONKEY ** association);
+DCMTK_DCMNET_EXPORT OFCondition DUL_AcknowledgeRelease(DUL_ASSOCIATIONKEY ** association);
 
 /* Functions for reading/write PDVs inside P DATA PDUs.
 */
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 DUL_ReadPDVs(DUL_ASSOCIATIONKEY ** association,
        DUL_PDVLIST * pdvList, DUL_BLOCKOPTIONS block, int timeout);
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 DUL_WritePDVs(DUL_ASSOCIATIONKEY ** association,
         DUL_PDVLIST * pdvList);
-OFCondition DUL_NextPDV(DUL_ASSOCIATIONKEY ** association, DUL_PDV * pdv);
+DCMTK_DCMNET_EXPORT OFCondition DUL_NextPDV(DUL_ASSOCIATIONKEY ** association, DUL_PDV * pdv);
 
 
 /* Miscellaneous functions.
 */
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 DUL_AssociationParameter(DUL_ASSOCIATIONKEY ** association,
        DUL_ASSOCIATION_PARAMETER param, DUL_DATA_TYPE type,
        void *address, size_t length);
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 DUL_MakePresentationCtx(DUL_PRESENTATIONCONTEXT ** ctx,
          DUL_SC_ROLE proposedSCRole, DUL_SC_ROLE acceptedSCRole,
 DUL_PRESENTATIONCONTEXTID ctxID, unsigned char reason, const char *abstractSyntax,
       const char *transferSyntax, ...);
-OFString& DUL_DumpParams(OFString& str, DUL_ASSOCIATESERVICEPARAMETERS * params);
-OFString& DUL_DumpConnectionParameters(OFString& str, DUL_ASSOCIATIONKEY *association);
+DCMTK_DCMNET_EXPORT OFString& DUL_DumpParams(OFString& str, DUL_ASSOCIATESERVICEPARAMETERS * params);
+DCMTK_DCMNET_EXPORT OFString& DUL_DumpConnectionParameters(OFString& str, DUL_ASSOCIATIONKEY *association);
 
-OFCondition DUL_ClearServiceParameters(DUL_ASSOCIATESERVICEPARAMETERS * params);
-void DUL_DefaultServiceParameters(DUL_ASSOCIATESERVICEPARAMETERS * params);
-OFString& dumpExtNegList(OFString& str, SOPClassExtendedNegotiationSubItemList& lst);
+DCMTK_DCMNET_EXPORT OFCondition DUL_ClearServiceParameters(DUL_ASSOCIATESERVICEPARAMETERS * params);
+DCMTK_DCMNET_EXPORT OFString& dumpExtNegList(OFString& str, SOPClassExtendedNegotiationSubItemList& lst);
 
 /*
 ** Additional functions (from dulextra.cc) needed to support
@@ -442,34 +492,35 @@ OFString& dumpExtNegList(OFString& str, SOPClassExtendedNegotiationSubItemList& 
 ** Andrew Hewett, Institute OFFIS, Oldenburg, Germany.
 */
 
-OFBool
+DCMTK_DCMNET_EXPORT OFBool
 DUL_dataWaiting(DUL_ASSOCIATIONKEY * callerAssociation, int timeout);
-int
-DUL_networkSocket(DUL_NETWORKKEY * callerNet);
-OFBool
+
+DCMTK_DCMNET_EXPORT DcmNativeSocketType DUL_networkSocket(DUL_NETWORKKEY * callerNet);
+
+DCMTK_DCMNET_EXPORT OFBool
 DUL_associationWaiting(DUL_NETWORKKEY * callerNet, int timeout);
 
 /*
  * functions allowing to retrieve raw A-ASSOCIATE PDUs from the DUL layer
  */
-void DUL_activateAssociatePDUStorage(DUL_ASSOCIATIONKEY *dulassoc);
-void DUL_returnAssociatePDUStorage(DUL_ASSOCIATIONKEY *dulassoc, void *& pdu, unsigned long& pdusize);
+DCMTK_DCMNET_EXPORT void DUL_activateAssociatePDUStorage(DUL_ASSOCIATIONKEY *dulassoc);
+DCMTK_DCMNET_EXPORT void DUL_returnAssociatePDUStorage(DUL_ASSOCIATIONKEY *dulassoc, void *& pdu, unsigned long& pdusize);
 
 /* get pointer to transport connection from opaque association pointer */
-DcmTransportConnection *DUL_getTransportConnection(DUL_ASSOCIATIONKEY * callerAssociation);
+DCMTK_DCMNET_EXPORT DcmTransportConnection *DUL_getTransportConnection(DUL_ASSOCIATIONKEY * callerAssociation);
 
 /* change transport layer */
-OFCondition DUL_setTransportLayer(DUL_NETWORKKEY *callerNetworkKey, DcmTransportLayer *newLayer, int takeoverOwnership);
+DCMTK_DCMNET_EXPORT OFCondition DUL_setTransportLayer(DUL_NETWORKKEY *callerNetworkKey, DcmTransportLayer *newLayer, int takeoverOwnership);
 
 /* activate compatibility mode and callback */
-void DUL_activateCompatibilityMode(DUL_ASSOCIATIONKEY *dulassoc, unsigned long mode);
-void DUL_activateCallback(DUL_ASSOCIATIONKEY *dulassoc, DUL_ModeCallback *cb);
+DCMTK_DCMNET_EXPORT void DUL_activateCompatibilityMode(DUL_ASSOCIATIONKEY *dulassoc, unsigned long mode);
+DCMTK_DCMNET_EXPORT void DUL_activateCallback(DUL_ASSOCIATIONKEY *dulassoc, DUL_ModeCallback *cb);
 
 /*
  * function allowing to retrieve the peer certificate from the DUL layer
  */
-unsigned long DUL_getPeerCertificateLength(DUL_ASSOCIATIONKEY *dulassoc);
-unsigned long DUL_getPeerCertificate(DUL_ASSOCIATIONKEY *dulassoc, void *buf, unsigned long bufLen);
+DCMTK_DCMNET_EXPORT unsigned long DUL_getPeerCertificateLength(DUL_ASSOCIATIONKEY *dulassoc);
+DCMTK_DCMNET_EXPORT unsigned long DUL_getPeerCertificate(DUL_ASSOCIATIONKEY *dulassoc, void *buf, unsigned long bufLen);
 
 /*
  * functions for multi-process servers
@@ -480,13 +531,22 @@ unsigned long DUL_getPeerCertificate(DUL_ASSOCIATIONKEY *dulassoc, void *buf, un
  *  in receiveTransportConnectionTCP().
  *  @return true if current process is a forked child of a multi-process server
  */
-OFBool DUL_processIsForkedChild();
+DCMTK_DCMNET_EXPORT OFBool DUL_processIsForkedChild();
 
 /** this function marks the current process as a child created by the
  *  DICOM network layer during receipt of a TCP transport connection, i.e.
  *  in receiveTransportConnectionTCP(). The call is not reversible - use with care.
  */
-void DUL_markProcessAsForkedChild();
+DCMTK_DCMNET_EXPORT void DUL_markProcessAsForkedChild();
+
+/** this helper function calls DUL_markProcessAsForkedChild(), then reads
+ *  the socket handle from the pipe opened by the parent process and
+ *  stores it in the global variable dcmExternalSocketHandle. This is
+ *  in most cases everything needed to prepare the network layer to act
+ *  as a forked child on Win32. On other operating system, the function does nothing.
+ * @return EC_Normal if successful, an error code otherwise.
+ */
+DCMTK_DCMNET_EXPORT OFCondition DUL_readSocketHandleAsForkedChild();
 
 /** this function marks the current process as a multi-process server and enables
  *  the creation of child processes for each incoming TCP transport connection
@@ -500,133 +560,14 @@ void DUL_markProcessAsForkedChild();
  *     on Win32, where the child process is created with CreateProcess and the
  *     command line parameters have to be passed from parent to child.
  */
-void DUL_requestForkOnTransportConnectionReceipt(int argc, char *argv[]);
+DCMTK_DCMNET_EXPORT void DUL_requestForkOnTransportConnectionReceipt(int argc, char *argv[]);
 
 
 /// @deprecated Use OFString& DUL_DumpParams(OFString&, DUL_ASSOCIATESERVICEPARAMETERS) instead.
-void DUL_DumpParams(DUL_ASSOCIATESERVICEPARAMETERS * params);
+DCMTK_DCMNET_EXPORT void DUL_DumpParams(DUL_ASSOCIATESERVICEPARAMETERS * params);
 /// @deprecated Use OFString& DUL_DumpConnectionParameters(OFString&, DUL_ASSOCIATIONKEY*) instead.
-void DUL_DumpConnectionParameters(DUL_ASSOCIATIONKEY *association, STD_NAMESPACE ostream& outstream);
+DCMTK_DCMNET_EXPORT void DUL_DumpConnectionParameters(DUL_ASSOCIATIONKEY *association, STD_NAMESPACE ostream& outstream);
 /// @deprecated Use OFString& dumpExtNegList(OFString&, SOPClassExtendedNegotiationSubItemList&) instead.
-void dumpExtNegList(SOPClassExtendedNegotiationSubItemList& lst);
+DCMTK_DCMNET_EXPORT void dumpExtNegList(SOPClassExtendedNegotiationSubItemList& lst);
 
 #endif
-
-/*
-** CVS Log
-** $Log: dul.h,v $
-** Revision 1.31  2010-12-01 08:26:10  joergr
-** Added OFFIS copyright header (beginning with the year 1994).
-**
-** Revision 1.30  2010-10-14 13:17:22  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.29  2010-08-26 09:28:02  joergr
-** Fixed incorrect behavior of association acceptors during SCP/SCU role
-** selection negotiation.
-** Introduced new global flag which allows for rejecting presentation contexts
-** in case of an unsuccessful SCP/SCU role selection (disabled by default).
-**
-** Revision 1.28  2009-12-08 16:37:52  joergr
-** Fixed inconsistent source code formatting.
-**
-** Revision 1.27  2009-11-18 11:53:58  uli
-** Switched to logging mechanism provided by the "new" oflog module.
-**
-** Revision 1.26  2008-04-17 15:28:33  onken
-** Reworked and extended User Identity Negotiation code.
-**
-** Revision 1.25  2007-09-07 08:49:12  onken
-** Added basic support for Extended Negotiation of User Identity.
-**
-** Revision 1.24  2006/08/15 16:04:29  meichel
-** Updated the code in module dcmnet to correctly compile when
-**   all standard C++ classes remain in namespace std.
-**
-** Revision 1.23  2005/12/12 15:15:08  meichel
-** Added missing include dependency
-**
-** Revision 1.22  2005/12/09 14:48:35  meichel
-** Added missing virtual destructors
-**
-** Revision 1.21  2005/12/08 16:02:23  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.20  2005/11/25 11:31:11  meichel
-** StoreSCP now supports multi-process mode both on Posix and Win32 platforms
-**   where a separate client process is forked for each incoming association.
-**
-** Revision 1.19  2004/02/25 12:31:15  meichel
-** Added global option flag for compatibility with very old DCMTK releases in the
-**   DICOM upper layer and ACSE code. Default is automatic handling, which should
-**   work in most cases.
-**
-** Revision 1.18  2003/08/14 09:01:37  meichel
-** Adapted type casts to new-style typecast operators defined in ofcast.h
-**
-** Revision 1.17  2003/06/10 13:37:36  meichel
-** Added support for TCP wrappers in DICOM network layer
-**
-** Revision 1.16  2003/06/06 13:07:29  meichel
-** Introduced global flag dcmExternalSocketHandle which allows
-**   to pass an already opened socket file descriptor to dcmnet.
-**
-** Revision 1.15  2003/06/02 16:44:11  meichel
-** Renamed local variables to avoid name clashes with STL
-**
-** Revision 1.14  2002/11/28 16:57:36  meichel
-** Added global flag dcmConnectionTimeout that defines a timeout for
-**   outgoing association requests in the DICOM upper layer.
-**
-** Revision 1.13  2001/11/27 09:54:33  wilkens
-** Updated storescp. 6 new options (--output-directory, --sort-conc-studies,
-** --exec-on-reception, --exec-on-eostudy, --rename-on-eostudy, and
-** --eostudy-timeout) implemented (requirements from GO-Kard).
-**
-** Revision 1.12  2001/10/12 10:18:27  meichel
-** Replaced the CONDITION types, constants and functions in the dcmnet module
-**   by an OFCondition based implementation which eliminates the global condition
-**   stack.  This is a major change, caveat emptor!
-**
-** Revision 1.11  2001/09/26 12:28:59  meichel
-** Implemented changes in dcmnet required by the adaptation of dcmdata
-**   to class OFCondition.  Removed some unused code.
-**
-** Revision 1.10  2001/06/01 11:02:02  meichel
-** Implemented global flag and command line option to disable reverse
-**   DNS hostname lookup using gethostbyaddr when accepting associations.
-**
-** Revision 1.9  2000/10/10 12:06:54  meichel
-** Updated transport layer error codes and routines for printing
-**   connection parameters.
-**
-** Revision 1.8  2000/08/10 14:50:54  meichel
-** Added initial OpenSSL support.
-**
-** Revision 1.7  2000/06/07 08:57:22  meichel
-** dcmnet ACSE routines now allow to retrieve a binary copy of the A-ASSOCIATE
-**   RQ/AC/RJ PDUs, e.g. for logging purposes.
-**
-** Revision 1.6  1999/04/19 08:39:27  meichel
-** Added experimental support for extended SOP class negotiation.
-**
-** Revision 1.5  1999/03/29 11:19:59  meichel
-** Cleaned up dcmnet code for char* to const char* assignments.
-**
-** Revision 1.4  1998/06/29 12:14:27  meichel
-** Removed some name clashes (e.g. local variable with same
-**   name as class member) to improve maintainability.
-**   Applied some code purifications proposed by the gcc 2.8.1 -Weffc++ option.
-**
-** Revision 1.3  1997/07/21 08:40:11  andreas
-** - Replace all boolean types (BOOLEAN, CTNBOOLEAN, DICOM_BOOL, BOOL)
-**   with one unique boolean type OFBool.
-**
-** Revision 1.2  1997/01/13 15:53:02  hewett
-** Added missing function prototypes (required for CodeWarrior 10).
-**
-** Revision 1.1.1.1  1996/03/26 18:38:44  hewett
-** Initial Release.
-**
-**
-*/

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2010, OFFIS e.V.
+ *  Copyright (C) 1997-2011, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Norbert Olges, Marco Eichelberg
  *
  *  Purpose: compression routines of the IJG JPEG library configured for 12 bits/sample. 
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:17 $
- *  CVS/RCS Revision: $Revision: 1.5 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -47,7 +40,7 @@ class DJCodecParameter;
 /** this class encapsulates the compression routines of the
  *  IJG JPEG library configured for 12 bits/sample. 
  */
-class DJCompressIJG12Bit: public DJEncoder
+class DCMTK_DCMJPEG_EXPORT DJCompressIJG12Bit: public DJEncoder
 {
 public:
 
@@ -178,26 +171,3 @@ private:
 };
 
 #endif
-
-/*
- * CVS/RCS Log
- * $Log: djeijg12.h,v $
- * Revision 1.5  2010-10-14 13:17:17  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.4  2009-11-18 16:17:54  uli
- * Use more than just the INFO log level.
- *
- * Revision 1.3  2005-12-08 16:59:25  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.2  2001/11/19 15:13:28  meichel
- * Introduced verbose mode in module dcmjpeg. If enabled, warning
- *   messages from the IJG library are printed on ofConsole, otherwise
- *   the library remains quiet.
- *
- * Revision 1.1  2001/11/13 15:56:23  meichel
- * Initial release of module dcmjpeg
- *
- *
- */

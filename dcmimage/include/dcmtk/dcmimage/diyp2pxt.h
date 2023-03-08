@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2016, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Joerg Riesmeier
  *
  *  Purpose: DicomYBRPart422PixelTemplate (Header)
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:30 $
- *  CVS/RCS Revision: $Revision: 1.23 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -93,21 +86,21 @@ class DiYBRPart422PixelTemplate
     {
         if (this->Init(pixel))
         {
-            register T2 *r = this->Data[0];
-            register T2 *g = this->Data[1];
-            register T2 *b = this->Data[2];
-            register unsigned long i;
+            T2 *r = this->Data[0];
+            T2 *g = this->Data[1];
+            T2 *b = this->Data[2];
+            unsigned long i;
             const T2 maxvalue = OFstatic_cast(T2, DicomImageClass::maxval(bits));
             const T1 offset = OFstatic_cast(T1, DicomImageClass::maxval(bits - 1));
             // use the number of input pixels derived from the length of the 'PixelData'
             // attribute), but not more than the size of the intermediate buffer
             const unsigned long count = (this->InputCount < this->Count) ? this->InputCount : this->Count;
 
-            register const T1 *p = pixel;
-            register T2 y1;
-            register T2 y2;
-            register T2 cb;
-            register T2 cr;
+            const T1 *p = pixel;
+            T2 y1;
+            T2 y2;
+            T2 cb;
+            T2 cr;
             for (i = count / 2; i != 0; --i)
             {
                 y1 = removeSign(*(p++), offset);
@@ -121,6 +114,13 @@ class DiYBRPart422PixelTemplate
     }
 
     /** convert a single YCbCr value to RGB
+     *  @param red the red part of the RGB value
+     *  @param green the green part of the RGB value
+     *  @param blue the blue part of the RGB value
+     *  @param y the luma part of the YCbCr value
+     *  @param cb the blue-difference part of the YCbCr value
+     *  @param cr the red-difference part of the YCbCr value
+     *  @param maxvalue the maximum value of the RGB parts
      */
     inline void convertValue(T2 &red,
                              T2 &green,
@@ -141,85 +141,3 @@ class DiYBRPart422PixelTemplate
 
 
 #endif
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: diyp2pxt.h,v $
- * Revision 1.23  2010-10-14 13:16:30  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.22  2010-03-01 09:08:46  uli
- * Removed some unnecessary include directives in the headers.
- *
- * Revision 1.21  2009-11-25 14:31:21  joergr
- * Removed inclusion of header file "ofconsol.h".
- *
- * Revision 1.20  2009-10-14 10:25:14  joergr
- * Fixed minor issues in log output. Also updated copyright date (if required).
- *
- * Revision 1.19  2009-10-13 14:08:33  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.18  2006-08-15 16:35:01  meichel
- * Updated the code in module dcmimage to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.17  2005/12/08 16:02:05  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.16  2004/04/21 10:00:31  meichel
- * Minor modifications for compilation with gcc 3.4.0
- *
- * Revision 1.15  2003/12/23 12:35:00  joergr
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- * Removed leading underscore characters from preprocessor symbols (reserved
- * symbols). Updated copyright header. Added missing API documentation.
- * Replaced post-increment/decrement operators by pre-increment/decrement
- * operators where appropriate (e.g. 'i++' by '++i').
- *
- * Revision 1.14  2002/06/26 16:21:01  joergr
- * Enhanced handling of corrupted pixel data and/or length.
- *
- * Revision 1.13  2001/11/09 16:47:03  joergr
- * Removed 'inline' specifier from certain methods.
- *
- * Revision 1.12  2001/06/01 15:49:33  meichel
- * Updated copyright header
- *
- * Revision 1.11  2000/04/28 12:39:33  joergr
- * DebugLevel - global for the module - now derived from OFGlobal (MF-safe).
- *
- * Revision 1.10  2000/04/27 13:15:16  joergr
- * Dcmimage library code now consistently uses ofConsole for error output.
- *
- * Revision 1.9  2000/03/08 16:21:55  meichel
- * Updated copyright header.
- *
- * Revision 1.8  2000/03/03 14:07:53  meichel
- * Implemented library support for redirecting error messages into memory
- *   instead of printing them to stdout/stderr for GUI applications.
- *
- * Revision 1.7  1999/09/17 14:03:47  joergr
- * Enhanced efficiency of some "for" loops.
- *
- * Revision 1.6  1999/04/28 12:45:22  joergr
- * Introduced new scheme for the debug level variable: now each level can be
- * set separately (there is no "include" relationship).
- *
- * Revision 1.5  1999/02/03 16:55:30  joergr
- * Moved global functions maxval() and determineRepresentation() to class
- * DicomImageClass (as static methods).
- *
- * Revision 1.4  1999/01/20 14:48:13  joergr
- * Replaced invocation of getCount() by member variable Count where possible.
- *
- * Revision 1.3  1998/11/27 14:22:55  joergr
- * Introduced global debug level for dcmimage module to control error output.
- *
- * Revision 1.2  1998/05/11 14:53:34  joergr
- * Added CVS/RCS header to each file.
- *
- *
- */

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2003-2010, OFFIS e.V.
+ *  Copyright (C) 2003-2015, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose:
  *    classes: DSRIODConstraintChecker
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:32 $
- *  CVS/RCS Revision: $Revision: 1.4 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -40,9 +33,9 @@
  *  class declaration  *
  *---------------------*/
 
-/** Class for checking the content relationship constraints of an SR IOD (abstract)
+/** Class for checking the relationship content constraints of an SR IOD (abstract)
  */
-class DSRIODConstraintChecker
+class DCMTK_DCMSR_EXPORT DSRIODConstraintChecker
   : public DSRTypes
 {
 
@@ -66,10 +59,14 @@ class DSRIODConstraintChecker
      */
     virtual OFBool isTemplateSupportRequired() const = 0;
 
-    /** get identifier of the root template
-     ** @return root template identifier (TID) if required, NULL otherwise
+    /** get identifier and mapping resource of the root template (if any)
+     ** @param  templateIdentifier  identifier of the root template (might be empty)
+     *  @param  mappingResource     mapping resource that defines the root template
+     *                              (might be empty)
+     ** @return status, EC_Normal if successful, an error code otherwise
      */
-    virtual const char *getRootTemplateIdentifier() const = 0;
+    virtual OFCondition getRootTemplateIdentification(OFString &templateIdentifier,
+                                                      OFString &mappingResource) const = 0;
 
     /** get the associated document type of the SR IOD (abstract)
      ** @return document type (see DSRTypes::E_DocumentType)
@@ -92,22 +89,3 @@ class DSRIODConstraintChecker
 
 
 #endif
-
-
-/*
- *  CVS/RCS Log:
- *  $Log: dsriodcc.h,v $
- *  Revision 1.4  2010-10-14 13:16:32  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.3  2005-12-08 16:05:07  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.2  2003/10/09 12:56:42  joergr
- *  Added check for root template identifier when reading an SR document.
- *
- *  Revision 1.1  2003/09/15 14:22:04  joergr
- *  Introduced new class to facilitate checking of SR IOD relationship content
- *  constraints. Replaced old implementation distributed over numerous classes.
- *
- */

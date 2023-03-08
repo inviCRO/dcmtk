@@ -36,7 +36,7 @@ LOCALINCLUDES = $(dcmnetinc) $(dcmdatainc) $(ofstdinc) $(ofloginc)
 LIBDIRS = -L$(top_srcdir)/libsrc $(dcmnetlibdir) $(dcmdatalibdir) \
 	$(ofstdlibdir) $(ofloglibdir)
 LOCALLIBS = -ldcmqrdb $(dcmnetlib) $(dcmdatalib) $(ofstdlib) $(ofloglib) \
-	$(ZLIBLIBS) $(TCPWRAPPERLIBS)
+	$(ZLIBLIBS) $(TCPWRAPPERLIBS) $(CHARCONVLIBS) $(MATHLIBS)
 
 objs = dcmqrscp.o dcmqrti.o dcmqridx.o
 progs = dcmqrscp dcmqrti dcmqridx
@@ -45,19 +45,19 @@ progs = dcmqrscp dcmqrti dcmqridx
 all: $(progs)
 
 dcmqrscp: dcmqrscp.o
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(LIBDIRS) -o $@ dcmqrscp.o $(LOCALLIBS) $(MATHLIBS) $(LIBS)
+	$(CXX) $(CXXFLAGS) $(LIBDIRS) $(LDFLAGS) -o $@ dcmqrscp.o $(LOCALLIBS) $(LIBS)
 
-dcmqrti: dcmqrti.o 
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(LIBDIRS) -o $@ dcmqrti.o $(LOCALLIBS) $(MATHLIBS) $(LIBS)
+dcmqrti: dcmqrti.o
+	$(CXX) $(CXXFLAGS) $(LIBDIRS) $(LDFLAGS) -o $@ dcmqrti.o $(LOCALLIBS) $(LIBS)
 
 dcmqridx: dcmqridx.o
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(LIBDIRS) -o $@ dcmqridx.o $(LOCALLIBS) $(MATHLIBS) $(LIBS)
+	$(CXX) $(CXXFLAGS) $(LIBDIRS) $(LDFLAGS) -o $@ dcmqridx.o $(LOCALLIBS) $(LIBS)
 
 
 install: all
 	$(configdir)/mkinstalldirs $(DESTDIR)$(bindir)
 	for prog in $(progs); do \
-		$(INSTALL_PROGRAM) $$prog$(BINEXT) $(DESTDIR)$(bindir) && strip $(DESTDIR)$(bindir)/$$prog$(BINEXT) ;\
+		$(INSTALL_PROGRAM) $$prog$(BINEXT) $(DESTDIR)$(bindir) && $(STRIP) $(DESTDIR)$(bindir)/$$prog$(BINEXT) ;\
 	done
 
 

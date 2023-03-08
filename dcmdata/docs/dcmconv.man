@@ -6,18 +6,18 @@
 \page dcmconv dcmconv: Convert DICOM file encoding
 \endif
 
-\section synopsis SYNOPSIS
+\section dcmconv_synopsis SYNOPSIS
 
 \verbatim
 dcmconv [options] dcmfile-in dcmfile-out
 \endverbatim
 
-\section description DESCRIPTION
+\section dcmconv_description DESCRIPTION
 
 The \b dcmconv utility reads a DICOM file (\e dcmfile-in), performs an encoding
 conversion and writes the converted data to an output file (\e dcmfile-out).
 
-\section parameters PARAMETERS
+\section dcmconv_parameters PARAMETERS
 
 \verbatim
 dcmfile-in   DICOM input filename to be converted
@@ -25,9 +25,9 @@ dcmfile-in   DICOM input filename to be converted
 dcmfile-out  DICOM output filename to write to
 \endverbatim
 
-\section options OPTIONS
+\section dcmconv_options OPTIONS
 
-\subsection general_options general options
+\subsection dcmconv_general_options general options
 \verbatim
   -h   --help
          print this help text and exit
@@ -55,7 +55,7 @@ dcmfile-out  DICOM output filename to write to
          use config file f for the logger
 \endverbatim
 
-\subsection input_options input options
+\subsection dcmconv_input_options input options
 \verbatim
 input file format:
 
@@ -101,6 +101,14 @@ parsing of odd-length attributes:
   +ae  --assume-even-length
          assume real length is one byte larger
 
+handling of explicit VR:
+
+  +ev  --use-explicit-vr
+         use explicit VR from dataset (default)
+
+  -ev  --ignore-explicit-vr
+         ignore explicit VR (prefer data dictionary)
+
 handling of non-standard VR:
 
   +vr  --treat-as-unknown
@@ -133,6 +141,38 @@ handling of private max-length elements (implicit VR):
   +sq  --maxlength-seq
          read as sequence with undefined length
 
+handling of wrong delimitation items:
+
+  -rd  --use-delim-items
+         use delimitation items from dataset (default)
+
+  +rd  --replace-wrong-delim
+         replace wrong sequence/item delimitation items
+
+handling of illegal undefined length OB/OW elements:
+
+  -oi  --illegal-obow-rej
+         reject dataset with illegal element (default)
+
+  +oi  --illegal-obow-conv
+         convert undefined length OB/OW element to SQ
+
+handling of VOI LUT Sequence with OW VR and explicit length:
+
+  -vi  --illegal-voi-rej
+         reject dataset with illegal VOI LUT (default)
+
+  +vi  --illegal-voi-conv
+         convert illegal VOI LUT to SQ
+
+handling of explicit length pixel data for encaps. transfer syntaxes:
+
+  -pe  --abort-expl-pixdata
+         abort on explicit length pixel data (default)
+
+  +pe  --use-expl-pixdata
+         use explicit length pixel data
+
 general handling of parser errors:
 
   +Ep  --ignore-parse-errors
@@ -163,15 +203,50 @@ bitstream format of deflated input:
          expect deflated zlib bitstream
 \endverbatim
 
-\subsection output_options output options
+\subsection dcmconv_processing_options processing options
+\verbatim
+specific character set:
+
+  # the following options require support from an underlying character
+  # encoding library (see output of --version on which one is available)
+
+  +U8  --convert-to-utf8
+         convert all element values that are affected
+         by Specific Character Set (0008,0005) to UTF-8
+
+  +L1  --convert-to-latin1
+         convert affected element values to ISO 8859-1
+
+  +A7  --convert-to-ascii
+         convert affected element values to 7-bit ASCII
+
+  +C   --convert-to-charset  [c]harset: string
+         convert affected element values to the character
+         set specified by the DICOM defined term c
+
+  -Ct  --transliterate
+         try to approximate characters that cannot be
+         represented through similar looking characters
+
+  -Cd  --discard-illegal
+         discard characters that cannot be represented
+         in destination character set
+
+other processing options:
+
+  -ig  --no-invalid-groups
+         remove elements with invalid group number
+\endverbatim
+
+\subsection dcmconv_output_options output options
 \verbatim
 output file format:
 
-  +F   --write-file
-         write file format (default)
-
   +Fm  --write-new-meta-info
-         write file format with new meta information
+         write file format with new meta information (default)
+
+  +F   --write-file
+         write file format
 
   -F   --write-dataset
          write data set without file meta information
@@ -192,6 +267,10 @@ output transfer syntax:
 
   +td  --write-xfer-deflated
          write with deflated explicit VR little endian TS
+
+  +tg  --write-xfer-ge
+         write private GE implicit VR little endian
+         with big endian pixel data TS (non-standard)
 
 post-1993 value representations:
 
@@ -243,14 +322,9 @@ deflate compression level (only with --write-xfer-deflated):
 
   +cl  --compression-level  [l]evel: integer (default: 6)
          0=uncompressed, 1=fastest, 9=best compression
-
-other output options:
-
-  -ig  --no-invalid-groups
-         don't write elements with invalid group number
 \endverbatim
 
-\section logging LOGGING
+\section dcmconv_logging LOGGING
 
 The level of logging output of the various command line tools and underlying
 libraries can be specified by the user.  By default, only errors and warnings
@@ -267,9 +341,9 @@ rotation), to syslog (Unix) or the event log (Windows) option \e --log-config
 can be used.  This configuration file also allows for directing only certain
 messages to a particular output stream and for filtering certain messages
 based on the module or application where they are generated.  An example
-configuration file is provided in <em>\<etcdir\>/logger.cfg</em>).
+configuration file is provided in <em>\<etcdir\>/logger.cfg</em>.
 
-\section command_line COMMAND LINE
+\section dcmconv_command_line COMMAND LINE
 
 All command line tools use the following notation for parameters: square
 brackets enclose optional values (0-1), three trailing dots indicate that
@@ -278,7 +352,7 @@ multiple values are allowed (1-n), a combination of both means 0 to n values.
 Command line options are distinguished from parameters by a leading '+' or '-'
 sign, respectively.  Usually, order and position of command line options are
 arbitrary (i.e. they can appear anywhere).  However, if options are mutually
-exclusive the rightmost appearance is used.  This behaviour conforms to the
+exclusive the rightmost appearance is used.  This behavior conforms to the
 standard evaluation rules of common Unix shells.
 
 In addition, one or more command files can be specified using an '@' sign as a
@@ -287,11 +361,11 @@ is replaced by the content of the corresponding text file (multiple
 whitespaces are treated as a single separator unless they appear between two
 quotation marks) prior to any further evaluation.  Please note that a command
 file cannot contain another command file.  This simple but effective approach
-allows to summarize common combinations of options/parameters and avoids
+allows one to summarize common combinations of options/parameters and avoids
 longish and confusing command lines (an example is provided in file
 <em>\<datadir\>/dumppat.txt</em>).
 
-\section environment ENVIRONMENT
+\section dcmconv_environment ENVIRONMENT
 
 The \b dcmconv utility will attempt to load DICOM data dictionaries specified
 in the \e DCMDICTPATH environment variable.  By default, i.e. if the
@@ -299,7 +373,7 @@ in the \e DCMDICTPATH environment variable.  By default, i.e. if the
 <em>\<datadir\>/dicom.dic</em> will be loaded unless the dictionary is built
 into the application (default for Windows).
 
-The default behaviour should be preferred and the \e DCMDICTPATH environment
+The default behavior should be preferred and the \e DCMDICTPATH environment
 variable only used when alternative data dictionaries are required.  The
 \e DCMDICTPATH environment variable has the same format as the Unix shell
 \e PATH variable in that a colon (":") separates entries.  On Windows systems,
@@ -307,12 +381,12 @@ a semicolon (";") is used as a separator.  The data dictionary code will
 attempt to load each file specified in the \e DCMDICTPATH environment variable.
 It is an error if no data dictionary can be loaded.
 
-\section see_also SEE ALSO
+\section dcmconv_see_also SEE ALSO
 
 <b>dcmdump</b>(1)
 
-\section copyright COPYRIGHT
+\section dcmconv_copyright COPYRIGHT
 
-Copyright (C) 1994-2010 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany.
+Copyright (C) 1994-2022 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany.
 
 */

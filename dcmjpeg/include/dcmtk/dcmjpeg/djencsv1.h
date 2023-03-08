@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2010, OFFIS e.V.
+ *  Copyright (C) 1997-2011, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: Codec class for encoding JPEG Lossless Selection Value 1 (8/12/16-bit)
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:17 $
- *  CVS/RCS Revision: $Revision: 1.3 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DJENCSV1_H
@@ -35,7 +28,7 @@
 
 /** Encoder class for JPEG Lossless Selection Value 1 (8/12/16-bit)
  */
-class DJEncoderP14SV1: public DJCodecEncoder
+class DCMTK_DCMJPEG_EXPORT DJEncoderP14SV1: public DJCodecEncoder
 {
 public: 
 
@@ -66,7 +59,7 @@ private:
    *  @param ratio image compression ratio. This is not the "quality factor"
    *    but the real effective ratio between compressed and uncompressed image,
    *    i. e. 30 means a 30:1 lossy compression.
-   *  @param imageComments image comments returned in this
+   *  @param derivationDescription derivation description returned in this
    *    parameter which is initially empty
    */
   virtual void createDerivationDescription(
@@ -87,22 +80,7 @@ private:
     const DcmRepresentationParameter * toRepParam,
     const DJCodecParameter *cp,
     Uint8 bitsPerSample) const;
-  
+
 };
 
 #endif
-
-/*
- * CVS/RCS Log
- * $Log: djencsv1.h,v $
- * Revision 1.3  2010-10-14 13:17:17  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.2  2005-12-08 16:59:35  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.1  2001/11/13 15:56:28  meichel
- * Initial release of module dcmjpeg
- *
- *
- */

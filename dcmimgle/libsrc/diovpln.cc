@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1996-2010, OFFIS e.V.
+ *  Copyright (C) 1996-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: DicomOverlayPlane (Source)
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:18 $
- *  CVS/RCS Revision: $Revision: 1.37 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -34,6 +27,7 @@
 #include "dcmtk/dcmdata/dctagkey.h"
 #include "dcmtk/dcmdata/dcpixel.h"
 #include "dcmtk/ofstd/ofbmanip.h"
+#include "dcmtk/ofstd/ofutil.h"
 
 #include "dcmtk/dcmimgle/diovpln.h"
 #include "dcmtk/dcmimgle/didocu.h"
@@ -50,6 +44,7 @@ DiOverlayPlane::DiOverlayPlane(const DiDocument *docu,
                                const Uint16 high)
   : NumberOfFrames(0),
     ImageFrameOrigin(0),
+    FirstFrame(0),
     Top(0),
     Left(0),
     Height(0),
@@ -65,13 +60,14 @@ DiOverlayPlane::DiOverlayPlane(const DiDocument *docu,
     DefaultMode(EMO_Graphic),
     Label(),
     Description(),
-    GroupNumber(group),
+    GroupNumber(OFstatic_cast(Uint16, group)),
     Valid(0),
     Visible(0),
     BitPos(0),
     StartBitPos(0),
     StartLeft(0),
     StartTop(0),
+    MultiframeOverlay(0),
     EmbeddedData(0),
     Ptr(NULL),
     StartPtr(NULL),
@@ -79,8 +75,10 @@ DiOverlayPlane::DiOverlayPlane(const DiDocument *docu,
 {
     if (docu != NULL)
     {
-        /* specifiy overlay group number */
-        DcmTagKey tag(group, DCM_OverlayRows.getElement() /* dummy */);
+        /* determine first frame to be processed */
+        FirstFrame = docu->getFrameStart();
+        /* specify overlay group number */
+        DcmTagKey tag(OFstatic_cast(Uint16, group), DCM_OverlayRows.getElement() /* dummy */);
         /* get descriptive data */
         tag.setElement(DCM_OverlayLabel.getElement());
         docu->getValue(tag, Label);
@@ -94,6 +92,7 @@ DiOverlayPlane::DiOverlayPlane(const DiDocument *docu,
         Sint32 sl = 0;
         /* multi-frame overlays */
         tag.setElement(DCM_NumberOfFramesInOverlay.getElement());
+        MultiframeOverlay = (docu->search(tag) != NULL);
         docu->getValue(tag, sl);
         NumberOfFrames = (sl < 1) ? 1 : OFstatic_cast(Uint32, sl);
         tag.setElement(DCM_ImageFrameOrigin.getElement());
@@ -106,6 +105,8 @@ DiOverlayPlane::DiOverlayPlane(const DiDocument *docu,
         if (Valid)
         {
             DCMIMGLE_DEBUG("processing overlay plane in group 0x" << STD_NAMESPACE hex << group);
+            if (MultiframeOverlay)
+                DCMIMGLE_TRACE("  this is a multi-frame overlay with " << NumberOfFrames << " frame(s) starting at frame " << (ImageFrameOrigin + 1));
             if (docu->getValue(tag, Top, 1) < 2)
                 DCMIMGLE_WARN("missing second value for 'OverlayOrigin' ... assuming 'Top' = " << Top);
         }
@@ -114,6 +115,8 @@ DiOverlayPlane::DiOverlayPlane(const DiDocument *docu,
         if (Valid)
         {
             DCMIMGLE_DEBUG("processing overlay plane in group 0x" << STD_NAMESPACE hex << group);
+            if (MultiframeOverlay)
+                DCMIMGLE_TRACE("  this is a multi-frame overlay with " << NumberOfFrames << " frame(s) starting at frame " << (ImageFrameOrigin + 1));
             if (docu->getValue(tag, Left, 1) < 2)
                 DCMIMGLE_WARN("missing second value for 'OverlayOrigin' ... assuming 'Left' = " << Left);
         }
@@ -192,6 +195,21 @@ DiOverlayPlane::DiOverlayPlane(const DiDocument *docu,
                 Data = NULL;
             } else
                 Valid = (Data != NULL);
+            /* check condition for multi-frame overlay */
+            if (NumberOfFrames > 1)
+            {
+                Sint32 numFrames = 0;
+                if (!docu->getValue(DCM_NumberOfFrames, numFrames) || (numFrames == 1))
+                    DCMIMGLE_WARN("found multi-frame overlay in group 0x" << STD_NAMESPACE hex << group << " for single frame image");
+            }
+        }
+        if (Valid)
+        {
+            /* report that this group contains a valid overlay plane */
+            DCMIMGLE_TRACE("overlay plane in group 0x" << STD_NAMESPACE hex << group << " is present and can be processed");
+        } else {
+            /* report that this group does not contain a valid overlay plane */
+            DCMIMGLE_TRACE("overlay plane in group 0x" << STD_NAMESPACE hex << group << " is missing or incomplete");
         }
     }
 }
@@ -208,6 +226,7 @@ DiOverlayPlane::DiOverlayPlane(const unsigned int group,
                                const EM_Overlay mode)
   : NumberOfFrames(1),
     ImageFrameOrigin(0),
+    FirstFrame(0),
     Top(top_pos),
     Left(left_pos),
     Height(rows),
@@ -223,13 +242,14 @@ DiOverlayPlane::DiOverlayPlane(const unsigned int group,
     DefaultMode(mode),
     Label(),
     Description(),
-    GroupNumber(group),
+    GroupNumber(OFstatic_cast(Uint16, group)),
     Valid(0),
     Visible((mode == EMO_BitmapShutter) ? 1 : 0),
     BitPos(0),
     StartBitPos(0),
     StartLeft(0),
     StartTop(0),
+    MultiframeOverlay(0),
     EmbeddedData(0),
     Ptr(NULL),
     StartPtr(NULL),
@@ -257,7 +277,7 @@ DiOverlayPlane::DiOverlayPlane(const unsigned int group,
 
 DiOverlayPlane::DiOverlayPlane(DiOverlayPlane *plane,
                                const unsigned int bit,
-                               Uint16 *data,
+                               const Uint16 *data,
                                Uint16 *temp,
                                const Uint16 width,
                                const Uint16 height,
@@ -265,6 +285,7 @@ DiOverlayPlane::DiOverlayPlane(DiOverlayPlane *plane,
                                const Uint16 rows)
   : NumberOfFrames(plane->NumberOfFrames),
     ImageFrameOrigin(plane->ImageFrameOrigin),
+    FirstFrame(plane->FirstFrame),
     Top(plane->Top),
     Left(plane->Left),
     Height(plane->Height),
@@ -272,7 +293,7 @@ DiOverlayPlane::DiOverlayPlane(DiOverlayPlane *plane,
     Rows(rows),
     Columns(columns),
     BitsAllocated(16),
-    BitPosition(bit),
+    BitPosition(OFstatic_cast(Uint16, bit)),
     Foreground(plane->Foreground),
     Threshold(plane->Threshold),
     PValue(0),
@@ -287,6 +308,7 @@ DiOverlayPlane::DiOverlayPlane(DiOverlayPlane *plane,
     StartBitPos(0),
     StartLeft(plane->StartLeft),
     StartTop(plane->StartTop),
+    MultiframeOverlay(plane->MultiframeOverlay),
     EmbeddedData(0),
     Ptr(NULL),
     StartPtr(NULL),
@@ -294,10 +316,10 @@ DiOverlayPlane::DiOverlayPlane(DiOverlayPlane *plane,
 {
     if (temp != NULL)
     {
-        register Uint16 x;
-        register Uint16 y;
-        register Uint16 *q = temp;
-        register const Uint16 mask = 1 << bit;
+        Uint16 x;
+        Uint16 y;
+        Uint16 *q = temp;
+        const Uint16 mask = 1 << bit;
         const Uint16 skip_x = width - plane->Columns;
         const unsigned long skip_f = OFstatic_cast(unsigned long, height - plane->Rows) * OFstatic_cast(unsigned long, width);
         for (unsigned long f = 0; f < NumberOfFrames; ++f)
@@ -342,7 +364,8 @@ void *DiOverlayPlane::getData(const unsigned long frame,
                               const Uint16 ymax,
                               const int bits,
                               const Uint16 fore,
-                              const Uint16 back)
+                              const Uint16 back,
+                              const OFBool useOrigin)
 {
     const unsigned long count = OFstatic_cast(unsigned long, xmax - xmin) * OFstatic_cast(unsigned long, ymax - ymin);
     if (Valid && (count > 0))
@@ -357,16 +380,16 @@ void *DiOverlayPlane::getData(const unsigned long frame,
                 if ((fore & mask) != (back & mask))
                 {
                     OFBitmanipTemplate<Uint8>::setMem(data, 0x0, count8);
-                    register Uint16 x;
-                    register Uint16 y;
-                    register Uint8 value = 0;
-                    register Uint8 *q = data;
-                    register int bit = 0;
+                    Uint16 x;
+                    Uint16 y;
+                    Uint8 value = 0;
+                    Uint8 *q = data;
+                    int bit = 0;
                     if (reset(frame + ImageFrameOrigin))
                     {
                         for (y = ymin; y < ymax; ++y)
                         {
-                            setStart(xmin, y);
+                            setStart(xmin, y, useOrigin);
                             for (x = xmin; x < xmax; ++x)
                             {
                                 if (getNextBit())
@@ -404,14 +427,14 @@ void *DiOverlayPlane::getData(const unsigned long frame,
                 OFBitmanipTemplate<Uint8>::setMem(data, back8, count);
                 if (fore8 != back8)                                     // optimization
                 {
-                    register Uint16 x;
-                    register Uint16 y;
-                    register Uint8 *q = data;
+                    Uint16 x;
+                    Uint16 y;
+                    Uint8 *q = data;
                     if (reset(frame + ImageFrameOrigin))
                     {
                         for (y = ymin; y < ymax; ++y)
                         {
-                            setStart(xmin, y);
+                            setStart(xmin, y, useOrigin);
                             for (x = xmin; x < xmax; ++x, ++q)
                             {
                                 if (getNextBit())
@@ -433,14 +456,14 @@ void *DiOverlayPlane::getData(const unsigned long frame,
                 OFBitmanipTemplate<Uint16>::setMem(data, back16, count);
                 if (fore16 != back16)                                   // optimization
                 {
-                    register Uint16 x;
-                    register Uint16 y;
-                    register Uint16 *q = data;
+                    Uint16 x;
+                    Uint16 y;
+                    Uint16 *q = data;
                     if (reset(frame + ImageFrameOrigin))
                     {
                         for (y = ymin; y < ymax; ++y)
                         {
-                            setStart(xmin, y);
+                            setStart(xmin, y, useOrigin);
                             for (x = xmin; x < xmax; ++x, ++q)
                             {
                                 if (getNextBit())
@@ -474,11 +497,11 @@ unsigned long DiOverlayPlane::create6xxx3000Data(Uint8 *&buffer,
         if (buffer != NULL)
         {
             OFBitmanipTemplate<Uint8>::setMem(buffer, 0x0, count8);
-            register Uint16 x;
-            register Uint16 y;
-            register Uint8 value = 0;
-            register Uint8 *q = buffer;
-            register int bit = 0;
+            Uint16 x;
+            Uint16 y;
+            Uint8 value = 0;
+            Uint8 *q = buffer;
+            int bit = 0;
             for (unsigned long f = 0; f < NumberOfFrames; ++f)
             {
                 if (reset(f + ImageFrameOrigin))
@@ -548,6 +571,8 @@ void DiOverlayPlane::setScaling(const double xfactor,
     Top = OFstatic_cast(Sint16, yfactor * Top);
     Width = OFstatic_cast(Uint16, xfactor * Width);
     Height = OFstatic_cast(Uint16, yfactor * Height);
+    StartLeft = OFstatic_cast(unsigned int, xfactor * StartLeft);
+    StartTop = OFstatic_cast(unsigned int, yfactor * StartTop);
 }
 
 
@@ -559,12 +584,12 @@ void DiOverlayPlane::setFlipping(const int horz,
     if (horz)
     {
         Left = OFstatic_cast(Sint16, columns - Width - Left);
-        StartLeft = OFstatic_cast(Uint16, OFstatic_cast(signed long, Columns) - Width - StartLeft);
+        StartLeft = OFstatic_cast(unsigned int, OFstatic_cast(signed long, Columns) - Width - StartLeft);
     }
     if (vert)
     {
         Top = OFstatic_cast(Sint16, rows - Height - Top);
-        StartTop = OFstatic_cast(Uint16, OFstatic_cast(signed long, Rows) - Height - StartTop);
+        StartTop = OFstatic_cast(unsigned int, OFstatic_cast(signed long, Rows) - Height - StartTop);
     }
 }
 
@@ -579,180 +604,25 @@ void DiOverlayPlane::setRotation(const int degree,
         setFlipping(1, 1, left_pos + columns, top_pos + rows);
     else if ((degree == 90) || (degree == 270))
     {
-        Uint16 us = Height;                     // swap visible width/height
-        Height = Width;
-        Width = us;
+        OFswap(Width, Height);                  // swap visible width/height
 /*
-        us = Rows;                              // swap stored width/height -> already done in the constructor !
-        Rows = Columns;
-        Columns = us;
+        OFswap(Columns, Rows);                  // swap stored columns/rows -> already done in the constructor !
 */
         if (degree == 90)                       // rotate right
         {
-            Sint16 ss = Left;
-            us = StartLeft;
+            const Sint16 ss = Left;
+            const unsigned int ui = StartLeft;
             Left = OFstatic_cast(Sint16, OFstatic_cast(signed long, columns) - Width - Top + top_pos);
-            StartLeft = OFstatic_cast(Uint16, OFstatic_cast(signed long, Columns) - Width - StartTop);
+            StartLeft = OFstatic_cast(unsigned int, OFstatic_cast(signed long, Columns) - Width - StartTop);
             Top = OFstatic_cast(Sint16, ss - left_pos);
-            StartTop = us;
+            StartTop = ui;
         } else {                                // rotate left
-            Sint16 ss = Left;
-            us = StartLeft;
+            const Sint16 ss = Left;
+            const unsigned int ui = StartLeft;
             Left = OFstatic_cast(Sint16, Top - top_pos);
             StartLeft = StartTop;
             Top = OFstatic_cast(Sint16, OFstatic_cast(signed long, rows) - Height - ss + left_pos);
-            StartTop = OFstatic_cast(Uint16, OFstatic_cast(signed long, Rows) - Height - us);
+            StartTop = OFstatic_cast(unsigned int, OFstatic_cast(signed long, Rows) - Height - ui);
         }
     }
 }
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: diovpln.cc,v $
- * Revision 1.37  2010-10-14 13:14:18  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.36  2010-06-16 07:08:12  joergr
- * Added type cast to integer variables in order to avoid compiler warnings
- * reported by VisualStudio 2008 with warning level 4 (highest).
- *
- * Revision 1.35  2009-11-25 16:30:21  joergr
- * Adapted code for new approach to access individual frames of a DICOM image.
- * Removed inclusion of header file "ofconsol.h".
- * Revised logging messages. Added more logging messages.
- *
- * Revision 1.34  2009-10-28 14:26:02  joergr
- * Fixed minor issues in log output.
- *
- * Revision 1.33  2009-10-28 09:53:41  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.32  2008-11-18 10:57:10  joergr
- * Fixed issue with incorrectly encoded overlay planes (wrong values for
- * OverlayBitsAllocated and OverlayBitPosition).
- *
- * Revision 1.31  2007-08-27 09:57:31  joergr
- * Added further check on Overlay Type variable.
- *
- * Revision 1.30  2006/08/15 16:30:11  meichel
- * Updated the code in module dcmimgle to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.29  2005/12/08 15:43:06  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.28  2003/12/23 16:03:18  joergr
- * Replaced post-increment/decrement operators by pre-increment/decrement
- * operators where appropriate (e.g. 'i++' by '++i').
- *
- * Revision 1.27  2003/12/08 15:00:23  joergr
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- *
- * Revision 1.26  2002/12/09 13:34:52  joergr
- * Renamed parameter/local variable to avoid name clashes with global
- * declaration left and/or right (used for as iostream manipulators).
- *
- * Revision 1.25  2001/09/28 13:18:28  joergr
- * Added method to extract embedded overlay planes from pixel data and store
- * them in group (6xxx,3000) format.
- *
- * Revision 1.24  2001/06/01 15:49:59  meichel
- * Updated copyright header
- *
- * Revision 1.23  2001/05/22 13:20:27  joergr
- * Enhanced checking routines for corrupt overlay data (e.g. invalid value for
- * OverlayBitsAllocated).
- *
- * Revision 1.22  2001/05/14 09:50:25  joergr
- * Added support for "1 bit output" of overlay planes; useful to extract
- * overlay planes from the pixel data and store them separately in the dataset.
- *
- * Revision 1.21  2000/04/28 12:33:48  joergr
- * DebugLevel - global for the module - now derived from OFGlobal (MF-safe).
- *
- * Revision 1.20  2000/04/27 13:10:32  joergr
- * Dcmimgle library code now consistently uses ofConsole for error output.
- *
- * Revision 1.19  2000/03/08 16:24:33  meichel
- * Updated copyright header.
- *
- * Revision 1.18  2000/03/03 14:09:22  meichel
- * Implemented library support for redirecting error messages into memory
- *   instead of printing them to stdout/stderr for GUI applications.
- *
- * Revision 1.17  1999/10/20 18:40:13  joergr
- * Added explicit type cast to make MSVC happy.
- *
- * Revision 1.16  1999/10/20 10:35:58  joergr
- * Enhanced method getOverlayData to support 12 bit data for print.
- *
- * Revision 1.15  1999/08/25 16:43:09  joergr
- * Added new feature: Allow clipping region to be outside the image
- * (overlapping).
- *
- * Revision 1.14  1999/07/23 13:46:55  joergr
- * Enhanced robustness of reading the attribute 'OverlayOrigin'.
- *
- * Revision 1.13  1999/04/28 15:04:49  joergr
- * Introduced new scheme for the debug level variable: now each level can be
- * set separately (there is no "include" relationship).
- *
- * Revision 1.12  1999/03/24 17:24:07  joergr
- * Removed bug in routines rotating and flipping overlay planes in clipped
- * images.
- *
- * Revision 1.11  1999/03/22 09:37:33  meichel
- * Reworked data dictionary based on the 1998 DICOM edition and the latest
- *   supplement versions. Corrected dcmtk applications for minor changes
- *   in attribute name constants.
- *
- * Revision 1.10  1999/03/22 08:58:32  joergr
- * Added parameter to specify (transparent) background color for method
- * getOverlayData().
- *
- * Revision 1.9  1999/02/28 16:42:21  joergr
- * Corrected bug: the bit position for bitmap shutters was 1 instead of 0
- * (i.e. the first bit was always been skipped and the all following bits were
- * wrong).
- *
- * Revision 1.8  1999/02/03 17:44:05  joergr
- * Added support for calibration according to Barten transformation (incl.
- * a DISPLAY file describing the monitor characteristic).
- *
- * Revision 1.7  1999/01/20 14:57:12  joergr
- * Added new overlay plane mode for bitmap shutters.
- *
- * Revision 1.6  1998/12/23 13:22:26  joergr
- * Changed parameter type (long to int) to avoid warning reported by MSVC5.
- *
- * Revision 1.5  1998/12/23 11:31:12  joergr
- * Change order of parameters for addOverlay() and getOverlayData().
- * Introduced new overlay mode item EMO_Graphic (= EMO_Replace).
- * Corrected bug concerning flipping and rotating overlay planes (same
- * image object).
- *
- * Revision 1.4  1998/12/22 13:51:04  joergr
- * Removed variable declaration to avoid compiler warnings (reported by
- * MSVC5). Changed initialization of member variable 'DefaultMode'.
- *
- * Revision 1.3  1998/12/16 16:20:10  joergr
- * Added method to export overlay planes (create 8-bit bitmap).
- * Implemented flipping and rotation of overlay planes.
- *
- * Revision 1.2  1998/12/14 17:41:56  joergr
- * Added methods to add and remove additional overlay planes (still untested).
- * Added methods to support overlay labels and descriptions.
- *
- * Revision 1.1  1998/11/27 16:22:13  joergr
- * Added copyright message.
- * Introduced global debug level for dcmimage module to control error output.
- * Added methods and constructors for flipping and rotating, changed for
- * scaling and clipping.
- *
- * Revision 1.5  1998/05/11 14:52:35  joergr
- * Added CVS/RCS header to each file.
- *
- *
- */

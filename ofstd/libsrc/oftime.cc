@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2010, OFFIS e.V.
+ *  Copyright (C) 2002-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,22 +17,13 @@
  *
  *  Purpose: Class for time functions (Source)
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:53 $
- *  CVS/RCS Revision: $Revision: 1.17 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
 #include "dcmtk/config/osconfig.h"
-
-#define INCLUDE_CSTDIO
-#define INCLUDE_CTIME
-#define INCLUDE_CSTRING
 #include "dcmtk/ofstd/ofstdinc.h"
+#include <ctime>
+
 
 BEGIN_EXTERN_C
 #ifdef HAVE_SYS_TIME_H
@@ -48,6 +39,7 @@ BEGIN_EXTERN_C
 END_EXTERN_C
 
 #ifdef HAVE_WINDOWS_H
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>      /* for Windows time functions */
 #endif
 
@@ -106,37 +98,73 @@ OFTime &OFTime::operator=(const OFTime &timeVal)
 
 OFBool OFTime::operator==(const OFTime &timeVal) const
 {
+#ifndef __i386__
     return (getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/) == timeVal.getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/));
+#else
+    volatile double lhs = getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/);
+    volatile double rhs = timeVal.getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/);
+    return lhs == rhs;
+#endif
 }
 
 
 OFBool OFTime::operator!=(const OFTime &timeVal) const
 {
+#ifndef __i386__
     return (getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/) != timeVal.getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/));
+#else
+    volatile double lhs = getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/);
+    volatile double rhs = timeVal.getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/);
+    return lhs != rhs;
+#endif
 }
 
 
 OFBool OFTime::operator<(const OFTime &timeVal) const
 {
+#ifndef __i386__
     return (getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/) < timeVal.getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/));
+#else
+    volatile double lhs = getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/);
+    volatile double rhs = timeVal.getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/);
+    return lhs < rhs;
+#endif
 }
 
 
 OFBool OFTime::operator<=(const OFTime &timeVal) const
 {
+#ifndef __i386__
     return (getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/) <= timeVal.getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/));
+#else
+    volatile double lhs = getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/);
+    volatile double rhs = timeVal.getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/);
+    return lhs <= rhs;
+#endif
 }
 
 
 OFBool OFTime::operator>=(const OFTime &timeVal) const
 {
+#ifndef __i386__
     return (getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/) >= timeVal.getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/));
+#else
+    volatile double lhs = getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/);
+    volatile double rhs = timeVal.getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/);
+    return lhs >= rhs;
+#endif
 }
 
 
 OFBool OFTime::operator>(const OFTime &timeVal) const
 {
+#ifndef __i386__
     return (getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/) > timeVal.getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/));
+#else
+    volatile double lhs = getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/);
+    volatile double rhs = timeVal.getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/);
+    return lhs > rhs;
+#endif
 }
 
 
@@ -161,8 +189,8 @@ OFBool OFTime::isTimeValid(const unsigned int hour,
                            const double second,
                            const double timeZone)
 {
-    /* check whether given time is valid */
-    return (hour < 24) && (minute < 60) && (second >= 0) && (second < 60) && (timeZone >= -12) && (timeZone <= 12);
+    /* check whether given time is valid (also support leap second) */
+    return (hour < 24) && (minute < 60) && (second >= 0) && (second <= 60) && (timeZone >= -12) && (timeZone <= 14);
 }
 
 
@@ -257,11 +285,11 @@ OFBool OFTime::setTimeInSeconds(const double seconds,
                                 const OFBool normalize)
 {
     OFBool status = OFFalse;
-    /* only change if the new time is valid */
+    /* only change if the new time is valid (leap second is not supported!) */
     if (normalize || ((seconds >= 0) && (seconds < 86400)))
     {
         /* first normalize the value first to the valid range of [0.0,86400.0[ */
-        const double normalSeconds = (normalize) ? seconds + OFstatic_cast(signed long, seconds / 86400) * 86400 : seconds;
+        const double normalSeconds = (normalize) ? seconds - OFstatic_cast(double, OFstatic_cast(signed long, seconds / 86400) * 86400) : seconds;
         /* compute time from given number of seconds since "00:00:00" */
         const unsigned int newHour = OFstatic_cast(unsigned int, normalSeconds / 3600);
         const unsigned int newMinute = OFstatic_cast(unsigned int, (normalSeconds - OFstatic_cast(double, newHour) * 3600) / 60);
@@ -281,7 +309,7 @@ OFBool OFTime::setTimeInHours(const double hours,
     if (normalize || ((hours >= 0) && (hours < 24)))
     {
         /* first normalize the value to the valid range of [0.0,24.0[ */
-        const double normalHours = (normalize) ? hours + OFstatic_cast(signed long, hours / 24) * 24 : hours;
+        const double normalHours = (normalize) ? hours - OFstatic_cast(double, OFstatic_cast(signed long, hours / 24) * 24) : hours;
         /* compute time from given number of hours since "00:00:00" */
         const unsigned int newHour = OFstatic_cast(unsigned int, normalHours);
         const unsigned int newMinute = OFstatic_cast(unsigned int, (normalHours - OFstatic_cast(double, newHour)) * 60);
@@ -302,8 +330,8 @@ OFBool OFTime::setCurrentTime()
 OFBool OFTime::setCurrentTime(const time_t &tt)
 {
     OFBool status = OFFalse;
-#if defined(_REENTRANT) && !defined(_WIN32) && !defined(__CYGWIN__)
-    // use localtime_r instead of localtime
+#ifdef HAVE_LOCALTIME_R
+    /* use localtime_r instead of localtime */
     struct tm ltBuf;
     struct tm *lt = &ltBuf;
     localtime_r(&tt, lt);
@@ -316,13 +344,13 @@ OFBool OFTime::setCurrentTime(const time_t &tt)
         Hour = lt->tm_hour;
         Minute = lt->tm_min;
         Second = lt->tm_sec;
-#if defined(_REENTRANT) && !defined(_WIN32) && !defined(__CYGWIN__)
-        // use gmtime_r instead of gmtime
+#ifdef HAVE_GMTIME_R
+        /* use gmtime_r instead of gmtime */
         struct tm gtBuf;
         struct tm *gt = &gtBuf;
         gmtime_r(&tt, gt);
 #else
-        // avoid overwriting of local time structure by calling gmtime()
+        /* avoid overwriting of local time structure by calling gmtime() */
         struct tm ltBuf = *lt;
         lt = &ltBuf;
         struct tm *gt = gmtime(&tt);
@@ -334,7 +362,7 @@ OFBool OFTime::setCurrentTime(const time_t &tt)
             /* correct for "day overflow" */
             if (TimeZone < -12)
                 TimeZone += 24;
-            else if (TimeZone > 12)
+            else if (TimeZone > 12)   // cannot detect time zones in the range ]+12.0,+14.0]
                 TimeZone -= 24;
         } else {
             /* could not retrieve the time zone */
@@ -361,34 +389,73 @@ OFBool OFTime::setISOFormattedTime(const OFString &formattedTime)
 {
     OFBool status = OFFalse;
     const size_t length = formattedTime.length();
+    const size_t firstSep = formattedTime.find_first_not_of("0123456789");
+    const OFBool separators = (firstSep != OFString_npos);
     unsigned int hours, minutes, seconds;
     /* check for supported formats: HHMM */
-    if (length == 4)
+    if ((length == 4) && !separators)
     {
-        /* extract components from time string */
+        /* extract "HH" and "MM" components from time string */
         if (sscanf(formattedTime.c_str(), "%02u%02u", &hours, &minutes) == 2)
             status = setTime(hours, minutes, 0 /*seconds*/);
     }
     /* HH:MM */
-    else if (length == 5)
+    else if ((length == 5) && separators)
     {
-        /* extract components from time string */
+        /* extract "HH" and "MM" components from time string */
         if (sscanf(formattedTime.c_str(), "%02u%*c%02u", &hours, &minutes) == 2)
             status = setTime(hours, minutes, 0 /*seconds*/);
     }
     /* HHMMSS */
-    else if (length == 6)
+    else if ((length == 6) && !separators)
     {
-        /* extract components from time string */
+        /* extract "HH", "MM" and "SS" components from time string */
         if (sscanf(formattedTime.c_str(), "%02u%02u%02u", &hours, &minutes, &seconds) == 3)
             status = setTime(hours, minutes, seconds);
     }
     /* HH:MM:SS */
-    else if (length == 8)
+    else if ((length == 8) && separators)
     {
-        /* extract components from time string */
+        /* extract "HH", "MM" and "SS" components from time string */
         if (sscanf(formattedTime.c_str(), "%02u%*c%02u%*c%02u", &hours, &minutes, &seconds) == 3)
             status = setTime(hours, minutes, seconds);
+    }
+    /* HHMMSS&ZZZZ */
+    else if ((length == 11) && (firstSep == 6) && ((formattedTime[6] == '+') || (formattedTime[6] == '-')))
+    {
+        int tzHours;
+        unsigned int tzMinutes;
+        /* extract "HH", "MM", "SS" and "&ZZZZ" components from time string */
+        if (sscanf(formattedTime.c_str(), "%02u%02u%02u%03d%02u", &hours, &minutes, &seconds, &tzHours, &tzMinutes) == 5)
+        {
+            const double timeZone = (tzHours < 0) ? tzHours - OFstatic_cast(double, tzMinutes) / 60
+                                                  : tzHours + OFstatic_cast(double, tzMinutes) / 60;
+            status = setTime(hours, minutes, seconds, timeZone);
+        }
+    }
+    /* HH:MM:SS &ZZ:ZZ */
+    else if ((length >= 14) && separators)
+    {
+        /* first, extract "HH", "MM" and "SS" components from time string */
+        if (sscanf(formattedTime.c_str(), "%02u%*c%02u%*c%02u", &hours, &minutes, &seconds) == 3)
+        {
+            size_t pos = 8;
+            /* then search for the first digit of the time zone value (skip arbitrary separators) */
+            while ((pos < length) && !isdigit(OFstatic_cast(unsigned char, formattedTime.at(pos))))
+                ++pos;
+            if (pos < length)
+            {
+                /* and finally, extract the time zone component from the time string */
+                int tzHours;
+                unsigned int tzMinutes;
+                if (sscanf(formattedTime.c_str() + pos - 1, "%03d%*c%02u", &tzHours, &tzMinutes) == 2)
+                {
+                    const double timeZone = (tzHours < 0) ? tzHours - OFstatic_cast(double, tzMinutes) / 60
+                                                          : tzHours + OFstatic_cast(double, tzMinutes) / 60;
+                    status = setTime(hours, minutes, seconds, timeZone);
+                }
+            }
+        }
     }
     return status;
 }
@@ -461,7 +528,7 @@ double OFTime::getTimeInSeconds(const unsigned int hour,
     double result = ((OFstatic_cast(double, hour) - timeZone) * 60 + OFstatic_cast(double, minute)) * 60 + second;
     /* normalize the result to the range [0.0,86400.0[ */
     if (normalize)
-        result -= OFstatic_cast(unsigned long, result / 86400) * 86400;
+        result -= OFstatic_cast(double, OFstatic_cast(unsigned long, result / 86400) * 86400);
     return result;
 }
 
@@ -476,7 +543,7 @@ double OFTime::getTimeInHours(const unsigned int hour,
     double result = OFstatic_cast(double, hour) - timeZone + (OFstatic_cast(double, minute) + second / 60) / 60;
     /* normalize the result to the range [0.0,24.0[ */
     if (normalize)
-        result -= OFstatic_cast(unsigned long, result / 24) * 24;
+        result -= OFstatic_cast(double, OFstatic_cast(unsigned long, result / 24) * 24);
     return result;
 }
 
@@ -514,7 +581,8 @@ OFBool OFTime::getISOFormattedTime(OFString &formattedTime,
                                    const OFBool showSeconds,
                                    const OFBool showFraction,
                                    const OFBool showTimeZone,
-                                   const OFBool showDelimiter) const
+                                   const OFBool showDelimiter,
+                                   const OFString &timeZoneSeparator) const
 {
     OFBool status = OFFalse;
     /* check for valid time first */
@@ -534,10 +602,10 @@ OFBool OFTime::getISOFormattedTime(OFString &formattedTime,
                 char buf2[12];
                 OFStandard::ftoa(buf2, sizeof(buf2), Second,
                   OFStandard::ftoa_format_f | OFStandard::ftoa_zeropad, 9, 6);
-
+                /* format: HH:MM:SS.FFFFFF */
                 if (showDelimiter)
-                    strcat(buf, ":");  /* format: HH:MM:SS.FFFFFF */
-                strcat(buf, buf2);
+                    OFStandard::strlcat(buf, ":", sizeof(buf));
+                OFStandard::strlcat(buf, buf2, sizeof(buf));
             } else {
                 /* format: HH:MM:SS*/
                 if (showDelimiter)
@@ -547,6 +615,8 @@ OFBool OFTime::getISOFormattedTime(OFString &formattedTime,
                     sprintf(strchr(buf, 0), "%02u", OFstatic_cast(unsigned int, Second));
             }
         }
+        /* copy converted part so far to the result variable */
+        formattedTime = buf;
         if (showTimeZone)
         {
             /* convert time zone from hours and fraction of hours to hours and minutes */
@@ -556,12 +626,16 @@ OFBool OFTime::getISOFormattedTime(OFString &formattedTime,
             const unsigned int zoneMinute = OFstatic_cast(unsigned int, (zoneAbs - zoneHour) * 60);
             /* format: ...+HH:MM or -HH:MM */
             if (showDelimiter)
-                sprintf(strchr(buf, 0), "%c%02u:%02u", zoneSign, zoneHour, zoneMinute);
+            {
+                formattedTime += timeZoneSeparator;
+                sprintf(buf, "%c%02u:%02u", zoneSign, zoneHour, zoneMinute);
+            }
             /* format: ...+HHMM or -HHMM */
             else
-                sprintf(strchr(buf, 0), "%c%02u%02u",  zoneSign, zoneHour, zoneMinute);
+                sprintf(buf, "%c%02u%02u",  zoneSign, zoneHour, zoneMinute);
+            /* append time zone part to the result variable */
+            formattedTime += buf;
         }
-        formattedTime = buf;
         status = OFTrue;
     }
     return status;
@@ -598,67 +672,3 @@ STD_NAMESPACE ostream& operator<<(STD_NAMESPACE ostream& stream, const OFTime &t
         stream << tmpString;
     return stream;
 }
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: oftime.cc,v $
- * Revision 1.17  2010-10-14 13:14:53  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.16  2009-08-19 11:55:45  meichel
- * Added additional includes needed for Sun Studio 11 on Solaris.
- *
- * Revision 1.15  2006-08-14 16:42:46  meichel
- * Updated all code in module ofstd to correctly compile if the standard
- *   namespace has not included into the global one with a "using" directive.
- *
- * Revision 1.14  2005/12/08 15:49:03  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.13  2004/01/16 10:35:18  joergr
- * Added setISOFormattedXXX() methods for Date, Time and DateTime.
- *
- * Revision 1.12  2003/12/18 16:28:22  joergr
- * Fixed bug in timezone calculation (difference of local time from UTC).
- *
- * Revision 1.11  2003/12/17 15:23:18  joergr
- * Fixed bug/inconsistency in comparison operators of class OFTime. Now the
- * "time overflow" is handled correctly.
- *
- * Revision 1.10  2003/09/17 17:01:11  joergr
- * Renamed variable "string" to avoid name clash with STL class.
- *
- * Revision 1.9  2003/09/15 12:15:07  joergr
- * Made comparison operators const.
- *
- * Revision 1.8  2003/07/09 13:58:04  meichel
- * Adapted type casts to new-style typecast operators defined in ofcast.h
- *
- * Revision 1.7  2002/12/04 10:40:50  meichel
- * Changed toolkit to use OFStandard::ftoa instead of sprintf for all
- *   double to string conversions that are supposed to be locale independent
- *
- * Revision 1.6  2002/11/27 11:23:12  meichel
- * Adapted module ofstd to use of new header file ofstdinc.h
- *
- * Revision 1.5  2002/07/18 12:14:20  joergr
- * Corrected typos.
- *
- * Revision 1.4  2002/05/24 09:44:27  joergr
- * Renamed some parameters/variables to avoid ambiguities.
- *
- * Revision 1.3  2002/04/19 10:42:55  joergr
- * Added new helper routines to get the milli and micro seconds part as well as
- * the integral value of seconds.
- *
- * Revision 1.2  2002/04/15 09:41:52  joergr
- * Removed "include <sys/types.h>" from implementation file.
- * Added "include <windows.h>" for Windows systems.
- *
- * Revision 1.1  2002/04/11 12:14:34  joergr
- * Introduced new standard classes providing date and time functions.
- *
- *
- */

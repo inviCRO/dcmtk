@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2020, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,43 +17,108 @@
  *
  *  Purpose: Definition of the DcmVR class for Value Representation
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:42 $
- *  CVS/RCS Revision: $Revision: 1.28 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCMVR_H
-#define DCMVR_H 1
+#define DCMVR_H
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 #include "dcmtk/ofstd/ofglobal.h"
+#include "dcmtk/dcmdata/dcdefine.h"
 
-/** Global flag to enable/disable the generation of VR=UN
- */
-extern OFGlobal<OFBool> dcmEnableUnknownVRGeneration; /* default OFTrue */
+// include this file in doxygen documentation
 
-/** Global flag to enable/disable the generation of VR=UT
+/** @file dcvr.h
+ *  @brief definition and handling of value representations (VR)
  */
-extern OFGlobal<OFBool> dcmEnableUnlimitedTextVRGeneration; /* default OFTrue */
+
+/** Global flag to enable/disable the generation of VR=UN, which has been
+ *  introduced after the first edition of the DICOM standard (1993).
+ *  If disabled, the VR=OB is used instead.
+ */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmEnableUnknownVRGeneration; /* default OFTrue */
+
+/** Global flag to enable/disable the generation of VR=UT, which has been
+ *  introduced after the first edition of the DICOM standard (1993).
+ *  If disabled, the VR=UN (if enabled) or alternatively VR=OB is used.
+ */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmEnableUnlimitedTextVRGeneration; /* default OFTrue */
+
+/** Global flag to enable/disable the generation of VR=OF, which has been
+ *  introduced after the first edition of the DICOM standard (1993).
+ *  If disabled, the VR=UN (if enabled) or alternatively VR=OB is used.
+ */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmEnableOtherFloatVRGeneration; /* default OFTrue */
+
+/** Global flag to enable/disable the generation of VR=OD, which has been
+ *  introduced after the first edition of the DICOM standard (1993).
+ *  If disabled, the VR=UN (if enabled) or alternatively VR=OB is used.
+ */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmEnableOtherDoubleVRGeneration; /* default OFTrue */
+
+/** Global flag to enable/disable the generation of VR=OL, which has been
+ *  introduced after the first edition of the DICOM standard (1993).
+ *  If disabled, the VR=UN (if enabled) or alternatively VR=OB is used.
+ */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmEnableOtherLongVRGeneration; /* default OFTrue */
+
+/** Global flag to enable/disable the generation of VR=UR, which has been
+ *  introduced after the first edition of the DICOM standard (1993).
+ *  If disabled, the VR=UT (if enabled), VR=UN (if enabled) or alternatively
+ *  VR=OB is used.
+ */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmEnableUniversalResourceIdentifierOrLocatorVRGeneration; /* default OFTrue */
+
+/** Global flag to enable/disable the generation of VR=UC, which has been
+ *  introduced after the first edition of the DICOM standard (1993).
+ *  If disabled, the VR=UN (if enabled) or alternatively VR=OB is used.
+ */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmEnableUnlimitedCharactersVRGeneration; /* default OFTrue */
+
+/** Global flag to enable/disable the generation of VR=OV, which has been
+ *  introduced after the first edition of the DICOM standard (1993).
+ *  If disabled, the VR=UN (if enabled) or alternatively VR=OB is used.
+ */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmEnableOther64bitVeryLongVRGeneration; /* default OFTrue */
+
+/** Global flag to enable/disable the generation of VR=SV, which has been
+ *  introduced after the first edition of the DICOM standard (1993).
+ *  If disabled, the VR=UN (if enabled) or alternatively VR=OB is used.
+ */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmEnableSigned64bitVeryLongVRGeneration; /* default OFTrue */
+
+/** Global flag to enable/disable the generation of VR=UV, which has been
+ *  introduced after the first edition of the DICOM standard (1993).
+ *  If disabled, the VR=UN (if enabled) or alternatively VR=OB is used.
+ */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmEnableUnsigned64bitVeryLongVRGeneration; /* default OFTrue */
 
 /** Global flag to enable/disable the automatic re-conversion of defined
  *  length UN elements read in an explicit VR transfer syntax, if the real
  *  VR is defined in the data dictionary.
  */
-extern OFGlobal<OFBool> dcmEnableUnknownVRConversion; /* default OFFalse */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmEnableUnknownVRConversion; /* default OFFalse */
 
-/*
-** VR Enumerations.
-** NB: The order of entries has to conform to the order in DcmVRDict (see dcmvr.cc)!
-**     If not an error message is reported and the program aborts (only in DEBUG mode).
-*/
+
+/** Global function that enables the generation of "new" value representations,
+ *  i.e. the ones that have been introduced after the first edition of the DICOM
+ *  standard (1993). See above dcmEnableXXXVRGeneration() flags for details.
+ */
+DCMTK_DCMDATA_EXPORT void dcmEnableGenerationOfNewVRs();
+
+/** Global function that disables the generation of "new" value representations,
+ *  i.e. the ones that have been introduced after the first edition of the DICOM
+ *  standard (1993). See above dcmEnableXXXVRGeneration() flags for details.
+ */
+DCMTK_DCMDATA_EXPORT void dcmDisableGenerationOfNewVRs();
+
+
+/** VR Enumerations.
+ *  NB: The order of entries has to conform to the order in DcmVRDict (see dcmvr.cc)!
+ *      If not an error message is reported and the program aborts (only in DEBUG mode).
+ */
 enum DcmEVR
 {
-
     /// application entity title
     EVR_AE,
 
@@ -93,8 +158,17 @@ enum DcmEVR
     /// other byte
     EVR_OB,
 
+    /// other double
+    EVR_OD,
+
     /// other float
     EVR_OF,
+
+    /// other long
+    EVR_OL,
+
+    /// other 64-bit very long
+    EVR_OV,
 
     /// other word
     EVR_OW,
@@ -117,8 +191,14 @@ enum DcmEVR
     /// short text
     EVR_ST,
 
+    /// signed 64-bit very long
+    EVR_SV,
+
     /// time string
     EVR_TM,
+
+    /// unlimited characters
+    EVR_UC,
 
     /// unique identifier
     EVR_UI,
@@ -126,14 +206,23 @@ enum DcmEVR
     /// unsigned long
     EVR_UL,
 
+    /// universal resource identifier or universal resource locator (URI/URL)
+    EVR_UR,
+
     /// unsigned short
     EVR_US,
 
     /// unlimited text
     EVR_UT,
 
+    /// unsigned 64-bit very long
+    EVR_UV,
+
     /// OB or OW depending on context
     EVR_ox,
+
+    /// OB or OW, interpreted as pixel data (compressed or uncompressed)
+    EVR_px,
 
     /// SS or US depending on context
     EVR_xs,
@@ -144,7 +233,7 @@ enum DcmEVR
     /// na="not applicable", for data which has no VR
     EVR_na,
 
-    /// up="unsigned pointer", used internally for DICOMDIR suppor
+    /// up="unsigned pointer", used internally for DICOMDIR support
     EVR_up,
 
     /// used internally for items
@@ -177,7 +266,7 @@ enum DcmEVR
     /// unknown value representation
     EVR_UN,
 
-    /// used internally for uncompressed pixeld data
+    /// used internally for uncompressed pixel data
     EVR_PixelData,
 
     /// used internally for overlay data
@@ -190,7 +279,7 @@ enum DcmEVR
 
 /** a class representing a DICOM Value Representation
  */
-class DcmVR
+class DCMTK_DCMDATA_EXPORT DcmVR
 {
 public:
 
@@ -210,7 +299,10 @@ public:
       setVR(evr);
     }
 
-    /** constructor
+    /** constructor.
+     *  Please note that only the first two characters of the passed string are
+     *  actually checked.  Value Representations that are labeled for internal
+     *  use only are mapped to EVR_UNKNOWN.
      *  @param vrName symbolic name of value representation
      */
     DcmVR(const char* vrName)
@@ -232,7 +324,10 @@ public:
      */
     void setVR(DcmEVR evr);
 
-    /** assign new VR value by name
+    /** assign new VR value by name.
+     *  Please note that only the first two characters of the passed string are
+     *  actually checked.  Value Representations that are labeled for internal
+     *  use only are mapped to EVR_UNKNOWN.
      *  @param vrName symbolic name of value representation
      */
     void setVR(const char* vrName);
@@ -244,6 +339,7 @@ public:
 
     /** copy assignment operator
      *  @param arg vr to assign from
+     *  @return reference to this object
      */
     DcmVR& operator=(const DcmVR& arg)
     {
@@ -260,6 +356,14 @@ public:
      *  If this object manages a non-standard, internal VR such as EVR_ox,
      *  this method returns the enumerated VR to which the internal VR will
      *  be mapped when writing the DICOM object.
+     *
+     *  Please note that some VR, e.g. EVR_pixelItem, won't be written as
+     *  EVR_UNKNOWN, although this method will return that value for them.
+     *  This means that e.g. usesExtendedLengthEncoding() for the returned VR
+     *  might not be correct.
+     *
+     *  Also note that DcmItem::checkAndUpdateVR() will in some cases influence
+     *  the VR which is written out.
      *  @return enumerated VR
      */
     DcmEVR getValidEVR() const;
@@ -269,7 +373,7 @@ public:
      */
     const char* getVRName() const ;
 
-    /** get symbolic standard VR name for this object
+    /** get symbolic standard VR name for this object.
      *  If this object manages a non-standard, internal VR such as EVR_ox,
      *  this method returns the name of the VR to which the internal VR will
      *  be mapped when writing the DICOM object.
@@ -278,36 +382,45 @@ public:
     const char* getValidVRName() const;
 
     /** compute the size for non-empty values of this VR.
-     *  For fixed size VRs such as OW, US, SL, the method returns the size
-     *  of each value, in bytes.  For variable length VRs (strings), it returns 1.
+     *  For fixed size VRs such as OW, US, SL, the method returns the size of
+     *  each value, in bytes.  For variable length VRs (strings), it returns 1.
      *  For internal VRs it returns 0.
      *  @return size of values of this VR
      */
     size_t getValueWidth() const;
 
     /** returns true if VR is a standard DICOM VR
-     *  @return true if VR is a standard DICOM VR
+     *  @return true if VR is a standard DICOM VR, false otherwise
      */
     OFBool isStandard() const;
 
     /** returns true if VR is for internal use only
-     *  @return true if VR is for internal use only
+     *  @return true if VR is for internal use only, false otherwise
      */
     OFBool isForInternalUseOnly() const;
 
     /** returns true if VR represents a string
-     *  @return true if VR represents a string
+     *  @return true if VR represents a string, false otherwise
      */
     OFBool isaString() const;
 
-    /** returns true if VR uses an extended length encoding for explicit transfer syntaxes
-     *  @return true if VR uses an extended length encoding for explicit transfer syntaxes
+    /** returns true if VR uses an extended length encoding for explicit
+     *  transfer syntaxes
+     *  @return true if VR uses an extended length encoding for explicit
+     *    transfer syntaxes, false otherwise
      */
     OFBool usesExtendedLengthEncoding() const;
 
-    /** check if VRs are equivalent
-     *  VRs are considered equivalent if equal or if one of them is an internal VR
-     *  and the other one is a possible standard VR to which the internal one maps.
+    /** returns true if VR supports undefined length for the value length field
+     *  and a sequence delimitation item marks the end of the value field
+     *  @return true if VR supports undefined length, false otherwise
+     */
+    OFBool supportsUndefinedLength() const;
+
+    /** check if VRs are equivalent.
+     *  VRs are considered equivalent if equal or if one of them is an internal
+     *  VR and the other one is a possible standard VR to which the internal one
+     *  maps.
      *  @param avr VR to compare with
      *  @return true if VRs are equivalent, false otherwise
      */
@@ -317,15 +430,39 @@ public:
     ** (in bytes assuming single byte characters)
     */
 
-    /** return minimum length of a value with this VR (in bytes), assuming single byte characters
+    /** return minimum length of a single value with this VR.
+     *  Whether the returned length is in bytes or characters can be determined
+     *  by isLengthInChar().
      *  @return minimum length of a value
      */
     Uint32 getMinValueLength() const;
 
-    /** return maximum length of a value with this VR (in bytes), assuming single byte characters
+    /** return maximum length of a single value with this VR.
+     *  Whether the returned length is in bytes or characters can be determined
+     *  by isLengthInChar().
      *  @return maximum length of a value
      */
     Uint32 getMaxValueLength() const;
+
+    /** return whether elements of this VR are affected by SpecificCharacterSet
+     *  @return true for the following VRs: PN, LO, LT, SH, ST, UC and UT,
+     *    false for all others.
+     */
+    OFBool isAffectedBySpecificCharacterSet() const;
+
+    /** retrieve delimiter characters to be used for character set conversion
+     *  (to switch back to the default character set in case code extension
+     *  techniques like ISO 2022 are used).
+     *  @return a reference to an OFString containing the delimiter characters
+     *    for this VR or a reference to an empty OFString.
+     */
+    const OFString& getDelimiterChars() const;
+
+    /** check whether the maximum or minimum length of a value with this VR is
+     *  in bytes or characters. See getMinValueLength() and getMaxValueLength().
+     *  @return true if length is stated in characters, false if in bytes
+     */
+    OFBool isLengthInChar() const;
 
 private:
     /// the enumerated VR value
@@ -334,74 +471,3 @@ private:
 
 
 #endif /* !DCMVR_H */
-
-
-/*
- * CVS/RCS Log:
- * $Log: dcvr.h,v $
- * Revision 1.28  2010-10-14 13:15:42  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.27  2010-03-01 09:08:45  uli
- * Removed some unnecessary include directives in the headers.
- *
- * Revision 1.26  2008-06-23 12:09:13  joergr
- * Fixed inconsistencies in Doxygen API documentation.
- *
- * Revision 1.25  2007/11/29 14:30:35  meichel
- * Updated doxygen API documentation
- *
- * Revision 1.24  2005/12/08 16:28:50  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.23  2005/11/15 18:28:02  meichel
- * Added new global flag dcmEnableUnknownVRConversion that enables the automatic
- *   re-conversion of defined length UN elements read in an explicit VR transfer
- *   syntax, if the real VR is defined in the data dictionary. Default is OFFalse,
- *   i.e. to retain the previous behavior.
- *
- * Revision 1.22  2005/11/15 16:59:24  meichel
- * Added new pseudo VR type EVR_lt that is used for LUT Data when read in
- *   implicit VR, which may be US, SS or OW. DCMTK always treats EVR_lt like OW.
- *
- * Revision 1.21  2003/06/12 13:31:46  joergr
- * Fixed inconsistent API documentation reported by Doxygen.
- *
- * Revision 1.20  2003/03/21 13:06:46  meichel
- * Minor code purifications for warnings reported by MSVC in Level 4
- *
- * Revision 1.19  2002/12/06 12:20:19  joergr
- * Added support for new value representation Other Float String (OF).
- *
- * Revision 1.18  2002/11/27 12:07:24  meichel
- * Adapted module dcmdata to use of new header file ofstdinc.h
- *
- * Revision 1.17  2001/06/01 15:48:47  meichel
- * Updated copyright header
- *
- * Revision 1.16  2000/04/14 15:42:56  meichel
- * Global VR generation flags are now derived from OFGlobal and, thus,
- *   safe for use in multi-thread applications.
- *
- * Revision 1.15  2000/03/08 16:26:21  meichel
- * Updated copyright header.
- *
- * Revision 1.14  2000/02/29 11:48:38  meichel
- * Removed support for VS value representation. This was proposed in CP 101
- *   but never became part of the standard.
- *
- * Revision 1.13  2000/02/23 15:11:42  meichel
- * Corrected macro for Borland C++ Builder 4 workaround.
- *
- * Revision 1.12  2000/02/01 10:12:03  meichel
- * Avoiding to include <stdlib.h> as extern "C" on Borland C++ Builder 4,
- *   workaround for bug in compiler header files.
- *
- * Revision 1.11  1999/06/10 10:44:51  meichel
- * Replaced some #if statements by more robust #ifdef
- *
- * Revision 1.10  1999/03/31 09:24:54  meichel
- * Updated copyright header in module dcmdata
- *
- *
- */

@@ -1,2 +1,2 @@
 # declare installation files
-INSTALL_FILES(${INSTALL_ETCDIR} .cfg)
+install(FILES dcmpstat.cfg printers.cfg DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/dcmtk" COMPONENT etc)

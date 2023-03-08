@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1996-2010, OFFIS e.V.
+ *  Copyright (C) 1996-2021 OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Joerg Riesmeier
  *
  *  Purpose: DicomMonochromeImage (Source)
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:18 $
- *  CVS/RCS Revision: $Revision: 1.84 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -43,10 +36,6 @@
 #include "dcmtk/dcmimgle/didocu.h"
 #include "dcmtk/dcmimgle/diutils.h"
 #include "dcmtk/dcmimgle/diregbas.h"
-
-#define INCLUDE_CMATH
-#include "dcmtk/ofstd/ofstdinc.h"
-
 
 /*---------------------*
  *  const definitions  *
@@ -545,36 +534,6 @@ DiMonoImage::DiMonoImage(const DiMonoImage *image,
 
 
 /*
- *   this implementation is necessary to avoid linker errors on NeXTSTEP (gcc 2.5.8)
- */
-
-DiMonoImage::DiMonoImage(const DiMonoImage &)
-  : DiImage(NULL),
-    WindowCenter(0),
-    WindowWidth(0),
-    WindowCount(0),
-    VoiLutCount(0),
-    ValidWindow(0),
-    VoiExplanation(),
-    VoiLutFunction(EFV_Default),
-    PresLutShape(ESP_Default),
-    MinDensity(Default_MinDensity),
-    MaxDensity(Default_MaxDensity),
-    Reflection(Default_Reflection),
-    Illumination(Default_Illumination),
-    VoiLutData(NULL),
-    PresLutData(NULL),
-    InterData(NULL),
-    DisplayFunction(NULL),
-    OutputData(NULL),
-    OverlayData(NULL)
-{
-    DCMIMGLE_FATAL("using unimplemented copy constructor in class DiMonoImage ... aborting");
-    abort();
-}
-
-
-/*
  *   createMonoOutputImage
  */
 
@@ -657,11 +616,15 @@ int DiMonoImage::processNextFrames(const unsigned long fcount)
 {
     if (DiImage::processNextFrames(fcount))
     {
-        delete InterData;
-        InterData = NULL;
-        DiMonoModality *modality = new DiMonoModality(Document, InputData);
-        Init(modality, OFTrue /* reuse */);
-        return (ImageStatus == EIS_Normal);
+        if (InterData != NULL)
+        {
+            /* do not create a new object but reference the existing one */
+            DiMonoModality *modality = InterData->addReferenceToModality();
+            delete InterData;
+            InterData = NULL;
+            Init(modality, OFTrue /* reuse */);
+            return (ImageStatus == EIS_Normal);
+        }
     }
     return 0;
 }
@@ -1677,7 +1640,7 @@ unsigned long DiMonoImage::createDIB(void *&data,
         if ((OutputData != NULL) && (OutputData->getData() != NULL))
         {
             const signed long nextRow = (upsideDown) ? -2 * OFstatic_cast(signed long, Columns) : 0;
-            register const Uint8 *p = OFstatic_cast(const Uint8 *, OutputData->getData()) + ((upsideDown) ?
+            const Uint8 *p = OFstatic_cast(const Uint8 *, OutputData->getData()) + ((upsideDown) ?
                 OFstatic_cast(unsigned long, Rows - 1) * OFstatic_cast(unsigned long, Columns) : 0);
             if (bits == 8)                                  // -- for idx color model (byte)
             {
@@ -1692,9 +1655,9 @@ unsigned long DiMonoImage::createDIB(void *&data,
                             data = new Uint8[count];            // allocated memory buffer
                         if (data != NULL)
                         {
-                            register Uint8 *q = OFstatic_cast(Uint8 *, data);
-                            register Uint16 x;
-                            register Uint16 y;
+                            Uint8 *q = OFstatic_cast(Uint8 *, data);
+                            Uint16 x;
+                            Uint16 y;
                             for (y = Rows; y != 0; --y)
                             {
                                 for (x = Columns; x != 0; --x)
@@ -1707,7 +1670,7 @@ unsigned long DiMonoImage::createDIB(void *&data,
                     }
                 } else {                                    // data already aligned and correctly oriented
                     data = OutputData->getDataPtr();
-                    OutputData = NULL;                      // remove reference to internal memory
+                    OutputData->removeDataReference();      // remove reference to internal memory
                     bytes = count;
                 }
             }
@@ -1723,11 +1686,11 @@ unsigned long DiMonoImage::createDIB(void *&data,
                         data = new Uint8[count];               // allocated memory buffer
                     if (data != NULL)
                     {
-                        register Uint8 *q = OFstatic_cast(Uint8 *, data);
-                        register Uint8 value;
-                        register Uint16 x;
-                        register Uint16 y;
-                        register int j;
+                        Uint8 *q = OFstatic_cast(Uint8 *, data);
+                        Uint8 value;
+                        Uint16 x;
+                        Uint16 y;
+                        int j;
                         for (y = Rows; y != 0; --y)
                         {
                             for (x = Columns; x != 0; --x)
@@ -1752,10 +1715,10 @@ unsigned long DiMonoImage::createDIB(void *&data,
                         data = new Uint32[count];               // allocated memory buffer
                     if (data != NULL)
                     {
-                        register Uint32 *q = OFstatic_cast(Uint32 *, data);
-                        register Uint32 value;
-                        register Uint16 x;
-                        register Uint16 y;
+                        Uint32 *q = OFstatic_cast(Uint32 *, data);
+                        Uint32 value;
+                        Uint16 x;
+                        Uint16 y;
                         for (y = Rows; y != 0; --y)
                         {
                             for (x = Columns; x != 0; --x)
@@ -1807,18 +1770,18 @@ unsigned long DiMonoImage::createAWTBitmap(void *&data,
             data = new Uint32[count];
             if (data != NULL)
             {
-                register const Uint8 *p = OFstatic_cast(const Uint8 *, OutputData->getData());
-                register Uint32 *q = OFstatic_cast(Uint32 *, data);
-                register Uint32 value;
-                register unsigned long i;
+                const Uint8 *p = OFstatic_cast(const Uint8 *, OutputData->getData());
+                Uint32 *q = OFstatic_cast(Uint32 *, data);
+                Uint32 value;
+                unsigned long i;
                 for (i = count; i != 0; --i)
                 {
-                    value = *(p++);                 // store gray value
+                    value = *(p++);                     // store gray value
                     *(q++) = (value << 24) |
                              (value << 16) |
-                             (value << 8);          // copy to the three RGB-planes
+                             (value << 8);              // copy to the three RGB-planes
                 }
-                bytes = count;
+                bytes = count * 4;
             }
         }
         deleteOutputData();                             // output data is no longer needed
@@ -1851,11 +1814,11 @@ void *DiMonoImage::createPackedBitmap(const void *buffer,
                 data = new Uint16[((count + 1) * stored - 1) / 16];     // create new memory buffer
                 if (data != NULL)
                 {
-                    register const Uint16 *p = OFstatic_cast(const Uint16 *, buffer);
-                    register Uint16 *q = data;
-                    register unsigned long i;
-                    register Uint16 value1;
-                    register Uint16 value2;
+                    const Uint16 *p = OFstatic_cast(const Uint16 *, buffer);
+                    Uint16 *q = data;
+                    unsigned long i;
+                    Uint16 value1;
+                    Uint16 value2;
                     for (i = 0; i < count - 3; i += 4)                  // make 3 items out of 4
                     {
                         value1 = *(p++);
@@ -1904,7 +1867,7 @@ DiImage *DiMonoImage::createOutputImage(const unsigned long frame,
     if ((OutputData != NULL) && (OutputData->getData() != NULL))
     {
 
-        DiImage *image = new DiMono2Image(this, OutputData, frame, bits, OutputData->getItemSize() * 8);
+        DiImage *image = new DiMono2Image(this, OutputData, frame, bits, OFstatic_cast(int, OutputData->getItemSize() * 8));
         if (image != NULL)
             OutputData->removeDataReference();              // output data is now handled by new mono image
         return image;
@@ -1938,7 +1901,7 @@ int DiMonoImage::createLinODPresentationLut(const unsigned long count, const int
                 *(p++) = OFstatic_cast(Uint16, (DiGSDFunction::getJNDIndex(la + l0 *
                     pow(OFstatic_cast(double, 10), -(dmin + OFstatic_cast(double, i) * density))) - jmin) * factor);
             }
-            PresLutData = new DiLookupTable(data, count, bits);
+            PresLutData = new DiLookupTable(data, count, OFstatic_cast(const Uint16, bits));
             return (PresLutData != NULL) && (PresLutData->isValid());
         }
     }
@@ -2022,10 +1985,12 @@ int DiMonoImage::writeImageToDataset(DcmItem &dataset,
             /* set image resolution */
             dataset.putAndInsertUint16(DCM_Columns, Columns);
             dataset.putAndInsertUint16(DCM_Rows, Rows);
-#if SIZEOF_LONG == 8
-            sprintf(numBuf, "%d", NumberOfFrames);
+#ifdef PRIu32
+            sprintf(numBuf, "%" PRIu32, NumberOfFrames);
+#elif SIZEOF_LONG == 8
+            sprintf(numBuf, "%u", NumberOfFrames);
 #else
-            sprintf(numBuf, "%ld", NumberOfFrames);
+            sprintf(numBuf, "%lu", NumberOfFrames);
 #endif
             dataset.putAndInsertString(DCM_NumberOfFrames, numBuf);
             dataset.putAndInsertUint16(DCM_SamplesPerPixel, 1);
@@ -2063,8 +2028,8 @@ int DiMonoImage::writeImageToDataset(DcmItem &dataset,
                     dataset.putAndInsertUint16Array(DCM_PixelData, OFstatic_cast(const Uint16 *, pixel), count * 2 /*double-words*/);
                     break;
             }
-            dataset.putAndInsertUint16(DCM_BitsStored, bits);
-            dataset.putAndInsertUint16(DCM_HighBit, bits - 1);
+            dataset.putAndInsertUint16(DCM_BitsStored, OFstatic_cast(Uint16, bits));
+            dataset.putAndInsertUint16(DCM_HighBit, OFstatic_cast(Uint16, (bits - 1)));
             /* update other DICOM attributes */
             updateImagePixelModuleAttributes(dataset);
             result = 1;
@@ -2146,9 +2111,10 @@ int DiMonoImage::writeRawPPM(FILE *stream,
                 fprintf(stream, "P6\n%u %u\n255\n", Columns, Rows);
             else
                 fprintf(stream, "P5\n%u %u\n%lu\n", Columns, Rows, DicomImageClass::maxval(bits));
-            fwrite(OutputData->getData(), OFstatic_cast(size_t, OutputData->getCount()), OutputData->getItemSize(), stream);
+            const size_t count = OFstatic_cast(size_t, OutputData->getCount());
+            int ok = (fwrite(OutputData->getData(), OutputData->getItemSize(), count, stream) == count) ? 1 : 0;
             deleteOutputData();
-            return 1;
+            return ok;
         }
     }
     return 0;
@@ -2167,330 +2133,3 @@ int DiMonoImage::writeBMP(FILE *stream,
         return DiImage::writeBMP(stream, frame, (bits == 0) ? 8 : bits);
     return 0;
 }
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: dimoimg.cc,v $
- * Revision 1.84  2010-10-14 13:14:18  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.83  2010-10-05 15:24:06  joergr
- * Added preliminary support for VOI LUT function. Please note, however, that
- * the sigmoid transformation is not yet implemented.
- *
- * Revision 1.82  2010-07-26 07:24:08  joergr
- * Made sure that no NULL pointer is passed to the OFString constructor.
- *
- * Revision 1.81  2010-07-21 13:10:43  joergr
- * Fixed CVS log entry and updated copyright date.
- *
- * Revision 1.80  2010-07-21 13:08:00  joergr
- * Fixed memory leak when using processNextFrames(): DiOverlay object was
- * created multiple times.
- *
- * Revision 1.79  2009-11-25 16:30:54  joergr
- * Adapted code for new approach to access individual frames of a DICOM image.
- *
- * Revision 1.78  2009-10-28 14:26:02  joergr
- * Fixed minor issues in log output.
- *
- * Revision 1.77  2009-10-28 09:53:40  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.76  2009-08-26 07:48:48  joergr
- * Added parentheses around + or - in operand of & in order to avoid warnings
- * reported by gcc 4.3.2.
- *
- * Revision 1.75  2009-04-20 12:22:42  joergr
- * Fixed issue with wrong BitsStored value in writeImageToDataset().
- *
- * Revision 1.74  2008-11-18 10:57:09  joergr
- * Fixed issue with incorrectly encoded overlay planes (wrong values for
- * OverlayBitsAllocated and OverlayBitPosition).
- *
- * Revision 1.73  2008-08-08 14:17:50  joergr
- * Fixed issue with NumberOfFrames element in writeImageToDataset().
- *
- * Revision 1.72  2008-05-20 13:12:02  joergr
- * Fixed issue with signed pixel data in bicubic interpolation algorithm.
- *
- * Revision 1.71  2008-05-13 09:54:45  joergr
- * Added new parameter to writeImageToDataset() in order to affect the planar
- * configuration of the output image/dataset. Changed behaviour: By default,
- * the output now uses the same planar configuration as the "original" image
- * (previously: always color-by-plane).
- *
- * Revision 1.70  2008-04-30 12:38:42  meichel
- * Fixed compile errors due to changes in attribute tag names
- *
- * Revision 1.69  2007/10/23 16:52:29  joergr
- * Fixed bug in writeImageToDataset() for images with BitsAllocated = 32.
- *
- * Revision 1.68  2007/03/16 11:51:43  joergr
- * Introduced new flag that allows to select how to handle the BitsPerTableEntry
- * value in the LUT descriptor (use, ignore or check).
- *
- * Revision 1.67  2007/02/08 17:08:21  joergr
- * Added lower limit check in DiMonoImage::writeImageToDataset() calculating
- * the value for bits stored.
- *
- * Revision 1.66  2006/11/17 15:09:54  joergr
- * Only compare stored and computed pixel count for "original" images that are
- * directly loaded from DICOM files or datasets.
- *
- * Revision 1.65  2006/10/27 15:00:16  joergr
- * Fixed possible integer overflow for images with very large pixel data.
- * Fixed wrong warning message about length of pixel data.
- *
- * Revision 1.64  2006/08/15 16:30:11  meichel
- * Updated the code in module dcmimgle to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.63  2006/07/10 10:54:26  joergr
- * Added support for 32-bit BMP images.
- *
- * Revision 1.62  2005/12/08 15:42:56  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.61  2005/03/09 17:43:41  joergr
- * Added mode to writeImageToDataset() which allows the value of BitsStored to
- * be determined either from 'used' or from 'possible' pixel values.
- * Fixed problem with wrong value for BitsStored in writeImageToDataset().
- * Do not remove separate overlay planes in writeImageToDataset().
- *
- * Revision 1.60  2004/09/22 11:33:38  joergr
- * Fixed wrong warning message about length of pixel data.
- *
- * Revision 1.59  2004/02/06 11:10:39  joergr
- * Distinguish more clearly between const and non-const access to pixel data.
- *
- * Revision 1.58  2003/12/23 16:03:18  joergr
- * Replaced post-increment/decrement operators by pre-increment/decrement
- * operators where appropriate (e.g. 'i++' by '++i').
- *
- * Revision 1.57  2003/12/17 16:18:34  joergr
- * Added new compatibility flag that allows to ignore the third value of LUT
- * descriptors and to determine the bits per table entry automatically.
- *
- * Revision 1.56  2003/12/09 17:53:50  joergr
- * Fixed tiny bug that was buried in the source code since version 3.4.1 and
- * which affected the output of signed 8 bit pixel data with modality LUT.
- *
- * Revision 1.55  2003/12/08 17:35:34  joergr
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- *
- * Revision 1.54  2003/05/20 09:25:42  joergr
- * Added method returning the number of bytes required to store a single
- * rendered frame: getOutputDataSize().
- *
- * Revision 1.53  2003/04/14 14:27:27  meichel
- * Added explicit typecasts in calls to pow(). Needed by Visual C++ .NET 2003.
- *
- * Revision 1.52  2002/12/10 19:00:26  joergr
- * Fixed bug that caused createAWTBitmap() to return always empty pixel data.
- *
- * Revision 1.51  2002/12/09 13:34:51  joergr
- * Renamed parameter/local variable to avoid name clashes with global
- * declaration left and/or right (used for as iostream manipulators).
- *
- * Revision 1.50  2002/11/27 14:08:12  meichel
- * Adapted module dcmimgle to use of new header file ofstdinc.h
- *
- * Revision 1.49  2002/08/02 15:05:25  joergr
- * Added function to write the current image (not only a selected frame) to a
- * DICOM dataset.
- *
- * Revision 1.48  2002/06/26 16:13:04  joergr
- * Enhanced handling of corrupted pixel data and/or length.
- * Added support for polarity flag to color images.
- * Added new methods to get the explanation string of stored VOI windows and
- * LUTs (not only of the currently selected VOI transformation).
- *
- * Revision 1.47  2002/01/29 17:06:31  joergr
- * Added optional flag to the "Windows DIB" methods allowing to switch off the
- * scanline padding.
- *
- * Revision 1.46  2001/12/11 14:12:35  joergr
- * Added type cast to keep old Sun compilers quiet.
- *
- * Revision 1.45  2001/11/29 16:59:54  joergr
- * Fixed bug in dcmimgle that caused incorrect decoding of some JPEG compressed
- * images (certain DICOM attributes, e.g. photometric interpretation, might
- * change during decompression process).
- *
- * Revision 1.44  2001/11/19 12:57:42  joergr
- * Added parameter 'frame' to setRoiWindow().
- *
- * Revision 1.43  2001/11/09 16:29:37  joergr
- * Added support for Windows BMP file format.
- * Enhanced and renamed createTrueColorDIB() method.
- *
- * Revision 1.42  2001/10/19 13:51:18  joergr
- * Fixed bug in DiMonoImage::setWindow(pos) - WindowCenterWidthExplanation was
- * always cleared and never extracted from the dataset as actually intended.
- *
- * Revision 1.41  2001/09/28 13:16:59  joergr
- * Added method to extract embedded overlay planes from pixel data and store
- * them in group (6xxx,3000) format.
- * Added support for the optional PresentationLUTShape (e.g. in DX images).
- *
- * Revision 1.40  2001/09/28 13:15:48  joergr
- * Added routines to get the currently active Polarity and PresentationLUTShape.
- * Added method setRoiWindow() which automatically calculates a min-max VOI
- * window for a specified rectangular region of the image.
- *
- * Revision 1.39  2001/05/14 09:50:24  joergr
- * Added support for "1 bit output" of overlay planes; useful to extract
- * overlay planes from the pixel data and store them separately in the dataset.
- *
- * Revision 1.38  2000/07/17 14:38:21  joergr
- * Corrected implementation of presentation LUT shape LIN OD.
- *
- * Revision 1.37  2000/07/07 13:47:51  joergr
- * Added support for LIN OD presentation LUT shape.
- * Corrected interpretation of presentation LUT shape.
- *
- * Revision 1.36  2000/06/07 14:54:06  joergr
- * Added missing variable to member initialization list.
- *
- * Revision 1.35  2000/06/07 14:31:11  joergr
- * Added method to set the image polarity (normal, reverse).
- *
- * Revision 1.34  2000/04/28 12:33:45  joergr
- * DebugLevel - global for the module - now derived from OFGlobal (MF-safe).
- *
- * Revision 1.33  2000/04/27 13:10:29  joergr
- * Dcmimgle library code now consistently uses ofConsole for error output.
- *
- * Revision 1.32  2000/03/08 17:14:38  meichel
- * Removed trial code checked in by mistake
- *
- * Revision 1.31  2000/03/08 16:24:30  meichel
- * Updated copyright header.
- *
- * Revision 1.30  2000/03/03 14:09:20  meichel
- * Implemented library support for redirecting error messages into memory
- *   instead of printing them to stdout/stderr for GUI applications.
- *
- * Revision 1.29  2000/02/02 11:04:25  joergr
- * Added type cast to delete void pointer (reported by gcc 2.95).
- *
- * Revision 1.28  1999/12/09 17:28:02  joergr
- * Split source file dimoimg.cc into 4 parts to avoid compiler problems
- * with gcc and additional optimization options.
- *
- * Revision 1.27  1999/11/24 15:15:41  joergr
- * Fixed bug in method getData() occurred sometimes when inverting
- * presentation LUTs.
- *
- * Revision 1.26  1999/11/19 15:21:47  joergr
- * Removed bugs: deactivating VOI and presentation LUTs should be done
- * by decreasing the reference pointer not by deleting the storage area.
- *
- * Revision 1.25  1999/10/20 10:35:54  joergr
- * Enhanced method getOverlayData to support 12 bit data for print.
- *
- * Revision 1.24  1999/10/06 13:45:56  joergr
- * Corrected creation of PrintBitmap pixel data: VOI windows should be applied
- * before clipping to avoid that the region outside the image (border) is also
- * windowed (this requires a new method in dcmimgle to create a DicomImage
- * with the grayscale transformations already applied).
- *
- * Revision 1.23  1999/09/17 13:17:36  joergr
- * Enhanced efficiency of some "for" loops.
- *
- * Revision 1.22  1999/09/10 08:54:50  joergr
- * Added support for CIELAB display function. Restructured class hierarchy
- * for display functions.
- *
- * Revision 1.21  1999/08/25 16:43:08  joergr
- * Added new feature: Allow clipping region to be outside the image
- * (overlapping).
- *
- * Revision 1.20  1999/07/23 13:44:43  joergr
- * Added dummy method (no implementation yet) to create inverse LUTs.
- * Changed implementation/interpretation of windows center/width (according to
- * new letter ballot of supplement 33).
- * Added method to create 12 bit packed bitmap data (used for grayscale print
- * storage).
- *
- * Revision 1.19  1999/05/03 11:05:30  joergr
- * Minor code purifications to keep Sun CC 2.0.1 quiet.
- *
- * Revision 1.18  1999/04/28 15:03:50  joergr
- * Added experimental support to create grayscale images with more than 256
- * shades of gray to be displayed on a consumer monitor (use pastel colors).
- * Introduced new scheme for the debug level variable: now each level can be
- * set separately (there is no "include" relationship).
- *
- * Revision 1.17  1999/03/24 17:23:14  joergr
- * Added/Modified comments and formatting.
- *
- * Revision 1.16  1999/03/22 08:55:02  joergr
- * Added parameter to specify (transparent) background color for method
- * getOverlayData().
- *
- * Revision 1.15  1999/03/03 12:06:54  joergr
- * Changed comments.
- *
- * Revision 1.14  1999/02/11 16:52:22  joergr
- * Changed method to check suitability of display function for a certain
- * image.
- *
- * Revision 1.13  1999/02/09 14:21:11  meichel
- * Corrected const signatures of some ctor declarations
- *
- * Revision 1.12  1999/02/08 13:09:33  joergr
- * Changed implementation of removeAllOverlays().
- *
- * Revision 1.11  1999/02/05 16:46:15  joergr
- * Added optional parameter to method convertPValueToDDL to specify width
- * of output data (number of bits).
- *
- * Revision 1.10  1999/02/03 17:41:01  joergr
- * Added support for calibration according to Barten transformation (incl.
- * a DISPLAY file describing the monitor characteristic).
- * Moved global functions maxval() and determineRepresentation() to class
- * DicomImageClass (as static methods).
- *
- * Revision 1.9  1999/01/20 14:53:41  joergr
- * Added new output method to fill external memory buffer with rendered pixel
- * data.
- *
- * Revision 1.8  1999/01/11 09:37:28  joergr
- * Added parameter to method 'getMinMaxValues()' to return absolute minimum
- * and maximum values ('possible') in addition to actually 'used' pixel
- * values.
- *
- * Revision 1.7  1998/12/23 13:22:22  joergr
- * Changed parameter type (long to int) to avoid warning reported by MSVC5.
- *
- * Revision 1.3  1998/12/16 16:15:55  joergr
- * Added explanation string for VOI transformations.
- * Added method to export overlay planes (create 8-bit bitmap).
- * Renamed 'setNoVoiLutTransformation' method ('Voi' instead of 'VOI').
- *
- * Revision 1.2  1998/12/14 17:37:15  joergr
- * Added methods to add and remove additional overlay planes (still untested).
- * Added support for presentation shapes.
- *
- * Revision 1.1  1998/11/27 16:12:48  joergr
- * Added copyright message.
- * Added methods and constructors for flipping and rotating, changed for
- * scaling and clipping.
- * Added method to directly create java AWT bitmaps.
- * Introduced global debug level for dcmimage module to control error output.
- * Renamed variable 'Status' to 'ImageStatus' because of possible conflicts
- * with X windows systems.
- * Added constructors to use external modality transformations.
- * Added methods to support presentation LUTs and shapes.
- * Changed behaviour: now window width of 0 is valid and negative width
- * is invalid.
- *
- * Revision 1.6  1998/05/11 14:52:32  joergr
- * Added CVS/RCS header to each file.
- *
- *
- */

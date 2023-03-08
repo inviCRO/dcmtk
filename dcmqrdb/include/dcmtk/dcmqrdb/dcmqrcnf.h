@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1993-2010, OFFIS e.V.
+ *  Copyright (C) 1993-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: class DcmQueryRetrieveConfig
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:41 $
- *  CVS/RCS Revision: $Revision: 1.7 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCMQRCNF_H
@@ -31,23 +24,93 @@
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 
-#define INCLUDE_CSTDIO
-#include "dcmtk/ofstd/ofstdinc.h"
+
 #include "dcmtk/ofstd/ofcmdln.h"
 #include "dcmtk/oflog/oflog.h"
+#include "dcmtk/dcmqrdb/qrdefine.h"
 
-OFLogger DCM_dcmqrdbGetLogger();
+extern DCMTK_DCMQRDB_EXPORT OFLogger DCM_dcmqrdbLogger;
 
-#define DCMQRDB_TRACE(msg) OFLOG_TRACE(DCM_dcmqrdbGetLogger(), msg)
-#define DCMQRDB_DEBUG(msg) OFLOG_DEBUG(DCM_dcmqrdbGetLogger(), msg)
-#define DCMQRDB_INFO(msg)  OFLOG_INFO(DCM_dcmqrdbGetLogger(), msg)
-#define DCMQRDB_WARN(msg)  OFLOG_WARN(DCM_dcmqrdbGetLogger(), msg)
-#define DCMQRDB_ERROR(msg) OFLOG_ERROR(DCM_dcmqrdbGetLogger(), msg)
-#define DCMQRDB_FATAL(msg) OFLOG_FATAL(DCM_dcmqrdbGetLogger(), msg)
+#define DCMQRDB_TRACE(msg) OFLOG_TRACE(DCM_dcmqrdbLogger, msg)
+#define DCMQRDB_DEBUG(msg) OFLOG_DEBUG(DCM_dcmqrdbLogger, msg)
+#define DCMQRDB_INFO(msg)  OFLOG_INFO(DCM_dcmqrdbLogger, msg)
+#define DCMQRDB_WARN(msg)  OFLOG_WARN(DCM_dcmqrdbLogger, msg)
+#define DCMQRDB_ERROR(msg) OFLOG_ERROR(DCM_dcmqrdbLogger, msg)
+#define DCMQRDB_FATAL(msg) OFLOG_FATAL(DCM_dcmqrdbLogger, msg)
+
+/** this class describes configuration settings regarding character set handling
+ */
+struct DCMTK_DCMQRDB_EXPORT DcmQueryRetrieveCharacterSetOptions
+{
+    /** Flags for controlling the application behavior regarding character set
+     *  conversion. Might be used for global and for per peer configuration.
+     */
+    enum Flags
+    {
+        /** Activate options for Specific Character Set.
+         *  If this flag is not set, all other flags and the given string for
+         *  Specific Character Set will be ignored, e.g. using the global
+         *  settings instead of peer specific ones.
+         */
+        Configured = 0x01,
+
+        /** Always respond using the given character set, ignoring the
+         *  character set of the request.
+         *  If this flag is not set, the response will be created to the
+         *  character set of the request (if possible).
+         */
+        Override   = 0x02,
+
+        /** Fall back to another character set.
+         *  If this flag is set, the application will try to recover from a
+         *  conversion failure:
+         *    - If 'Override' is set, the application will try to convert
+         *      the response to the character set of the request if conversion
+         *      to the given character set failed.
+         *    - If 'Override' is not set, the application will try to convert
+         *      the response to the given character set if conversion to the
+         *      character set of the response failed.
+         *  If this flag is not set, the response will be left as-is, i.e.
+         *  like it is stored in the index file, if conversion to another
+         *  character set failed.
+         *  @note The fall back conversion might also fail, in which case
+         *    the response will still be left as-is, even if a fall back
+         *    option was given.
+         */
+        Fallback   = 0x04
+    };
+
+    /** Constructor, will construct an object that is marked as
+     *  "not configured".
+     */
+    DcmQueryRetrieveCharacterSetOptions();
+
+    /** extract arguments from the config file.
+     *  @param mnemonic the name of the current option
+     *  @param valueptr the argument(s)
+     *  @return OFTrue if the given name value pair referred to a character
+     *    set option and was 'consumed', OFFalse if it should be handled
+     *    elsewhere.
+     */
+    OFBool parseOptions(const char* mnemonic, char* valueptr);
+
+    /// the given character set
+    OFString characterSet;
+
+    /** determine semantics of the character set value
+     *  @see DcmQueryRetrieveCharacterSet::Flags
+     */
+    unsigned flags;
+
+    /** special character set conversion flags.
+     *  @see OFCharacterEncoding::ConversionFlags
+     */
+    unsigned conversionFlags;
+};
 
 /** this class describes configuration settings for the quota of a storage area
  */
-struct DcmQueryRetrieveConfigQuota
+struct DCMTK_DCMQRDB_EXPORT DcmQueryRetrieveConfigQuota
 {
     /// maximum number of studies
     int  maxStudies;
@@ -57,7 +120,7 @@ struct DcmQueryRetrieveConfigQuota
 
 /** this class describes configuration settings for a remote SCP peer
  */
-struct DcmQueryRetrieveConfigPeer
+struct DCMTK_DCMQRDB_EXPORT DcmQueryRetrieveConfigPeer
 {
     /// remote peer AE title
     const char *ApplicationTitle;
@@ -71,7 +134,7 @@ struct DcmQueryRetrieveConfigPeer
 
 /** this class describes configuration settings for a single storage area
  */
-struct DcmQueryRetrieveConfigAEEntry
+struct DCMTK_DCMQRDB_EXPORT DcmQueryRetrieveConfigAEEntry
 {
     /// application entity title
     const char *ApplicationTitle;
@@ -94,7 +157,7 @@ struct DcmQueryRetrieveConfigAEEntry
 
 /** this class describes configuration settings for a list of storage areas
  */
-struct DcmQueryRetrieveConfigConfiguration
+struct DCMTK_DCMQRDB_EXPORT DcmQueryRetrieveConfigConfiguration
 {
     /// number of storage areas (aetitles)
     int noOfAEEntries;
@@ -105,7 +168,7 @@ struct DcmQueryRetrieveConfigConfiguration
 
 /** this class describes configuration settings for one symbolic host or vendor
  */
-struct DcmQueryRetrieveConfigHostEntry
+struct DCMTK_DCMQRDB_EXPORT DcmQueryRetrieveConfigHostEntry
 {
     /// symbolic name of host
     const char *SymbolicName;
@@ -119,7 +182,7 @@ struct DcmQueryRetrieveConfigHostEntry
 
 /** this class describes configuration settings for a list of symbolic hosts or vendors
  */
-struct DcmQueryRetrieveConfigHostTable
+struct DCMTK_DCMQRDB_EXPORT DcmQueryRetrieveConfigHostTable
 {
     /// number of entries
     int noOfHostEntries;
@@ -130,10 +193,24 @@ struct DcmQueryRetrieveConfigHostTable
 
 /** this class describes configuration settings for a Query/Retrieve SCP Service
  */
-class DcmQueryRetrieveConfig
+class DCMTK_DCMQRDB_EXPORT DcmQueryRetrieveConfig
 {
 
 public:
+
+  DcmQueryRetrieveConfig()
+  : UserName_()
+  , GroupName_()
+  , networkTCPPort_(0)
+  , maxPDUSize_(0)
+  , maxAssociations_(0)
+  , CNF_Config()
+  , CNF_HETable()
+  , CNF_VendorTable()
+  {
+  }
+
+  ~DcmQueryRetrieveConfig();
 
   /*
    *  read configuration file and initialize the
@@ -306,7 +383,23 @@ public:
    */
   const char *getGroupName() const;
 
+  /*
+   *  get Character Set Options
+   *  Input :
+   *  Return : Character Set Options
+   */
+  const DcmQueryRetrieveCharacterSetOptions& getCharacterSetOptions() const;
+
+  /*
+   *  get Character Set Options
+   *  Input :
+   *  Return : Character Set Options
+   */
+  DcmQueryRetrieveCharacterSetOptions& getCharacterSetOptions();
+
 private:
+
+  friend struct DcmQueryRetrieveCharacterSetOptions;
 
   const char* vendorForPeerAETitle(const char *peerAETitle) const;
 
@@ -426,6 +519,7 @@ private:
   int networkTCPPort_;
   Uint32 maxPDUSize_;
   int maxAssociations_;
+  DcmQueryRetrieveCharacterSetOptions characterSetOptions_;
   DcmQueryRetrieveConfigConfiguration CNF_Config;   /* configuration file contents */
   DcmQueryRetrieveConfigHostTable CNF_HETable;      /* HostEntries Table */
   DcmQueryRetrieveConfigHostTable CNF_VendorTable;  /* Vendor Table */
@@ -434,35 +528,3 @@ private:
 
 
 #endif
-
-/*
- * CVS Log
- * $Log: dcmqrcnf.h,v $
- * Revision 1.7  2010-10-14 13:16:41  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.6  2010-09-09 17:20:33  joergr
- * Removed unused (or never used?) configuration entries.
- *
- * Revision 1.5  2009-11-24 10:10:42  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.4  2009-08-21 09:50:07  joergr
- * Replaced tabs by spaces and updated copyright date.
- *
- * Revision 1.3  2005/12/08 16:04:20  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.2  2005/04/04 13:15:13  meichel
- * Added username/groupname configuration option that allows to start the
- *   image database as root and let it call setuid/setgid to execute under an
- *   unprivileged account once the listen socket has been opened.
- *
- * Revision 1.1  2005/03/30 13:34:50  meichel
- * Initial release of module dcmqrdb that will replace module imagectn.
- *   It provides a clear interface between the Q/R DICOM front-end and the
- *   database back-end. The imagectn code has been re-factored into a minimal
- *   class structure.
- *
- *
- */

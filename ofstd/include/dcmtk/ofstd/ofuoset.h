@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2010, OFFIS e.V.
+ *  Copyright (C) 1997-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: Template class for administrating an unordered set of elements
  *           of an arbitrary type.
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:51 $
- *  CVS/RCS Revision: $Revision: 1.7 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -43,7 +36,7 @@
  *  - it is allowed to insert identical elements into the set
  *  - if a user requires to remove a certain element and if there are several elements
  *    which are identical to this element, only one element will be removed from the set
- *  - after removing an element of a set, the indeces of the set's elements might have
+ *  - after removing an element of a set, the indices of the set's elements might have
  *    changed; hence, looping over all elements of a set must be restarted if an element
  *    was removed from the set within the loop
  *  - the order of the elements is arbitrary, but it will not be changed unless an element
@@ -147,7 +140,7 @@ template <class T> class OFUnorderedSet : public OFSet<T>
       {
         // if size equals num, we need more space
         if( OFSet<T>::size == OFSet<T>::num )
-          Resize( OFSet<T>::size * 2 );
+          this->Resize( OFSet<T>::size * 2 );
 
         // copy item
         T *newItem = new T( item );
@@ -442,25 +435,3 @@ template <class T> class OFUnorderedSet : public OFSet<T>
 };
 
 #endif
-
-/*
-** CVS/RCS Log:
-** $Log: ofuoset.h,v $
-** Revision 1.7  2010-10-14 13:15:51  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.6  2005/12/12 09:24:27  meichel
-** Added explicit references to parent template class, needed for
-**   gcc 3.4.2 (MinGW port)
-**
-** Revision 1.5  2005/12/08 16:06:12  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.4  2002/12/16 10:40:25  wilkens
-** Removed superfluous implementation files and modified header and make files.
-**
-** Revision 1.3  2002/07/09 18:29:47  wilkens
-** Added some more functionality.
-**
-**
-*/

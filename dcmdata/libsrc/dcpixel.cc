@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2010, OFFIS e.V.
+ *  Copyright (C) 1997-2020, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: class DcmPixelData
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-20 16:44:16 $
- *  CVS/RCS Revision: $Revision: 1.51 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
@@ -32,6 +25,8 @@
 #include "dcmtk/dcmdata/dcpixseq.h"
 #include "dcmtk/dcmdata/dcdeftag.h"
 #include "dcmtk/dcmdata/dcitem.h"
+#include "dcmtk/dcmdata/dcpxitem.h"
+#include "dcmtk/dcmdata/dcjson.h"
 
 //
 // class DcmRepresentationEntry
@@ -95,7 +90,8 @@ DcmPixelData::DcmPixelData(
 {
     repListEnd = repList.end();
     current = original = repListEnd;
-    if (getTag().getEVR() == EVR_ox) setTagVR(EVR_OW);
+    if ((getTag().getEVR() == EVR_ox) || (getTag().getEVR() == EVR_px))
+        setTagVR(EVR_OW);
     unencapsulatedVR = getTag().getEVR();
     recalcVR();
 }
@@ -179,18 +175,6 @@ DcmPixelData &DcmPixelData::operator=(const DcmPixelData &obj)
   return *this;
 }
 
-
-OFCondition DcmPixelData::copyFrom(const DcmObject& rhs)
-{
-  if (this != &rhs)
-  {
-    if (rhs.ident() != ident()) return EC_IllegalCall;
-    *this = OFstatic_cast(const DcmPixelData &, rhs);
-  }
-  return EC_Normal;
-}
-
-
 // methods in alphabetical order
 
 Uint32
@@ -202,11 +186,10 @@ DcmPixelData::calcElementLength(
     errorFlag = EC_Normal;
     Uint32 elementLength = 0;
 
-    if (xferSyn.isEncapsulated() && (! alwaysUnencapsulated))
+    if (xferSyn.isEncapsulated() && (! writeUnencapsulated(xfer)))
     {
         DcmRepresentationListIterator found;
-        errorFlag =
-            findConformingEncapsulatedRepresentation(xfer, NULL, found);
+        errorFlag = findConformingEncapsulatedRepresentation(xfer, NULL, found);
         if (errorFlag == EC_Normal)
             elementLength = (*found)->pixSeq->calcElementLength(xfer, enctype);
     }
@@ -229,25 +212,31 @@ DcmPixelData::canChooseRepresentation(
 
     const DcmRepresentationEntry findEntry(repType, repParam, NULL);
     DcmRepresentationListIterator resultIt(repListEnd);
+    // find out whether we have the desired target representation available. Three possibilities:
+    // 1. we have uncompressed data, and target is uncompressed (conversion between uncompressed always possible)
+    // 2. we have uncompressed and want compressed, but we are forced to write uncompressed anyway
+    // 3. we want to go to compressed, and already have the desired representation available
     if ((!toType.isEncapsulated() && existUnencapsulated) ||
-        (toType.isEncapsulated() && alwaysUnencapsulated && existUnencapsulated) ||
+        (toType.isEncapsulated() && writeUnencapsulated(repType) && existUnencapsulated) ||
         (toType.isEncapsulated() && findRepresentationEntry(findEntry, resultIt) == EC_Normal))
     {
         // representation found
         result = OFTrue;
     }
+    // otherwise let's see whether we know how to convert to the target representation
     else
     {
         // representation not found, check if we have a codec that can create the
         // desired representation.
         if (original == repListEnd)
         {
+          // we have uncompressed data, check whether we know how to go from uncompressed to desired compression
           result = DcmCodecList::canChangeCoding(EXS_LittleEndianExplicit, toType.getXfer());
         }
         else if (toType.isEncapsulated())
         {
-          result = DcmCodecList::canChangeCoding(EXS_LittleEndianExplicit, toType.getXfer());
-
+          // we have already compressed data, check whether we know how to transcode
+          result = DcmCodecList::canChangeCoding((*original)->repType, toType.getXfer());
           if (!result)
           {
             // direct transcoding is not possible. Check if we can decode and then encode.
@@ -257,6 +246,7 @@ DcmPixelData::canChooseRepresentation(
         }
         else
         {
+          // target transfer syntax is uncompressed, look whether decompression is possible
           result = DcmCodecList::canChangeCoding((*original)->repType, EXS_LittleEndianExplicit);
         }
     }
@@ -270,7 +260,7 @@ DcmPixelData::canWriteXfer(
 {
     DcmXfer newXferSyn(newXfer);
     DcmRepresentationListIterator found;
-    OFBool result = existUnencapsulated && (!newXferSyn.isEncapsulated() || alwaysUnencapsulated);
+    OFBool result = existUnencapsulated && (!newXferSyn.isEncapsulated() || writeUnencapsulated(newXfer));
 
     if (!result && newXferSyn.isEncapsulated())
         result = (findConformingEncapsulatedRepresentation(newXferSyn, NULL, found) == EC_Normal);
@@ -289,7 +279,6 @@ DcmPixelData::chooseRepresentation(
     const DcmRepresentationEntry findEntry(repType, repParam, NULL);
     DcmRepresentationListIterator result(repListEnd);
     if ((!toType.isEncapsulated() && existUnencapsulated) ||
-        (toType.isEncapsulated() && existUnencapsulated && alwaysUnencapsulated) ||
         (toType.isEncapsulated() && findRepresentationEntry(findEntry, result) == EC_Normal))
     {
         // representation found
@@ -309,12 +298,119 @@ DcmPixelData::chooseRepresentation(
             l_error = decode((*original)->repType, (*original)->repParam,
                              (*original)->pixSeq, pixelStack);
     }
+    if (l_error.bad() && toType.isEncapsulated() && existUnencapsulated && writeUnencapsulated(repType))
+        // Encoding failed so this will be written out unencapsulated
+        l_error = EC_Normal;
     return l_error;
 }
 
 
-void
-DcmPixelData::clearRepresentationList(
+int DcmPixelData::compare(const DcmElement& rhs) const
+{
+  // check tag and VR
+  int result = DcmElement::compare(rhs);
+  if (result != 0)
+  {
+    return result;
+  }
+
+  // cast away constness (dcmdata is not const correct...)
+  DcmPixelData* myThis = NULL;
+  DcmPixelData* myRhs = NULL;
+  myThis = OFconst_cast(DcmPixelData*, this);
+  myRhs =  OFstatic_cast(DcmPixelData*, OFconst_cast(DcmElement*, &rhs));
+
+  if (myThis->existUnencapsulated && myRhs->existUnencapsulated)
+  {
+    // we have uncompressed representations, which can be compared using DcmPolymorphOBOW::compare
+    return DcmPolymorphOBOW::compare(rhs);
+  }
+
+  // both do not have uncompressed data, we must compare compressed ones.
+  // check both have a current representation at all.
+  if ((myThis->current == myThis->repList.end()) && (myRhs->current != myRhs->repList.end())) return -1;
+  if ((myThis->current != myThis->repList.end()) && (myRhs->current == myRhs->repList.end())) return 1;
+  if ((myThis->current == myThis->repList.end()) && (myRhs->current == myRhs->repList.end()))
+  {
+    // if one of both have uncompressed data at least, that one is considered "bigger"
+    if (myThis->existUnencapsulated) return 1;
+    if (myRhs->existUnencapsulated) return -1;
+    else return 0;
+  }
+
+  // both have compressed data: compare current representation (only)
+  if ((myThis->current != myThis->repList.end()) && (myRhs->current != myRhs->repList.end()) )
+  {
+    E_TransferSyntax myRep = (*(myThis->current))->repType;
+    E_TransferSyntax rhsRep = (*(myRhs->current))->repType;
+    DcmXfer myXfer(myRep);
+    DcmXfer rhsXfer(rhsRep);
+    // if both transfer syntaxes are different, we have to perform more checks to
+    // find out whether the related pixel data is comparable; this is the case
+    // for all uncompressed transfer syntaxes, except Big Endian with OW data
+    // since it uses a different memory layout, and we do not want to byte-swap
+    // the values for the comparison.
+    if (myRep != rhsRep)
+    {
+        return 1;
+    }
+    else
+    {
+      // For compressed, compare pixel items bytewise
+      DcmPixelSequence* myPix = (*(myThis->current))->pixSeq;
+      DcmPixelSequence* rhsPix = (*(myRhs->current))->pixSeq;
+      if (!myPix && rhsPix) return -1;
+      if (myPix && !rhsPix) return 1;
+      if (!myPix && !rhsPix) return 0;
+      // Check number of pixel items
+      long unsigned int myNumPix = myPix->card();
+      long unsigned int rhsNumPix = rhsPix->card();
+      if (myNumPix < rhsNumPix) return -1;
+      if (myNumPix > rhsNumPix) return 1;
+      // loop over pixel items, both have the same number of pixel items
+      for (unsigned long n = 0; n < myNumPix; n++)
+      {
+        DcmPixelItem* myPixItem = NULL;
+        DcmPixelItem* rhsPixItem = NULL;
+        if (myPix->getItem(myPixItem, n).good() && rhsPix->getItem(rhsPixItem, n).good())
+        {
+          // compare them value by value, using DcmOtherByteOtherWord::compare() method
+          result = myPixItem->compare(*rhsPixItem);
+          if (result != 0)
+          {
+            return result;
+          }
+        }
+        else
+        {
+          DCMDATA_ERROR("Internal error: Could not get pixel item #" << n << " from Pixel Sequence");
+          return 1;
+        }
+      }
+      return 0;
+    }
+  }
+  // if one of both have a current representation; consider that one "bigger".
+  // if none has a current one, consider both equal (neither uncompressed or compressed data present).
+  else
+  {
+    if (myThis->current != myThis->repList.end()) return 1;
+    if (myRhs->current != myRhs->repList.end()) return -1;
+    else return 0;
+  }
+}
+
+OFCondition DcmPixelData::copyFrom(const DcmObject& rhs)
+{
+  if (this != &rhs)
+  {
+    if (rhs.ident() != ident()) return EC_IllegalCall;
+    *this = OFstatic_cast(const DcmPixelData &, rhs);
+  }
+  return EC_Normal;
+}
+
+void DcmPixelData::clearRepresentationList(
     DcmRepresentationListIterator leaveInList)
 {
     /* define iterators to go through all representations in the list */
@@ -347,13 +443,20 @@ DcmPixelData::decode(
     DcmStack & pixelStack)
 {
     if (existUnencapsulated) return EC_Normal;
-    OFCondition l_error = DcmCodecList::decode(fromType, fromParam, fromPixSeq, *this, pixelStack);
+    OFBool removeOldPixelRepresentation = OFFalse;
+    OFCondition l_error = DcmCodecList::decode(fromType, fromParam, fromPixSeq, *this, pixelStack, removeOldPixelRepresentation);
     if (l_error.good())
     {
         existUnencapsulated = OFTrue;
         current = repListEnd;
         setVR(EVR_OW);
         recalcVR();
+
+        // the codec has indicated that the image pixel module has been modified
+        // in a way that may affect the validity of the old representation of pixel data.
+        // Thus, we cannot just switch back to the old representation.
+        // Thus, remove old representation(s).
+        if (removeOldPixelRepresentation) removeAllButCurrentRepresentations();
     }
     else
     {
@@ -378,10 +481,11 @@ DcmPixelData::encode(
     if (toType.isEncapsulated())
     {
        DcmPixelSequence * toPixSeq = NULL;
+       OFBool removeOldPixelRepresentation = OFFalse;
        if (fromType.isEncapsulated())
        {
          l_error = DcmCodecList::encode(fromType.getXfer(), fromParam, fromPixSeq,
-                   toType.getXfer(), toParam, toPixSeq, pixelStack);
+                   toType.getXfer(), toParam, toPixSeq, pixelStack, removeOldPixelRepresentation);
        }
        else
        {
@@ -391,7 +495,7 @@ DcmPixelData::encode(
          if (l_error == EC_Normal)
          {
            l_error = DcmCodecList::encode(fromType.getXfer(), pixelData, length,
-                     toType.getXfer(), toParam, toPixSeq, pixelStack);
+                     toType.getXfer(), toParam, toPixSeq, pixelStack, removeOldPixelRepresentation);
          }
        }
 
@@ -400,6 +504,11 @@ DcmPixelData::encode(
            current = insertRepresentationEntry(
              new DcmRepresentationEntry(toType.getXfer(), toParam, toPixSeq));
            recalcVR();
+           // the codec has indicated that the image pixel module has been modified
+           // in a way that may affect the validity of the old representation of pixel data.
+           // Thus, we cannot just switch back to the old representation, but have
+           // to actually decode in this case. Thus, remove old representation(s).
+           if (removeOldPixelRepresentation) removeAllButCurrentRepresentations();
        } else delete toPixSeq;
 
        // if it was possible to convert one encapsulated syntax into
@@ -524,7 +633,7 @@ DcmPixelData::getLength(const E_TransferSyntax xfer,
     errorFlag = EC_Normal;
     Uint32 valueLength = 0;
 
-    if (xferSyn.isEncapsulated() && !alwaysUnencapsulated)
+    if (xferSyn.isEncapsulated() && !writeUnencapsulated(xfer))
     {
         DcmRepresentationListIterator foundEntry;
         errorFlag = findConformingEncapsulatedRepresentation(
@@ -600,7 +709,7 @@ DcmPixelData::insertRepresentationEntry(
 
 void
 DcmPixelData::print(
-    STD_NAMESPACE ostream&out,
+    STD_NAMESPACE ostream &out,
     const size_t flags,
     const int level,
     const char *pixelFileName,
@@ -954,12 +1063,17 @@ OFCondition DcmPixelData::write(
   if (getTransferState() == ERW_notInitialized) errorFlag = EC_IllegalCall;
   else
   {
+    // check if the output transfer syntax is encapsulated
+    // and we are not requested to write an uncompressed dataset
+    // for example because this is within an Icon Image Sequence
     DcmXfer xferSyn(oxfer);
-    if (xferSyn.isEncapsulated() && (! alwaysUnencapsulated))
+    if (xferSyn.isEncapsulated() && (! writeUnencapsulated(oxfer)))
     {
+      // write encapsulated representation (i.e., compressed image)
       if (getTransferState() == ERW_init)
       {
         DcmRepresentationListIterator found;
+        // find a compressed image matching the output transfer syntax
         errorFlag = findConformingEncapsulatedRepresentation(xferSyn, NULL, found);
         if (errorFlag == EC_Normal)
         {
@@ -969,17 +1083,21 @@ OFCondition DcmPixelData::write(
           setTransferState(ERW_inWork);
         }
       }
+      // write compressed image
       if (errorFlag == EC_Normal && pixelSeqForWrite) errorFlag = pixelSeqForWrite->write(outStream, oxfer, enctype, wcache);
       if (errorFlag == EC_Normal) setTransferState(ERW_ready);
     }
     else if (existUnencapsulated)
     {
+      // we're supposed to write an uncompressed image, and we happen to have one available.
       current = repListEnd;
       recalcVR();
+      // write uncompressed image
       errorFlag = DcmPolymorphOBOW::write(outStream, oxfer, enctype, wcache);
     }
-    else if (getValue() == NULL)
+    else if ((getValue() == NULL) && (current == repListEnd))
     {
+      // the PixelData is empty. Write an empty element.
       errorFlag = DcmPolymorphOBOW::write(outStream, oxfer, enctype, wcache);
     } else errorFlag = EC_RepresentationNotFound;
   }
@@ -987,7 +1105,7 @@ OFCondition DcmPixelData::write(
 }
 
 OFCondition DcmPixelData::writeXML(
-    STD_NAMESPACE ostream&out,
+    STD_NAMESPACE ostream &out,
     const size_t flags)
 {
     if (current == repListEnd)
@@ -1011,7 +1129,7 @@ OFCondition DcmPixelData::writeSignatureFormat(
   else if (getTag().isSignable())
   {
     DcmXfer xferSyn(oxfer);
-    if (xferSyn.isEncapsulated() && (! alwaysUnencapsulated))
+    if (xferSyn.isEncapsulated() && (! writeUnencapsulated(oxfer)))
     {
       if (getTransferState() == ERW_init)
       {
@@ -1110,7 +1228,7 @@ OFCondition DcmPixelData::getDecompressedColorModel(
     DcmItem *dataset,
     OFString &decompressedColorModel)
 {
-    OFCondition result = EC_IllegalCall;
+    OFCondition result = EC_IllegalParameter;
     if (dataset != NULL)
     {
       if (existUnencapsulated)
@@ -1118,7 +1236,21 @@ OFCondition DcmPixelData::getDecompressedColorModel(
         // we already have an uncompressed version of the pixel data either in memory or in file,
         // so just retrieve the color model from the given dataset
         result = dataset->findAndGetOFString(DCM_PhotometricInterpretation, decompressedColorModel);
-      } else {
+        if (result == EC_TagNotFound)
+        {
+          DCMDATA_WARN("DcmPixelData: Mandatory element PhotometricInterpretation " << DCM_PhotometricInterpretation << " is missing");
+          result = EC_MissingAttribute;
+        }
+        else if (result.bad())
+        {
+          DCMDATA_WARN("DcmPixelData: Cannot retrieve value of element PhotometricInterpretation " << DCM_PhotometricInterpretation << ": " << result.text());
+        }
+        else if (decompressedColorModel.empty())
+        {
+          DCMDATA_WARN("DcmPixelData: No value for mandatory element PhotometricInterpretation " << DCM_PhotometricInterpretation);
+          result = EC_MissingValue;
+        }
+    } else {
         // we only have a compressed version of the pixel data.
         // Identify a codec for determining the color model.
         result = DcmCodecList::determineDecompressedColorModel(
@@ -1129,209 +1261,90 @@ OFCondition DcmPixelData::getDecompressedColorModel(
     return result;
 }
 
+OFBool DcmPixelData::writeUnencapsulated(const E_TransferSyntax xfer)
+{
+    // There are three cases under which a dataset is written out
+    // unencapsulated:
+    //
+    // - It was already read unencapsulated (handled via alwaysUnencapsulated)
+    // - We were told to do so (handled via alwaysUnencapsulated)
+    // - This is not the pixel data element on the main level and it exists
+    //   unencapsulated.
 
-/*
-** CVS/RCS Log:
-** $Log: dcpixel.cc,v $
-** Revision 1.51  2010-10-20 16:44:16  joergr
-** Use type cast macros (e.g. OFstatic_cast) where appropriate.
-**
-** Revision 1.50  2010-10-14 13:14:08  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.49  2010-07-02 12:34:42  uli
-** Added comment explaining why an even buffer size is required.
-**
-** Revision 1.48  2010-03-01 09:08:45  uli
-** Removed some unnecessary include directives in the headers.
-**
-** Revision 1.47  2009-11-17 16:41:26  joergr
-** Added new method that allows for determining the color model of the
-** decompressed image.
-**
-** Revision 1.46  2009-05-11 16:10:14  meichel
-** DcmPixelData::getUncompressedFrame() now returns color model also
-**   for uncompressed images.
-**
-** Revision 1.45  2009-05-11 16:06:51  meichel
-** DcmPixelData::getUncompressedFrame() now works with uncompressed multi-frame
-**   images with odd frame size.
-**
-** Revision 1.44  2009-01-30 13:28:14  joergr
-** Fixed bug in hasRepresentation() which returned the wrong status in case of
-** compressed pixel data.
-**
-** Revision 1.43  2008-11-03 14:29:45  joergr
-** Added method createValueFromTempFile() - overrides method in DcmElement.
-**
-** Revision 1.42  2008-07-17 10:31:31  onken
-** Implemented copyFrom() method for complete DcmObject class hierarchy, which
-** permits setting an instance's value from an existing object. Implemented
-** assignment operator where necessary.
-**
-** Revision 1.41  2008-05-29 10:46:16  meichel
-** Implemented new method DcmPixelData::getUncompressedFrame
-**   that permits frame-wise access to compressed and uncompressed
-**   objects without ever loading the complete object into main memory.
-**   For this new method to work with compressed images, all classes derived from
-**   DcmCodec need to implement a new method decodeFrame(). For now, only
-**   dummy implementations returning an error code have been defined.
-**
-** Revision 1.40  2007/11/29 14:30:21  meichel
-** Write methods now handle large raw data elements (such as pixel data)
-**   without loading everything into memory. This allows very large images to
-**   be sent over a network connection, or to be copied without ever being
-**   fully in memory.
-**
-** Revision 1.39  2007/06/29 14:17:49  meichel
-** Code clean-up: Most member variables in module dcmdata are now private,
-**   not protected anymore.
-**
-** Revision 1.38  2006/08/15 15:49:54  meichel
-** Updated all code in module dcmdata to correctly compile when
-**   all standard C++ classes remain in namespace std.
-**
-** Revision 1.37  2005/12/08 15:41:25  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.36  2005/05/26 09:06:55  meichel
-** Renamed isIconImage flag to alwaysUnencapsulated to clarify meaning.
-**   Added public method DcmPixelData::setNonEncapsulationFlag() that allows
-**   DcmCodec instances to enable the flag. Improved documentation.
-**
-** Revision 1.35  2004/07/01 12:28:12  meichel
-** Fixed copy constructor for class DcmPixelData which did not work correctly
-**   under certain circumstances due to an uninitialized attribute.
-**
-** Revision 1.34  2004/04/07 13:56:08  meichel
-** Compressed image datasets containing uncompressed icon images
-**   are now correctly handled by the parser.
-**
-** Revision 1.33  2004/01/16 13:49:53  joergr
-** Removed acknowledgements with e-mail addresses from CVS log.
-**
-** Revision 1.32  2003/06/12 18:22:23  joergr
-** Modified code to use const_iterators where appropriate (required for STL).
-**
-** Revision 1.31  2003/06/02 16:55:41  meichel
-** Cleaned up implementation of DcmRepresentationEntry, added doc++ comments
-**
-** Revision 1.30  2003/04/03 14:30:37  joergr
-** Fixed bug introduced in the context of the new createUint8/16Array() methods.
-**
-** Revision 1.29  2003/04/01 12:35:17  joergr
-** Added implementation of createUint8/16Array() methods to DcmPixelData.
-** Required to work properly with chooseRepresentation() for pixel compression.
-**
-** Revision 1.28  2003/03/21 13:08:04  meichel
-** Minor code purifications for warnings reported by MSVC in Level 4
-**
-** Revision 1.27  2002/12/09 09:30:54  wilkens
-** Modified/Added doc++ documentation.
-**
-** Revision 1.26  2002/12/06 13:16:57  joergr
-** Enhanced "print()" function by re-working the implementation and replacing
-** the boolean "showFullData" parameter by a more general integer flag.
-** Made source code formatting more consistent with other modules/files.
-**
-** Revision 1.25  2002/09/17 13:22:45  meichel
-** Fixed two bugs in class DcmPixelData.
-**
-** Revision 1.24  2002/09/10 15:24:04  meichel
-** Fixed two issues in parser. Dcmdata will now correctly parse compressed
-**   data sets containing uncompressed pixel data (e.g. icon images) and
-**   uncompressed data sets containing compressed pixel data (e.g. compressed
-**   file but meta-header missing). Note that write-back of such datasets will
-**   fail unless appropriate compression codecs are registered.
-**
-** Revision 1.23  2002/08/27 16:55:54  meichel
-** Initial release of new DICOM I/O stream classes that add support for stream
-**   compression (deflated little endian explicit VR transfer syntax)
-**
-** Revision 1.22  2002/07/10 11:49:30  meichel
-** Fixed memory leak that occured when compression of an image failed in
-**   a compression codec.
-**
-** Revision 1.21  2002/04/25 10:19:53  joergr
-** Added support for XML output of DICOM objects.
-**
-** Revision 1.20  2001/11/08 16:19:42  meichel
-** Changed interface for codec registration. Now everything is thread-safe
-**   and multiple codecs can be registered for a single transfer syntax (e.g.
-**   one encoder and one decoder).
-**
-** Revision 1.19  2001/11/01 14:55:42  wilkens
-** Added lots of comments.
-**
-** Revision 1.18  2001/09/25 17:18:36  meichel
-** Updated abstract class DcmRepresentationParameter for use with dcmjpeg
-**
-** Revision 1.17  2001/06/01 15:49:07  meichel
-** Updated copyright header
-**
-** Revision 1.16  2001/05/25 09:53:54  meichel
-** Modified DcmCodec::decode() interface, required for future dcmjpeg module.
-**
-** Revision 1.15  2000/11/07 16:56:21  meichel
-** Initial release of dcmsign module for DICOM Digital Signatures
-**
-** Revision 1.14  2000/09/27 08:19:58  meichel
-** Minor changes in DcmCodec interface, required for future dcmjpeg module.
-**
-** Revision 1.13  2000/04/14 16:09:16  meichel
-** Made function DcmCodec and related functions thread safe.
-**   registerGlobalCodec() should not be called anymore from the constructor
-**   of global objects.
-**
-** Revision 1.12  2000/03/08 16:26:39  meichel
-** Updated copyright header.
-**
-** Revision 1.11  2000/02/10 16:04:07  joergr
-** Fixed bug producing an error message when trying to create an empty
-** PixelData element.
-**
-** Revision 1.10  2000/02/10 10:52:21  joergr
-** Added new feature to dcmdump (enhanced print method of dcmdata): write
-** pixel data/item value fields to raw files.
-**
-** Revision 1.9  2000/02/03 16:30:19  joergr
-** Fixed bug: encapsulated data (pixel items) have never been loaded using
-** method 'loadAllDataIntoMemory'. Therefore, encapsulated pixel data was
-** never printed with 'dcmdump'.
-**
-** Revision 1.8  1999/04/21 15:48:15  meichel
-** Fixed bug in DcmPixelData::findConformingEncapsulatedRepresentation
-**   leading to an assertion failure when working with compressed data.
-**
-** Revision 1.7  1999/03/31 09:25:35  meichel
-** Updated copyright header in module dcmdata
-**
-** Revision 1.6  1998/11/12 16:48:17  meichel
-** Implemented operator= for all classes derived from DcmObject.
-**
-** Revision 1.5  1998/07/15 15:52:04  joergr
-** Removed several compiler warnings reported by gcc 2.8.1 with
-** additional options, e.g. missing copy constructors and assignment
-** operators, initialization of member variables in the body of a
-** constructor instead of the member initialization list, hiding of
-** methods by use of identical names, uninitialized member variables,
-** missing const declaration of char pointers. Replaced tabs by spaces.
-**
-** Revision 1.4  1997/09/18 08:10:55  meichel
-** Many minor type conflicts (e.g. long passed as int) solved.
-**
-** Revision 1.3  1997/07/31 06:59:35  andreas
-** Added initialization of error code in
-** DcmPixelData::removeOriginalRepresentation()
-**
-** Revision 1.2  1997/07/24 13:08:28  andreas
-** - Removed const for method DcmRepresentationParameter::copy
-**
-** Revision 1.1  1997/07/21 07:55:05  andreas
-** - New environment for encapsulated pixel representations. DcmPixelData
-**   can contain different representations and uses codecs to convert
-**   between them. Codecs are derived from the DcmCodec class. New error
-**   codes are introduced for handling of representations. New internal
-**   value representation (only for ident()) for PixelData
-**
-*/
+    if (alwaysUnencapsulated)
+        return OFTrue;
+    if (DcmXfer(xfer).isEncapsulated()) {
+        DcmRepresentationListIterator found;
+        OFCondition cond = findConformingEncapsulatedRepresentation(xfer, NULL, found);
+        if (cond.good()) {
+            // We found a suitable encapsulated representation, so encapsulate
+            // this element in the output.
+            return OFFalse;
+        }
+    }
+
+    return existUnencapsulated && isNested();
+}
+
+
+OFCondition DcmPixelData::writeJson(STD_NAMESPACE ostream &out,
+                                             DcmJsonFormat &format)
+{
+
+    // check if we have an empty uncompressed value field.
+    // We never encode that as BulkDataURI.
+    OFBool emptyValue = OFFalse;
+    if ((current == repListEnd) && existUnencapsulated && (getLengthField() == 0))
+    {
+      emptyValue = OFTrue;
+    }
+
+    // now check if the pixel data will be written as
+    // BulkDataURI, which is possible for both uncompressed
+    // and encapsulated pixel data.
+    OFString value;
+    if ((! emptyValue) && format.asBulkDataURI(getTag(), value))
+    {
+        /* write JSON Opener */
+        writeJsonOpener(out, format);
+
+        /* return defined BulkDataURI */
+        format.printBulkDataURIPrefix(out);
+        DcmJsonFormat::printString(out, value);
+
+        /* write JSON Closer */
+        writeJsonCloser(out, format);
+        return EC_Normal;
+    }
+
+    // No bulk data URI, we're supposed to write as InlineBinary.
+    // This is only defined for uncompressed data, not for any of the
+    // encapsulated encodings.
+
+    // check the current pixel data representation
+    if ((current == repListEnd) && existUnencapsulated)
+    {
+      // current pixel data representation is uncompressed (and available).
+
+      /* write JSON Opener */
+      writeJsonOpener(out, format);
+
+      /* for an empty value field, we do not need to do anything */
+      if (getLengthField() > 0)
+      {
+         /* encode binary data as Base64 */
+         format.printInlineBinaryPrefix(out);
+         out << "\"";
+         /* adjust byte order to little endian */
+         Uint8 *byteValues = OFstatic_cast(Uint8 *, getValue(EBO_LittleEndian));
+         OFStandard::encodeBase64(out, byteValues, OFstatic_cast(size_t, getLengthField()));
+         out << "\"";
+      }
+      /* write JSON Closer */
+      writeJsonCloser(out, format);
+      return EC_Normal;
+    }
+
+    // pixel data is encapsulated, return error
+    return EC_CannotWriteJsonInlineBinary;
+}

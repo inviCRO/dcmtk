@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2000-2010, OFFIS e.V.
+ *  Copyright (C) 2000-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose:
  *    classes: DSRDocumentTreeNode
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:32 $
- *  CVS/RCS Revision: $Revision: 1.27 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -35,7 +28,6 @@
 
 #include "dcmtk/dcmsr/dsrtree.h"
 #include "dcmtk/dcmsr/dsrcodvl.h"
-#include "dcmtk/dcmdata/dcitem.h"
 
 
 /*-----------------------*
@@ -51,30 +43,73 @@ class DSRIODConstraintChecker;
 
 /** Base class for content items
  */
-class DSRDocumentTreeNode
+class DCMTK_DCMSR_EXPORT DSRDocumentTreeNode
   : public DSRTreeNode
 {
+    // allow direct access to protected methods
+    friend class DSRTree<DSRDocumentTreeNode>;
+    friend class DSRTreeNodeCursor<DSRDocumentTreeNode>;
+    // also for the derived cursor classes
+    friend class DSRDocumentTreeNodeCursor;
+    friend class DSRIncludedTemplateNodeCursor;
+
     // allow access to getConceptNamePtr()
     friend class DSRContentItem;
 
   public:
 
     /** constructor.
-     *  The 'relationshipType' and 'valueType' can never be changed after the tree node
-     *  has been created (therefore, the corresponding member variables are declared
-     *  "const").
-     ** @param  relationshipType  type of relationship to the parent tree node.
-     *                            Should not be RT_invalid and RT_isRoot only for the
-     *                            root node.
-     *  @param  valueType         value type of the associated content item.
-     *                            Should not be VT_invalid.
+     *  The 'valueType' can never be changed after the tree node has been created
+     *  (therefore, the corresponding member variable is declared "const").
+     ** @param  relationshipType  type of relationship to the parent tree node.  Should
+     *                            not be DSRTypes::RT_invalid, and DSRTypes::RT_isRoot
+     *                            only for the root node.
+     *  @param  valueType         value type of the associated content item.  Should not
+     *                            be DSRTypes::VT_invalid.
      */
     DSRDocumentTreeNode(const E_RelationshipType relationshipType,
                         const E_ValueType valueType);
 
+    /** copy constructor.
+     *  Please note that the member variables of the base class DSRTreeNode are not copied
+     *  because the new tree node is not (yet) part of a document tree.  Furthermore, the
+     *  following member variables of this class are also not copied but initialized with
+     *  their respective default values:
+     *  - ReferenceTarget
+     *  - MACParameters
+     *  - DigitalSignatures
+     *
+     ** @param  node  tree node to be copied
+     */
+    DSRDocumentTreeNode(const DSRDocumentTreeNode &node);
+
     /** destructor
      */
     virtual ~DSRDocumentTreeNode();
+
+    /** comparison operator "equal".
+     *  Two tree nodes are regarded as equal if the relationship type, the value type and the
+     *  concept name are equal.  Other information is not used unless implemented in a derived
+     *  class.
+     ** @param  node  tree node that should be compared to the current one
+     ** @return OFTrue if both tree nodes are equal, OFFalse otherwise
+     */
+    virtual OFBool operator==(const DSRDocumentTreeNode &node) const;
+
+    /** comparison operator "not equal".
+     *  Two tree nodes are regarded as not equal if either the relationship type or the value
+     *  type or the concept name are not equal.  Other information is not used unless implemented
+     *  in a derived class.
+     ** @param  node  tree node that should be compared to the current one
+     ** @return OFTrue if both tree nodes are not equal, OFFalse otherwise
+     */
+    virtual OFBool operator!=(const DSRDocumentTreeNode &node) const;
+
+    /** clone this tree node (abstract).
+     *  Internally, the copy constructor is used, so the corresponding comments apply.
+     ** @return copy of this tree node
+     */
+    virtual DSRDocumentTreeNode *clone() const = 0;
 
     /** clear all member variables.
      *  This does not apply to the relationship and value type since they are never changed.
@@ -82,11 +117,15 @@ class DSRDocumentTreeNode
     virtual void clear();
 
     /** check whether the content item is valid.
-     *  The content item is valid if the relationship type and the value type are both not
-     *  invalid.
+     *  The content item is valid if the relationship type and the value type are both not invalid.
      ** @return OFTrue if tree node is valid, OFFalse otherwise
      */
     virtual OFBool isValid() const;
+
+    /** check whether the value of the content item is valid.  See derived classes for details.
+     ** @return OFTrue if the value is valid, OFFalse otherwise
+     */
+    virtual OFBool hasValidValue() const;
 
     /** check whether the content is short.
      *  This method is used to check whether the rendered output of this content item can be
@@ -95,6 +134,11 @@ class DSRDocumentTreeNode
      ** @return OFTrue if the content is short, OFFalse otherwise
      */
     virtual OFBool isShort(const size_t flags) const;
+
+    /** check whether template identification is set
+     ** @return OFTrue if template identification is set, OFFalse otherwise
+     */
+    virtual OFBool hasTemplateIdentification() const;
 
     /** print content item.
      *  The output of a content item depends on its value type.  This general method prints
@@ -107,6 +151,18 @@ class DSRDocumentTreeNode
      */
     virtual OFCondition print(STD_NAMESPACE ostream &stream,
                               const size_t flags) const;
+
+    /** print extended information on the content item.
+     *  The following details are printed (if present and output is enabled): observation
+     *  date/time (in curly brackets), annotation text (in quotation marks) and template
+     *  identification (after a hash mark).  This method is intended to be called after
+     *  the general print() method, e.g. like it is done by DSRDocumentSubTree::print().
+     ** @param  stream  output stream to which the extended information should be printed
+     *  @param  flags   flag used to customize the output (see DSRTypes::PF_xxx)
+     ** @return status, EC_Normal if successful, an error code otherwise
+     */
+    virtual OFCondition printExtended(STD_NAMESPACE ostream &stream,
+                                      const size_t flags) const;
 
     /** read content item from dataset.
      *  A number of readXXX() methods are called (see "protected" part) in order to retrieve all
@@ -136,8 +192,7 @@ class DSRDocumentTreeNode
      ** @param  doc           document containing the XML file content
      *  @param  cursor        cursor pointing to the starting node
      *  @param  documentType  type of the document to be read (used for debug output only)
-     *  @param  flags         optional flag used to customize the reading process
-     *                        (see DSRTypes::XF_xxx)
+     *  @param  flags         flag used to customize the reading process (see DSRTypes::XF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
     virtual OFCondition readXML(const DSRXMLDocument &doc,
@@ -146,8 +201,8 @@ class DSRDocumentTreeNode
                                 const size_t flags);
 
     /** write content item in XML format
-     ** @param  stream     output stream to which the XML document is written
-     *  @param  flags      flag used to customize the output (see DSRTypes::XF_xxx)
+     ** @param  stream  output stream to which the XML document is written
+     *  @param  flags   flag used to customize the output (see DSRTypes::XF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
     virtual OFCondition writeXML(STD_NAMESPACE ostream &stream,
@@ -177,14 +232,14 @@ class DSRDocumentTreeNode
      */
     inline OFBool isSigned()
     {
-        return (DigitalSignatures.card() > 0);
+        return !DigitalSignatures.isEmpty();
     }
 
     /** check whether content item is marked.
-     *  Use method 'setMark' to mark and unmark the current content item.
+     *  Use method setMark() to mark and unmark the current content item.
      *  Pointers to the DICOM dataset/item of marked content items are added to the optional
-     *  stack when calling the 'write' method.  This mechanism can e.g. be used to digitally
-     *  sign particular content items.
+     *  stack when calling the DSRDocument::write() method.  This mechanism can e.g. be used
+     *  to digitally sign particular content items.
      ** @return OFTrue if content item is marked, OFFalse otherwise
      */
     inline OFBool isMarked() const
@@ -193,7 +248,7 @@ class DSRDocumentTreeNode
     }
 
     /** mark/unmark the current content item.
-     *  See explanation for method 'isMarked' for details.
+     *  See explanation for method isMarked() for details.
      *  @param  flag  mark item if OFTrue, unmark otherwise
      */
     inline void setMark(const OFBool flag)
@@ -222,7 +277,7 @@ class DSRDocumentTreeNode
      */
     inline OFBool hasChildNodes() const
     {
-        return (Down != NULL);
+        return (getDown() != NULL);
     }
 
     /** check whether the current content item has any siblings
@@ -230,7 +285,7 @@ class DSRDocumentTreeNode
      */
     inline OFBool hasSiblingNodes() const
     {
-        return (Prev != NULL) || (Next != NULL);
+        return (getPrev() != NULL) || (getNext() != NULL);
     }
 
     /** get ID of the current tree node
@@ -238,19 +293,31 @@ class DSRDocumentTreeNode
      */
     inline size_t getNodeID() const
     {
-        return Ident;
+        return getIdent();
     }
 
     /** get relationship type of the current content item
-     ** @return relationship type of the current content item (might be RT_invalid)
+     ** @return relationship type of the current content item (might be DSRTypes::RT_invalid)
      */
     inline E_RelationshipType getRelationshipType() const
     {
         return RelationshipType;
     }
 
+    /** set relationship type of the current content item (if previously unknown).
+     *  Please note that changing the relationship type (which was originally passed to the
+     *  constructor of this class) only works if the current value is DSRTypes::RT_unknown.
+     *  This is needed for inserting document subtrees where the top-level nodes might have an
+     *  "unknown" relationship to the parent node (see DSRDocumentSubTree::insertSubTree()).
+     ** @param  relationshipType  type of relationship to the parent tree node.  Should not be
+     *                            DSRTypes::RT_invalid or DSRTypes::RT_unknown.  Be careful
+     *                            with DSRTypes::RT_isRoot, use it for root nodes only.
+     ** @return status, EC_Normal if successful, an error code otherwise
+     */
+    virtual OFCondition setRelationshipType(const E_RelationshipType relationshipType);
+
     /** get value type of the current content item
-     ** @return value type of the current content item (might be VT_invalid)
+     ** @return value type of the current content item (might be DSRTypes::VT_invalid)
      */
     inline E_ValueType getValueType() const
     {
@@ -271,7 +338,7 @@ class DSRDocumentTreeNode
      ** @param  conceptName  reference to a variable where the code should be stored
      ** @return status, EC_Normal if successful, an error code otherwise
      */
-    OFCondition getConceptName(DSRCodedEntryValue &conceptName) const;
+    virtual OFCondition getConceptName(DSRCodedEntryValue &conceptName) const;
 
     /** set the concept name.
      *  Code describing the concept represented by this content item.  Also conveys the value
@@ -279,54 +346,142 @@ class DSRDocumentTreeNode
      *  If the new code is invalid the current one is not replaced.  An empty code can
      *  be used to clear the current concept name.
      ** @param  conceptName  code to be set as the new concept name (checked before set)
+     *  @param  check        check 'conceptName' for validity if enabled.  See
+     *                       DSRCodedEntryValue::checkCode() for details.
      ** @return status, EC_Normal if successful, an error code otherwise
      */
-    virtual OFCondition setConceptName(const DSRCodedEntryValue &conceptName);
+    virtual OFCondition setConceptName(const DSRCodedEntryValue &conceptName,
+                                       const OFBool check = OFTrue);
 
-    /** get observation date time.
+    /** get observation date/time.
      *  This is the date and time on which this content item was completed.  Might be empty
      *  if the date and time do not differ from the content date and time, see DSRDocument.
-     ** @return observation date and time of current content item (might be empty/invalid)
+     ** @return observation date/time of current content item (might be empty/invalid)
      */
     inline const OFString &getObservationDateTime() const
     {
         return ObservationDateTime;
     }
 
-    /** set observation date time.
+    /** set observation date/time.
      *  This is the date and time on which this content item was completed.  Might be empty
      *  if the date and time do not differ from the content date and time, see DSRDocument.
-     *  Please use the correct DICOM format (YYYYMMDDHHMMSS) or an empty string to clear
-     *  the current value.  Currently no check is performed on the parameter value!
      ** @param  observationDateTime  value to be set (might be an empty string)
+     *  @param  check                check 'observationDateTime' for conformance with VR (DT)
+     *                               and VM (1) if enabled
      ** @return status, EC_Normal if successful, an error code otherwise
      */
-    virtual OFCondition setObservationDateTime(const OFString &observationDateTime);
+    virtual OFCondition setObservationDateTime(const OFString &observationDateTime,
+                                               const OFBool check = OFTrue);
+
+    /** set observation date/time from element.
+     *  This is the date and time on which this content item was completed.  Might be empty
+     *  if the date and time do not differ from the content date and time, see DSRDocument.
+     ** @param  delem  DICOM element from which the date/time value should be retrieved
+     *  @param  pos    index of the value in case of multi-valued elements (0..vm-1)
+     *  @param  check  check date/time value for conformance with VR (DT) and VM (1) if
+     *                 enabled
+     ** @return status, EC_Normal if successful, an error code otherwise
+     */
+    virtual OFCondition setObservationDateTime(const DcmElement &delem,
+                                               const unsigned long pos = 0,
+                                               const OFBool check = OFTrue);
+
+    /** set observation date/time from dataset.
+     *  This is the date and time on which this content item was completed.  Might be empty
+     *  if the date and time do not differ from the content date and time, see DSRDocument.
+     ** @param  dataset  DICOM dataset from which the date/time value should be retrieved
+     *  @param  tagKey   DICOM tag specifying the attribute from which the value should be
+     *                   retrieved.  The search is limited to the top-level of the dataset.
+     *  @param  pos      index of the value in case of multi-valued elements (0..vm-1)
+     *  @param  check    check date/time value for conformance with VR (DT) and VM (1) if
+     *                   enabled
+     ** @return status, EC_Normal if successful, an error code otherwise
+     */
+    virtual OFCondition setObservationDateTime(DcmItem &dataset,
+                                               const DcmTagKey &tagKey,
+                                               const unsigned long pos = 0,
+                                               const OFBool check = OFTrue);
+
+    /** get observation unique identifier.
+     *  The UID represents the semantic content of the observation; an encoding of the same
+     *  observation with the same context into another representation may use the same UID.
+     ** @return observation unique identifier of current content item (might be empty/invalid)
+     */
+    inline const OFString &getObservationUID() const
+    {
+        return ObservationUID;
+    }
+
+    /** set observation unique identifier.
+     *  The UID represents the semantic content of the observation; an encoding of the same
+     *  observation with the same context into another representation may use the same UID.
+     ** @param  observationUID  value to be set (might be an empty string)
+     *  @param  check           check 'observationUID' for conformance with VR (UI) and VM (1)
+     *                          if enabled
+     ** @return status, EC_Normal if successful, an error code otherwise
+     */
+    virtual OFCondition setObservationUID(const OFString &observationUID,
+                                          const OFBool check = OFTrue);
+
+    /** compare template identification with given values
+     ** @param  templateIdentifier  template identifier to compare with
+     *  @param  mappingResource     mapping resource that defines the template
+     *  @param  mappingResourceUID  uniquely identifies the mapping resource (optional).
+     *                              Not used for comparison if the value is empty.
+     ** @result OFTrue if template identification is identical, OFFalse otherwise
+     */
+    virtual OFBool compareTemplateIdentification(const OFString &templateIdentifier,
+                                                 const OFString &mappingResource,
+                                                 const OFString &mappingResourceUID = "") const;
 
     /** get template identifier and mapping resource.
      *  This value pair identifies the template that was used to create this content item
-     *  (and its children).  According to the DICOM standard it is "required if a template
+     *  (and its children).  According to the DICOM standard, it is "required if a template
      *  was used to define the content of this Item, and the template consists of a single
      *  CONTAINER with nested content, and it is the outermost invocation of a set of
-     *  nested templates that start with the same CONTAINER."  However, this condition is
-     *  currently not checked.  The identification is valid if both values are either present
-     *  (non-empty) or absent (empty).
+     *  nested templates that start with the same CONTAINER."  The identification is valid
+     *  if both values are either present (non-empty) or absent (empty).
      ** @param  templateIdentifier  identifier of the template (might be empty)
      *  @param  mappingResource     mapping resource that defines the template (might be empty)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
-    OFCondition getTemplateIdentification(OFString &templateIdentifier,
-                                          OFString &mappingResource) const;
+    virtual OFCondition getTemplateIdentification(OFString &templateIdentifier,
+                                                  OFString &mappingResource) const;
+
+    /** get template identifier, mapping resource and optional mapping resource UID.
+     *  This value triple identifies the template that was used to create this content item
+     *  (and its children).  According to the DICOM standard, it is "required if a template
+     *  was used to define the content of this Item, and the template consists of a single
+     *  CONTAINER with nested content, and it is the outermost invocation of a set of
+     *  nested templates that start with the same CONTAINER."  The identification is valid
+     *  if the first two values are either present (non-empty) or all three are absent (empty).
+     ** @param  templateIdentifier  identifier of the template (might be empty)
+     *  @param  mappingResource     mapping resource that defines the template (might be empty)
+     *  @param  mappingResourceUID  uniquely identifies the mapping resource (might be empty)
+     ** @return status, EC_Normal if successful, an error code otherwise
+     */
+    virtual OFCondition getTemplateIdentification(OFString &templateIdentifier,
+                                                  OFString &mappingResource,
+                                                  OFString &mappingResourceUID) const;
 
     /** set template identifier and mapping resource.
-     *  The identification is valid if both values are either present (non-empty) or absent
-     *  (empty).  See getTemplateIdentification() for details.
-     ** @param  templateIdentifier  identifier of the template to be set (VR=CS)
-     *  @param  mappingResource     mapping resource that defines the template (VR=CS)
+     *  The identification is valid if the first two values are either present (non-empty) or
+     *  all three values are absent (empty).  See getTemplateIdentification() for details.
+     *  A warning message is reported to the logger if a template identification is specified
+     *  for a content item that is not a CONTAINER.
+     ** @param  templateIdentifier  identifier of the template to be set
+     *  @param  mappingResource     mapping resource that defines the template
+     *  @param  mappingResourceUID  uniquely identifies the mapping resource (optional)
+     *  @param  check               check 'templateIdentifier', 'mappingResource' and
+     *                              'mappingResourceUID' for conformance with VR (CS,UI) and
+     *                              VM (1) if enabled
      ** @return status, EC_Normal if successful, an error code otherwise
      */
     virtual OFCondition setTemplateIdentification(const OFString &templateIdentifier,
-                                                  const OFString &mappingResource);
+                                                  const OFString &mappingResource,
+                                                  const OFString &mappingResourceUID = "",
+                                                  const OFBool check = OFTrue);
 
     /** remove digital signatures from content item.
      *  This method clears the MACParametersSequence and the DigitalSignaturesSequence for
@@ -343,6 +498,38 @@ class DSRDocumentTreeNode
     inline DSRCodedEntryValue *getConceptNamePtr()
     {
         return &ConceptName;
+    }
+
+    /** get pointer to previous tree node
+     ** @return pointer to previous tree node (might be NULL)
+     */
+    inline DSRDocumentTreeNode *getPrev() const
+    {
+        return OFstatic_cast(DSRDocumentTreeNode *, DSRTreeNode::getPrev());
+    }
+
+    /** get pointer to next tree node
+     ** @return pointer to next tree node (might be NULL)
+     */
+    inline DSRDocumentTreeNode *getNext() const
+    {
+        return OFstatic_cast(DSRDocumentTreeNode *, DSRTreeNode::getNext());
+    }
+
+    /** get pointer to first child node
+     ** @return pointer to first child node (might be NULL)
+     */
+    inline DSRDocumentTreeNode *getDown() const
+    {
+        return OFstatic_cast(DSRDocumentTreeNode *, DSRTreeNode::getDown());
+    }
+
+    /** get unique identifier of this node
+     ** @return unique identifier of this node
+     */
+    inline size_t getIdent() const
+    {
+        return DSRTreeNode::getIdent();
     }
 
     /** create a new node and append it to the current one
@@ -364,15 +551,17 @@ class DSRDocumentTreeNode
     /** read content item (value) from dataset.
      *  This method does nothing for this base class, but derived classes overwrite it to read
      *  the contents according to their value type.
-     ** @param  dataset    DICOM dataset from which the content item should be read
+     ** @param  dataset  DICOM dataset from which the content item should be read
+     *  @param  flags    flag used to customize the reading process (see DSRTypes::RF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
-    virtual OFCondition readContentItem(DcmItem &dataset);
+    virtual OFCondition readContentItem(DcmItem &dataset,
+                                        const size_t flags);
 
     /** write content item (value) to dataset.
      *  This method does nothing for this base class, but derived classes overwrite it to write
      *  the contents according to their value type.
-     ** @param  dataset    DICOM dataset to which the content item should be written
+     ** @param  dataset  DICOM dataset to which the content item should be written
      ** @return status, EC_Normal if successful, an error code otherwise
      */
     virtual OFCondition writeContentItem(DcmItem &dataset) const;
@@ -382,10 +571,12 @@ class DSRDocumentTreeNode
      *  the contents according to their value type.
      ** @param  doc     document containing the XML file content
      *  @param  cursor  cursor pointing to the starting node
+     *  @param  flags   flag used to customize the output (see DSRTypes::XF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
     virtual OFCondition readXMLContentItem(const DSRXMLDocument &doc,
-                                           DSRXMLCursor cursor);
+                                           DSRXMLCursor cursor,
+                                           const size_t flags);
 
     /** render content item (value) in HTML/XHTML format.
      *  This method does nothing for this base class, but derived classes overwrite it to render
@@ -443,7 +634,7 @@ class DSRDocumentTreeNode
     /** read document relationship macro
      ** @param  dataset            DICOM dataset from which the data should be read
      *  @param  constraintChecker  checks relationship content constraints of the associated IOD
-     *  @param  posString          location of the current content item (e.g. "1.2.3")
+     *  @param  posString          location of the current content item (e.g.\ "1.2.3")
      *  @param  flags              flag used to customize the reading process (see DSRTypes::RF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
@@ -463,7 +654,7 @@ class DSRDocumentTreeNode
 
     /** read document content macro
      ** @param  dataset    DICOM dataset from which the data should be read
-     *  @param  posString  location of the current content item (e.g. "1.2.3")
+     *  @param  posString  location of the current content item (e.g.\ "1.2.3")
      *  @param  flags      flag used to customize the reading process (see DSRTypes::RF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
@@ -472,7 +663,7 @@ class DSRDocumentTreeNode
                                          const size_t flags);
 
     /** write document content macro
-     ** @param  dataset    DICOM dataset to which the data should be written
+     ** @param  dataset  DICOM dataset to which the data should be written
      ** @return status, EC_Normal if successful, an error code otherwise
      */
     OFCondition writeDocumentContentMacro(DcmItem &dataset) const;
@@ -480,7 +671,7 @@ class DSRDocumentTreeNode
     /** read content sequence
      ** @param  dataset            DICOM dataset from which the data should be read
      *  @param  constraintChecker  checks relationship content constraints of the associated IOD
-     *  @param  posString          location of the current content item (e.g. "1.2.3")
+     *  @param  posString          location of the current content item (e.g.\ "1.2.3")
      *  @param  flags              flag used to customize the reading process (see DSRTypes::RF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
@@ -490,18 +681,18 @@ class DSRDocumentTreeNode
                                     const size_t flags);
 
     /** write content sequence
-     ** @param  dataset       DICOM dataset to which the data should be written
-     *  @param  markedItems   optional stack where pointers to all 'marked' content items
-     *                        (DICOM datasets/items) are added to during the write process.
+     ** @param  dataset      DICOM dataset to which the data should be written
+     *  @param  markedItems  optional stack where pointers to all 'marked' content items
+     *                       (DICOM datasets/items) are added to during the write process.
      ** @return status, EC_Normal if successful, an error code otherwise
      */
     OFCondition writeContentSequence(DcmItem &dataset,
                                      DcmStack *markedItems) const;
 
     /** render concept name in HTML/XHTML format.
-     *  If the optional observation datetime field is valid (not empty) it is also rendered.
-     ** @param  docStream    output stream to which the main HTML/XHTML document is written
-     *  @param  flags        flag used to customize the output (see DSRTypes::HF_xxx)
+     *  If the optional observation date/time field is non-empty, it is also rendered.
+     ** @param  docStream  output stream to which the main HTML/XHTML document is written
+     *  @param  flags      flag used to customize the output (see DSRTypes::HF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
     OFCondition renderHTMLConceptName(STD_NAMESPACE ostream &docStream,
@@ -536,141 +727,57 @@ class DSRDocumentTreeNode
                                                OFString &relationshipText,
                                                const size_t flags);
 
+    /** check the specified template identification values for validity.
+     *  The identification is valid if the first two values are either present (non-empty) or
+     *  absent (empty).  In the latter case, the third (optional) parameter also has to be empty.
+     ** @param  templateIdentifier  identifier of the template
+     *  @param  mappingResource     mapping resource that defines the template
+     *  @param  mappingResourceUID  uniquely identifies the mapping resource (optional)
+     ** @return OFTrue if template identification is valid, OFFalse otherwise
+     */
+    static OFBool checkTemplateIdentification(const OFString &templateIdentifier,
+                                              const OFString &mappingResource,
+                                              const OFString &mappingResourceUID);
+
 
   private:
 
-    /// flag indicating whether the content item is marked (e.g. used for digital signatures)
-    OFBool                   MarkFlag;
-    /// flag indicating whether the content item is referenced (by-reference relationship)
-    OFBool                   ReferenceTarget;
+    /// flag indicating whether the content item is marked (e.g.\ used for digital signatures).
+    /// The default value is OFFalse.
+    OFBool             MarkFlag;
+    /// flag indicating whether the content item is referenced (by-reference relationship).
+    /// The default value is OFFalse.
+    OFBool             ReferenceTarget;
 
     /// relationship type to the parent node (associated DICOM VR=CS, mandatory)
-    const E_RelationshipType RelationshipType;
+    E_RelationshipType RelationshipType;
     /// value type (associated DICOM VR=CS, mandatory)
-    const E_ValueType        ValueType;
+    const E_ValueType  ValueType;
 
     /// concept name (VR=SQ, conditional)
-    DSRCodedEntryValue       ConceptName;
-    /// observation date and time (VR=DT, conditional)
-    OFString                 ObservationDateTime;
+    DSRCodedEntryValue ConceptName;
+    /// observation date/time (VR=DT, conditional)
+    OFString           ObservationDateTime;
+    /// observation unique identifier (VR=UI, optional)
+    OFString           ObservationUID;
 
     /// template identifier (VR=CS, mandatory in ContentTemplateSequence)
-    OFString                 TemplateIdentifier;
+    OFString           TemplateIdentifier;
     /// mapping resource (VR=CS, mandatory in ContentTemplateSequence)
-    OFString                 MappingResource;
+    OFString           MappingResource;
+    /// mapping resource UID (VR=UI, optional in ContentTemplateSequence)
+    OFString           MappingResourceUID;
 
     /// MAC parameters sequence (VR=SQ, optional)
-    DcmSequenceOfItems       MACParameters;
+    DcmSequenceOfItems MACParameters;
     /// digital signatures sequence (VR=SQ, optional)
-    DcmSequenceOfItems       DigitalSignatures;
+    DcmSequenceOfItems DigitalSignatures;
 
-
- // --- declaration of default/copy constructor and assignment operator
+ // --- declaration of default constructor and assignment operator
 
     DSRDocumentTreeNode();
-    DSRDocumentTreeNode(const DSRDocumentTreeNode &);
     DSRDocumentTreeNode &operator=(const DSRDocumentTreeNode &);
 };
 
 
 #endif
-
-
-/*
- *  CVS/RCS Log:
- *  $Log: dsrdoctn.h,v $
- *  Revision 1.27  2010-10-14 13:16:32  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.26  2009-10-13 14:57:50  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.25  2008-05-19 09:48:32  joergr
- *  Fixed typo.
- *
- *  Revision 1.24  2007-11-15 16:33:30  joergr
- *  Added support for output in XHTML 1.1 format.
- *
- *  Revision 1.23  2006/08/15 16:40:03  meichel
- *  Updated the code in module dcmsr to correctly compile when
- *    all standard C++ classes remain in namespace std.
- *
- *  Revision 1.22  2006/05/11 09:18:21  joergr
- *  Moved containsExtendedCharacters() from dcmsr to dcmdata module.
- *
- *  Revision 1.21  2005/12/08 16:05:00  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.20  2004/11/22 16:39:09  meichel
- *  Added method that checks if the SR document contains non-ASCII characters
- *    in any of the strings affected by SpecificCharacterSet.
- *
- *  Revision 1.19  2003/12/16 15:57:51  joergr
- *  Added note that the condition for the Content Template Sequence is currently
- *  not checked.
- *
- *  Revision 1.18  2003/10/30 17:53:02  joergr
- *  Added full support for the ContentTemplateSequence (read/write, get/set
- *  template identification). Template constraints are not checked yet.
- *
- *  Revision 1.17  2003/10/06 09:52:58  joergr
- *  Added new flag which allows to ignore content item errors when reading an SR
- *  document (e.g. missing value type specific attributes).
- *
- *  Revision 1.16  2003/09/15 14:18:54  joergr
- *  Introduced new class to facilitate checking of SR IOD relationship content
- *  constraints. Replaced old implementation distributed over numerous classes.
- *
- *  Revision 1.15  2003/08/07 17:31:00  joergr
- *  Removed libxml dependency from header files. Simplifies linking (MSVC).
- *
- *  Revision 1.14  2003/08/07 12:34:06  joergr
- *  Added readXML functionality.
- *  Updated documentation to get rid of doxygen warnings.
- *
- *  Revision 1.13  2002/08/02 12:38:31  joergr
- *  Enhanced debug output of dcmsr::read() routines (e.g. add position string
- *  of invalid content items to error messages).
- *
- *  Revision 1.12  2001/11/09 16:10:49  joergr
- *  Added preliminary support for Mammography CAD SR.
- *
- *  Revision 1.11  2001/09/26 13:04:07  meichel
- *  Adapted dcmsr to class OFCondition
- *
- *  Revision 1.10  2001/04/03 08:24:01  joergr
- *  Added new command line option: ignore relationship content constraints
- *  specified for each SR document class.
- *
- *  Revision 1.9  2001/02/02 14:37:33  joergr
- *  Added new option to dsr2xml allowing to specify whether value and/or
- *  relationship type are to be encoded as XML attributes or elements.
- *
- *  Revision 1.8  2001/01/18 15:53:34  joergr
- *  Added support for digital signatures.
- *
- *  Revision 1.7  2000/11/13 10:26:21  joergr
- *  Added output of optional observation datetime to rendered HTML page.
- *
- *  Revision 1.6  2000/11/07 18:14:28  joergr
- *  Enhanced support for by-reference relationships.
- *
- *  Revision 1.5  2000/11/01 16:23:19  joergr
- *  Added support for conversion to XML.
- *
- *  Revision 1.4  2000/10/26 14:17:38  joergr
- *  Added support for "Comprehensive SR".
- *
- *  Revision 1.3  2000/10/23 15:10:29  joergr
- *  Added/updated doc++ comments.
- *
- *  Revision 1.2  2000/10/18 17:02:27  joergr
- *  Added methods allowing direct access to certain content item values.
- *  Made some functions inline.
- *
- *  Revision 1.1  2000/10/13 07:49:26  joergr
- *  Added new module 'dcmsr' providing access to DICOM structured reporting
- *  documents (supplement 23).  Doc++ documentation not yet completed.
- *
- *
- */

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,17 +17,11 @@
  *
  *  Purpose: DVPresentationState
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:31 $
- *  CVS/RCS Revision: $Revision: 1.165 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
+
 #include "dcmtk/dcmpstat/dviface.h"
 
 #include "dcmtk/dcmpstat/dvpsdef.h"   /* for constants */
@@ -48,7 +42,7 @@
 #include "dcmtk/dcmsign/dcsignat.h"   /* for class DcmSignature */
 #include "dcmtk/dcmsr/dsrdoc.h"       /* for class DSRDocument */
 #include "dcmtk/dcmsr/dsrcodvl.h"     /* for class DSRCodedEntryValue */
-#include "dcmtk/oflog/fileap.h"       /* for log4cplus::FileAppender */
+#include "dcmtk/oflog/fileap.h"       /* for dcmtk::log4cplus::FileAppender */
 
 #include "dcmtk/dcmpstat/dvpsib.h"    /* for DVPSImageBoxContent, needed by MSVC5 with STL */
 #include "dcmtk/dcmpstat/dvpsab.h"    /* for DVPSAnnotationContent, needed by MSVC5 with STL */
@@ -67,12 +61,6 @@
 #include "dcmtk/dcmpstat/dvpsri.h"    /* for DVPSReferencedImage, needed by MSVC5 with STL */
 #include "dcmtk/dcmqrdb/dcmqrdbi.h"   /* for DB_UpperMaxBytesPerStudy */
 #include "dcmtk/dcmqrdb/dcmqrdbs.h"   /* for DcmQueryRetrieveDatabaseStatus */
-
-#define INCLUDE_CSTDIO
-#define INCLUDE_CCTYPE
-#define INCLUDE_CMATH
-#define INCLUDE_UNISTD
-#include "dcmtk/ofstd/ofstdinc.h"
 
 BEGIN_EXTERN_C
 #ifdef HAVE_SYS_TYPES_H
@@ -99,7 +87,6 @@ BEGIN_EXTERN_C
 END_EXTERN_C
 
 #ifdef HAVE_WINDOWS_H
-#include <windows.h>
 #include <winbase.h>     /* for CreateProcess */
 #endif
 
@@ -112,6 +99,7 @@ BEGIN_EXTERN_C
 #include <openssl/x509.h>
 #include <openssl/pem.h>
 #include <openssl/err.h>
+#include <openssl/ssl.h>
 END_EXTERN_C
 #endif
 
@@ -231,13 +219,13 @@ DVInterface::DVInterface(const char *config_file, OFBool useLog)
 
             // This will badly interact with oflog config files :(
             const char *pattern = "%D, Level %p, Module DCMPSTAT%n%m%n";
-            OFauto_ptr<log4cplus::Layout> layout(new log4cplus::PatternLayout(pattern));
-            log4cplus::SharedAppenderPtr logfile(new log4cplus::FileAppender(filepath, STD_NAMESPACE ios::app));
+            OFunique_ptr<dcmtk::log4cplus::Layout> layout(new dcmtk::log4cplus::PatternLayout(pattern));
+            dcmtk::log4cplus::SharedAppenderPtr logfile(new dcmtk::log4cplus::FileAppender(filepath, STD_NAMESPACE ios::app));
             // We can't use OFLog::getLogger() here because that doesn't let us
             // configure the object
-            log4cplus::Logger log = log4cplus::Logger::getInstance("dcmtk.dcmpstat.logfile");
+            dcmtk::log4cplus::Logger log = dcmtk::log4cplus::Logger::getInstance("dcmtk.dcmpstat.logfile");
 
-            logfile->setLayout(layout);
+            logfile->setLayout(OFmove(layout));
             log.addAppender(logfile);
             log.setLogLevel(getLogLevel());
 
@@ -265,7 +253,7 @@ DVInterface::~DVInterface()
       delete displayFunction[i];
     if (pHandle) releaseDatabase();
     // refresh database index file access time
-    if (databaseIndexFile.length() > 0)
+    if (!databaseIndexFile.empty())
         // cast to char* required for gcc 2.5.8 on NeXTSTEP
         utime(OFconst_cast(char *, databaseIndexFile.c_str()), NULL);
 }
@@ -670,7 +658,7 @@ OFCondition DVInterface::savePState(OFBool replaceSOPInstanceUID)
         return EC_IllegalCall;
     }
 
-    if (dbhandle.makeNewStoreFileName(UID_GrayscaleSoftcopyPresentationStateStorage, instanceUID, imageFileName).good())
+    if (dbhandle.makeNewStoreFileName(UID_GrayscaleSoftcopyPresentationStateStorage, instanceUID, imageFileName, sizeof(imageFileName)).good())
     {
         // now store presentation state as filename
         result = savePState(imageFileName, OFFalse);
@@ -681,7 +669,7 @@ OFCondition DVInterface::savePState(OFBool replaceSOPInstanceUID)
             {
                 result = EC_IllegalCall;
                 DCMPSTAT_LOGFILE("Save presentation state to database failed: could not register in index file");
-                DCMPSTAT_DEBUG("Unable to register presentation state '" << imageFileName << "' in database");
+                DCMPSTAT_WARN("Unable to register presentation state '" << imageFileName << "' in database");
             }
         }
     }
@@ -694,14 +682,14 @@ OFCondition DVInterface::savePState(OFBool replaceSOPInstanceUID)
             DIC_UI instanceUID2;
             DIC_UI seriesUID;
             DIC_UI studyUID;
-            if (DU_getStringDOElement(dset, DCM_SOPClassUID, sopClass) &&
-                    DU_getStringDOElement(dset, DCM_SOPInstanceUID, instanceUID2) &&
-                    DU_getStringDOElement(dset, DCM_SeriesInstanceUID, seriesUID) &&
-                    DU_getStringDOElement(dset, DCM_StudyInstanceUID, studyUID) &&
+            if (DU_getStringDOElement(dset, DCM_SOPClassUID, sopClass, sizeof(sopClass)) &&
+                    DU_getStringDOElement(dset, DCM_SOPInstanceUID, instanceUID2, sizeof(instanceUID2)) &&
+                    DU_getStringDOElement(dset, DCM_SeriesInstanceUID, seriesUID, sizeof(seriesUID)) &&
+                    DU_getStringDOElement(dset, DCM_StudyInstanceUID, studyUID, sizeof(studyUID)) &&
                 ((!imageInDatabase) || (getSeriesStruct(studyUID, seriesUID, instanceUID2) == NULL)))
             {
                 releaseDatabase();   /* avoid deadlocks */
-                if (dbhandle.makeNewStoreFileName(sopClass, instanceUID2, imageFileName).good())
+                if (dbhandle.makeNewStoreFileName(sopClass, instanceUID2, imageFileName, sizeof(imageFileName)).good())
                 {
                     // now store presentation state as filename
                     result = saveCurrentImage(imageFileName);
@@ -711,7 +699,7 @@ OFCondition DVInterface::savePState(OFBool replaceSOPInstanceUID)
                         {
                             result = EC_IllegalCall;
                             DCMPSTAT_LOGFILE("Save presentation state to database failed: could not register image in index file");
-                            DCMPSTAT_DEBUG("Unable to register image '" << imageFileName << "' in database");
+                            DCMPSTAT_WARN("Unable to register image '" << imageFileName << "' in database");
                         } else {
                             imageInDatabase = OFTrue;
                         }
@@ -780,14 +768,14 @@ OFCondition DVInterface::saveStructuredReport()
     if (pReport == NULL)
         return EC_IllegalCall;
     OFString sopClassUID;
-    if (pReport->getSOPClassUID(sopClassUID).length() == 0)
+    if (pReport->getSOPClassUID(sopClassUID).bad() || sopClassUID.empty())
         return EC_IllegalCall;
     OFString instanceUID;
-    if (pReport->getSOPInstanceUID(instanceUID).length() == 0)
+    if (pReport->getSOPInstanceUID(instanceUID).bad() || instanceUID.empty())
         return EC_IllegalCall;
 
     DcmQueryRetrieveDatabaseStatus dbStatus(STATUS_Success);
-    char filename[MAXPATHLEN+1];
+    char filename[MAXPATHLEN + 1];
     OFCondition result = EC_Normal;
 
     DcmQueryRetrieveIndexDatabaseHandle dbhandle(getDatabaseFolder(), PSTAT_MAXSTUDYCOUNT, PSTAT_STUDYSIZE, result);
@@ -797,7 +785,7 @@ OFCondition DVInterface::saveStructuredReport()
         return EC_IllegalCall;
     }
 
-    if (dbhandle.makeNewStoreFileName(sopClassUID.c_str(), instanceUID.c_str(), filename).good())
+    if (dbhandle.makeNewStoreFileName(sopClassUID.c_str(), instanceUID.c_str(), filename, sizeof(filename)).good())
     {
         // now store presentation state as filename
         result = saveStructuredReport(filename);
@@ -807,7 +795,7 @@ OFCondition DVInterface::saveStructuredReport()
             {
                 result = EC_IllegalCall;
                 DCMPSTAT_LOGFILE("Save structured report to database failed: could not register in index file");
-                DCMPSTAT_DEBUG("Unable to register structured report '" << filename << "' in database");
+                DCMPSTAT_WARN("Unable to register structured report '" << filename << "' in database");
             }
         }
     }
@@ -1005,7 +993,7 @@ Uint32 DVInterface::getNumberOfPStates()
     {
         DVInstanceCache::ItemStruct *instance = getInstanceStruct();
         if ((instance != NULL) && ((instance->Type == DVPSI_image) || (instance->Type == DVPSI_hardcopyGrayscale)))
-            return instance->List.size();
+            return OFstatic_cast(Uint32, instance->List.size());
     }
     return 0;
 }
@@ -1221,7 +1209,7 @@ OFCondition DVInterface::lockDatabase()
         lockingMode = OFFalse;
         if (pHandle->DB_lock(OFFalse).good())
         {
-            if (databaseIndexFile.length() == 0)
+            if (databaseIndexFile.empty())
                 databaseIndexFile = pHandle->getIndexFilename();
             return EC_Normal;
         }
@@ -1310,7 +1298,7 @@ void DVInterface::resetDatabaseReferenceTime()
 
 OFBool DVInterface::newInstancesReceived()
 {
-  if (databaseIndexFile.length() == 0)
+  if (databaseIndexFile.empty())
   {
     if (pHandle == NULL)
     {
@@ -1319,7 +1307,7 @@ OFBool DVInterface::newInstancesReceived()
     }
   }
 
-  if (databaseIndexFile.length() > 0)
+  if (!databaseIndexFile.empty())
   {
     struct stat stat_buf;
     if (0== stat(databaseIndexFile.c_str(), &stat_buf))
@@ -1364,18 +1352,22 @@ OFBool DVInterface::createIndexCache()
                         if (!series->List.isElem(record.SOPInstanceUID))
                         {
                             DVPSInstanceType type = DVPSI_image;
-                            if (record.Modality != NULL)
-                            {
-                                if (strcmp(record.Modality, "PR") == 0)
-                                    type = DVPSI_presentationState;
-                                if (strcmp(record.Modality, "SR") == 0)
-                                    type = DVPSI_structuredReport;
-                                else if (strcmp(record.Modality, "HC") == 0)
-                                    type =DVPSI_hardcopyGrayscale;
-                                else if (strcmp(record.Modality, "STORED_PRINT") == 0)
-                                    type = DVPSI_storedPrint;
-                            }
-                            series->List.addItem(record.SOPInstanceUID, counter, record.hstat, type, record.ImageSize, record.filename);
+                            if (DSRTypes::sopClassUIDToDocumentType(record.SOPClassUID) != DSRTypes::DT_invalid)
+                                type = DVPSI_structuredReport;
+                            else if (strcmp(record.Modality, "PR") == 0)
+                                type = DVPSI_presentationState;
+                            else if (strcmp(record.Modality, "SR") == 0)
+                                type = DVPSI_structuredReport;
+                            else if (strcmp(record.Modality, "HC") == 0)
+                                type =DVPSI_hardcopyGrayscale;
+                            else if (strcmp(record.Modality, "STORED_PRINT") == 0)
+                                type = DVPSI_storedPrint;
+                            series->List.addItem(record.SOPInstanceUID,
+                                                 counter,
+                                                 OFstatic_cast(DVIFhierarchyStatus, record.hstat),
+                                                 type,
+                                                 record.ImageSize,
+                                                 record.filename);
                             if (series->Type == DVPSI_image)
                                 series->Type = type;                // series contains only one type of instances
                         }
@@ -1684,7 +1676,7 @@ OFCondition DVInterface::selectInstance(const char *instanceUID, const char *sop
                             {
                                 if (sopClassUID == NULL)
                                     return EC_Normal;
-                                else if ((idxRec.SOPClassUID != NULL) && (strcmp(sopClassUID, idxRec.SOPClassUID) == 0))
+                                else if (strcmp(sopClassUID, idxRec.SOPClassUID) == 0)
                                     return EC_Normal;
                             }
                         }
@@ -1960,7 +1952,9 @@ OFCondition DVInterface::instanceReviewed(int pos)
     lockDatabase();
     OFBool wasNew = newInstancesReceived();
     if (pHandle == NULL) return EC_IllegalCall;
+    pHandle->DB_unlock();
     OFCondition result = pHandle->instanceReviewed(pos);
+    pHandle->DB_lock(OFFalse);
     if (!wasNew) resetDatabaseReferenceTime();
     releaseDatabase();
     return result;
@@ -1989,14 +1983,11 @@ int DVInterface::findStudyIdx(StudyDescRecord *study,
 {
     if ((study != NULL) && (uid != NULL))
     {
-        register int i = 0;
+        int i = 0;
         for (i = 0; i < PSTAT_MAXSTUDYCOUNT; i++)
         {
-            if ((study[i].StudyInstanceUID != NULL) &&
-                (strcmp(uid, study[i].StudyInstanceUID) == 0))
-            {
+            if (strcmp(uid, study[i].StudyInstanceUID) == 0)
                 return i;
-            }
         }
     }
     return -1;
@@ -2007,9 +1998,16 @@ int DVInterface::deleteImageFile(const char *filename)
 {
     if ((filename != NULL) && (pHandle != NULL))
     {
-        const char *pos;
-        if (((pos = strrchr(filename, OFstatic_cast(int, PATH_SEPARATOR))) == NULL) ||   // check whether image file resides in index.dat directory
-            (strncmp(filename, pHandle->getStorageArea(), pos - filename) == 0))
+        const char *pos = strrchr(filename, OFstatic_cast(int, PATH_SEPARATOR));
+#ifdef _WIN32
+        // Windows accepts both backslash and forward slash as path separators.
+        const char *pos2 = strrchr(filename, OFstatic_cast(int, '/'));
+
+        // if pos2 points to a character closer to the end of the string, use this instead of strPos
+        if ((pos == NULL) || ((pos2 != NULL) && (pos2 > pos))) pos = pos2;
+#endif
+        // check whether image file resides in index.dat directory
+        if ((pos == NULL) || (strncmp(filename, pHandle->getStorageArea(), pos - filename) == 0))
         {
 //            DB_deleteImageFile((/*const */char *)filename);
             if (unlink(filename) == 0)
@@ -2140,11 +2138,10 @@ OFCondition DVInterface::deleteInstance(const char *studyUID,
             {
                 if (pHandle->DB_GetStudyDesc(study_desc).good())
                 {
-                    register int i = 0;
+                    int i = 0;
                     for (i = 0; i < PSTAT_MAXSTUDYCOUNT; i++)
                     {
-                        if ((study_desc[i].StudyInstanceUID != NULL) &&
-                            (strcmp(studyUID, study_desc[i].StudyInstanceUID) != 0))
+                        if (strcmp(studyUID, study_desc[i].StudyInstanceUID) != 0)
                         {
                             if (study_desc[i].NumberofRegistratedImages > 0)
                             {
@@ -2209,7 +2206,7 @@ OFCondition DVInterface::sendIOD(const char * targetID,
   if ((targetID==NULL)||(studyUID==NULL)) return EC_IllegalCall;
   const char *sender_application = getSenderName();
   if (sender_application==NULL) return EC_IllegalCall;
-  if (configPath.length()==0) return EC_IllegalCall;
+  if (configPath.empty()) return EC_IllegalCall;
 
   DVPSHelper::cleanChildren(); // clean up old child processes before creating new ones
 
@@ -2227,7 +2224,7 @@ OFCondition DVInterface::sendIOD(const char * targetID,
   } else {
     // we are the child process
     if (execl(sender_application, sender_application, configPath.c_str(),
-            targetID, studyUID, seriesUID, instanceUID, NULL) < 0)
+            targetID, studyUID, seriesUID, instanceUID, OFreinterpret_cast(char *, 0)) < 0)
     {
       DCMPSTAT_ERROR("Unable to execute '" << sender_application << "'");
     }
@@ -2240,7 +2237,7 @@ OFCondition DVInterface::sendIOD(const char * targetID,
 
   // initialize startup info
   PROCESS_INFORMATION procinfo;
-  STARTUPINFO sinfo;
+  STARTUPINFOA sinfo;
   OFBitmanipTemplate<char>::zeroMem((char *)&sinfo, sizeof(sinfo));
   sinfo.cb = sizeof(sinfo);
   char commandline[4096];
@@ -2250,9 +2247,9 @@ OFCondition DVInterface::sendIOD(const char * targetID,
       studyUID, seriesUID);
   else sprintf(commandline, "%s %s %s %s", sender_application, configPath.c_str(), targetID, studyUID);
 #ifdef DEBUG
-  if (CreateProcess(NULL, commandline, NULL, NULL, 0, 0, NULL, NULL, &sinfo, &procinfo))
+  if (CreateProcessA(NULL, commandline, NULL, NULL, 0, 0, NULL, NULL, &sinfo, &procinfo))
 #else
-  if (CreateProcess(NULL, commandline, NULL, NULL, 0, DETACHED_PROCESS, NULL, NULL, &sinfo, &procinfo))
+  if (CreateProcessA(NULL, commandline, NULL, NULL, 0, DETACHED_PROCESS, NULL, NULL, &sinfo, &procinfo))
 #endif
   {
     return EC_Normal;
@@ -2269,7 +2266,7 @@ OFCondition DVInterface::startReceiver()
 {
   const char *receiver_application = getReceiverName();
   if (receiver_application==NULL) return EC_IllegalCall;
-  if (configPath.length()==0) return EC_IllegalCall;
+  if (configPath.empty()) return EC_IllegalCall;
 
   OFCondition result = EC_Normal;
   DCMPSTAT_LOGFILE("Starting network receiver processes ...");
@@ -2290,7 +2287,7 @@ OFCondition DVInterface::startReceiver()
       // we are the parent process, continue loop
     } else {
       // we are the child process
-      if (execl(receiver_application, receiver_application, configPath.c_str(), getTargetID(i, DVPSE_receiver), NULL) < 0)
+      if (execl(receiver_application, receiver_application, configPath.c_str(), getTargetID(i, DVPSE_receiver), OFreinterpret_cast(char *, 0)) < 0)
       {
           DCMPSTAT_ERROR("Unable to execute '" << receiver_application << "'");
       }
@@ -2302,15 +2299,15 @@ OFCondition DVInterface::startReceiver()
     // Windows version - call CreateProcess()
     // initialize startup info
     PROCESS_INFORMATION procinfo;
-    STARTUPINFO sinfo;
+    STARTUPINFOA sinfo;
     OFBitmanipTemplate<char>::zeroMem((char *)&sinfo, sizeof(sinfo));
     sinfo.cb = sizeof(sinfo);
     char commandline[4096];
     sprintf(commandline, "%s %s %s", receiver_application, configPath.c_str(), getTargetID(i, DVPSE_receiver));
 #ifdef DEBUG
-    if (CreateProcess(NULL, commandline, NULL, NULL, 0, 0, NULL, NULL, &sinfo, &procinfo))
+    if (CreateProcessA(NULL, commandline, NULL, NULL, 0, 0, NULL, NULL, &sinfo, &procinfo))
 #else
-    if (CreateProcess(NULL, commandline, NULL, NULL, 0, DETACHED_PROCESS, NULL, NULL, &sinfo, &procinfo))
+    if (CreateProcessA(NULL, commandline, NULL, NULL, 0, DETACHED_PROCESS, NULL, NULL, &sinfo, &procinfo))
 #endif
     {
       // continue loop
@@ -2327,7 +2324,7 @@ OFCondition DVInterface::terminateReceiver()
 {
   const char *receiver_application = getReceiverName();
   if (receiver_application==NULL) return EC_IllegalCall;
-  if (configPath.length()==0) return EC_IllegalCall;
+  if (configPath.empty()) return EC_IllegalCall;
 
   OFCondition result = EC_Normal;
   DCMPSTAT_LOGFILE("Terminating network receiver processes ...");
@@ -2345,7 +2342,7 @@ OFCondition DVInterface::terminateReceiver()
     // we are the parent process, continue loop
   } else {
     // we are the child process
-    if (execl(receiver_application, receiver_application, configPath.c_str(), "--terminate", NULL) < 0)
+    if (execl(receiver_application, receiver_application, configPath.c_str(), "--terminate", OFreinterpret_cast(char *, 0)) < 0)
     {
         DCMPSTAT_ERROR("Unable to execute '" << receiver_application << "'");
     }
@@ -2357,15 +2354,15 @@ OFCondition DVInterface::terminateReceiver()
   // Windows version - call CreateProcess()
   // initialize startup info
   PROCESS_INFORMATION procinfo;
-  STARTUPINFO sinfo;
+  STARTUPINFOA sinfo;
   OFBitmanipTemplate<char>::zeroMem((char *)&sinfo, sizeof(sinfo));
   sinfo.cb = sizeof(sinfo);
   char commandline[4096];
   sprintf(commandline, "%s %s %s", receiver_application, configPath.c_str(), "--terminate");
 #ifdef DEBUG
-  if (CreateProcess(NULL, commandline, NULL, NULL, 0, 0, NULL, NULL, &sinfo, &procinfo))
+  if (CreateProcessA(NULL, commandline, NULL, NULL, 0, 0, NULL, NULL, &sinfo, &procinfo))
 #else
-  if (CreateProcess(NULL, commandline, NULL, NULL, 0, DETACHED_PROCESS, NULL, NULL, &sinfo, &procinfo))
+  if (CreateProcessA(NULL, commandline, NULL, NULL, 0, DETACHED_PROCESS, NULL, NULL, &sinfo, &procinfo))
 #endif
   {
     // continue loop
@@ -2382,7 +2379,7 @@ OFCondition DVInterface::startQueryRetrieveServer()
 {
   const char *server_application = getQueryRetrieveServerName();
   if (server_application==NULL) return EC_IllegalCall;
-  if (configPath.length()==0) return EC_IllegalCall;
+  if (configPath.empty()) return EC_IllegalCall;
 
   OFString config_filename = getQueryRetrieveServerName();
   config_filename += ".cfg";
@@ -2413,11 +2410,11 @@ OFCondition DVInterface::startQueryRetrieveServer()
       char str_timeout[20];
       sprintf(str_timeout, "%lu", OFstatic_cast(unsigned long, timeout));
       execl(server_application, server_application, "-c", config_filename.c_str(), "--allow-shutdown",
-        "--timeout", str_timeout, NULL);
+        "--timeout", str_timeout, OFreinterpret_cast(char *, 0));
     }
     else
     {
-      execl(server_application, server_application, "-c", config_filename.c_str(), "--allow-shutdown", NULL);
+      execl(server_application, server_application, "-c", config_filename.c_str(), "--allow-shutdown", OFreinterpret_cast(char *, 0));
     }
 
     DCMPSTAT_ERROR("Unable to execute '" << server_application << "'");
@@ -2430,7 +2427,7 @@ OFCondition DVInterface::startQueryRetrieveServer()
   // Windows version - call CreateProcess()
   // initialize startup info
   PROCESS_INFORMATION procinfo;
-  STARTUPINFO sinfo;
+  STARTUPINFOA sinfo;
   OFBitmanipTemplate<char>::zeroMem((char *)&sinfo, sizeof(sinfo));
   sinfo.cb = sizeof(sinfo);
   char commandline[4096];
@@ -2446,9 +2443,9 @@ OFCondition DVInterface::startQueryRetrieveServer()
   }
 
 #ifdef DEBUG
-  if (CreateProcess(NULL, commandline, NULL, NULL, 0, 0, NULL, NULL, &sinfo, &procinfo))
+  if (CreateProcessA(NULL, commandline, NULL, NULL, 0, 0, NULL, NULL, &sinfo, &procinfo))
 #else
-  if (CreateProcess(NULL, commandline, NULL, NULL, 0, DETACHED_PROCESS, NULL, NULL, &sinfo, &procinfo))
+  if (CreateProcessA(NULL, commandline, NULL, NULL, 0, DETACHED_PROCESS, NULL, NULL, &sinfo, &procinfo))
 #endif
   {
     return EC_Normal;
@@ -2462,24 +2459,13 @@ OFCondition DVInterface::startQueryRetrieveServer()
 OFCondition DVInterface::terminateQueryRetrieveServer()
 {
   if (getQueryRetrieveServerName()==NULL) return EC_IllegalCall;
-  if (configPath.length()==0) return EC_IllegalCall;
+  if (configPath.empty()) return EC_IllegalCall;
 
-#ifdef HAVE_GUSI_H
-  GUSISetup(GUSIwithSIOUXSockets);
-  GUSISetup(GUSIwithInternetSockets);
-#endif
-
-#ifdef HAVE_WINSOCK_H
-  WSAData winSockData;
-  /* we need at least version 1.1 */
-  WORD winSockVersionNeeded = MAKEWORD( 1, 1 );
-  WSAStartup(winSockVersionNeeded, &winSockData);
-#endif
+  OFStandard::initializeNetwork();
 
   OFCondition result = EC_Normal;
   T_ASC_Network *net=NULL;
   T_ASC_Parameters *params=NULL;
-  DIC_NODENAME localHost;
   DIC_NODENAME peerHost;
   T_ASC_Association *assoc=NULL;
 
@@ -2492,9 +2478,8 @@ OFCondition DVInterface::terminateQueryRetrieveServer()
     if (cond.good())
     {
       ASC_setAPTitles(params, getNetworkAETitle(), getQueryRetrieveAETitle(), NULL);
-      gethostname(localHost, sizeof(localHost) - 1);
       sprintf(peerHost, "localhost:%d", OFstatic_cast(int, getQueryRetrievePort()));
-      ASC_setPresentationAddresses(params, localHost, peerHost);
+      ASC_setPresentationAddresses(params, OFStandard::getHostName().c_str(), peerHost);
 
       const char* transferSyntaxes[] = { UID_LittleEndianImplicitTransferSyntax };
       cond = ASC_addPresentationContext(params, 1, UID_PrivateShutdownSOPClass, transferSyntaxes, 1);
@@ -2509,9 +2494,7 @@ OFCondition DVInterface::terminateQueryRetrieveServer()
     ASC_dropNetwork(&net);
   } else result = EC_IllegalCall;
 
-#ifdef HAVE_WINSOCK_H
-  WSACleanup();
-#endif
+  OFStandard::shutdownNetwork();
 
   return result;
 }
@@ -2670,7 +2653,7 @@ OFCondition DVInterface::saveDICOMImage(
     return result;
   }
 
-  if (handle.makeNewStoreFileName(UID_SecondaryCaptureImageStorage, uid, imageFileName).good())
+  if (handle.makeNewStoreFileName(UID_SecondaryCaptureImageStorage, uid, imageFileName, sizeof(imageFileName)).good())
   {
      // now store presentation state as filename
      result = saveDICOMImage(imageFileName, pixelData, width, height, aspectRatio, OFTrue, uid);
@@ -2680,7 +2663,7 @@ OFCondition DVInterface::saveDICOMImage(
        {
          result = EC_IllegalCall;
          DCMPSTAT_LOGFILE("Save image to database failed: could not register in index file");
-         DCMPSTAT_DEBUG("Unable to register secondary capture image '" << imageFileName << "' in database");
+         DCMPSTAT_WARN("Unable to register secondary capture image '" << imageFileName << "' in database");
        }
      }
   }
@@ -2743,6 +2726,8 @@ OFCondition DVInterface::saveHardcopyGrayscaleImage(
       if (EC_Normal==status) status = DVPSHelper::putStringValue(dataset, DCM_InstanceCreationDate, aString.c_str());
       DVPSHelper::currentTime(aString);
       if (EC_Normal==status) status = DVPSHelper::putStringValue(dataset, DCM_InstanceCreationTime, aString.c_str());
+      const char *specificCharSet = pState->getCharsetString();
+      if (status.good() && specificCharSet) status = DVPSHelper::putStringValue(dataset, DCM_SpecificCharacterSet, specificCharSet);
 
       // Hardcopy Grayscale Image Module
       if (EC_Normal==status) status = DVPSHelper::putStringValue(dataset, DCM_PhotometricInterpretation, "MONOCHROME2");
@@ -2829,7 +2814,7 @@ OFCondition DVInterface::saveHardcopyGrayscaleImage(
     return result;
   }
 
-  if (handle.makeNewStoreFileName(UID_RETIRED_HardcopyGrayscaleImageStorage, uid, imageFileName).good())
+  if (handle.makeNewStoreFileName(UID_RETIRED_HardcopyGrayscaleImageStorage, uid, imageFileName, sizeof(imageFileName)).good())
   {
      result = saveHardcopyGrayscaleImage(imageFileName, pixelData, width, height, aspectRatio, OFTrue, uid);
      if (EC_Normal==result)
@@ -2838,7 +2823,7 @@ OFCondition DVInterface::saveHardcopyGrayscaleImage(
        {
          result = EC_IllegalCall;
          DCMPSTAT_LOGFILE("Save hardcopy grayscale image to database failed: could not register in index file");
-         DCMPSTAT_DEBUG("Unable to register hardcopy grayscale image '" << imageFileName << "' in database");
+         DCMPSTAT_WARN("Unable to register hardcopy grayscale image '" << imageFileName << "' in database");
        }
      }
   }
@@ -2881,7 +2866,7 @@ OFCondition DVInterface::saveFileFormatToDB(DcmFileFormat &fileformat)
     return result;
   }
 
-  if (handle.makeNewStoreFileName(classUID, instanceUID, imageFileName).good())
+  if (handle.makeNewStoreFileName(classUID, instanceUID, imageFileName, sizeof(imageFileName)).good())
   {
      // save image file
      result = DVPSHelper::saveFileFormat(imageFileName, &fileformat, OFTrue);
@@ -2891,7 +2876,7 @@ OFCondition DVInterface::saveFileFormatToDB(DcmFileFormat &fileformat)
        {
          result = EC_IllegalCall;
          DCMPSTAT_LOGFILE("Save fileformat to database failed: could not register in index file");
-         DCMPSTAT_DEBUG("Unable to register file '" << imageFileName << "' in database");
+         DCMPSTAT_WARN("Unable to register file '" << imageFileName << "' in database");
        }
      }
   }
@@ -2990,6 +2975,7 @@ OFCondition DVInterface::saveStoredPrint(
       if (prependDateTime)
       {
         OFDateTime::getCurrentDateTime().getISOFormattedDateTime(text, OFFalse /*showSeconds*/);
+        text += " ";
       }
       if (prependPrinterName)
       {
@@ -3059,7 +3045,7 @@ OFCondition DVInterface::saveStoredPrint(OFBool writeRequestedImageSize)
     return result;
   }
 
-  if (handle.makeNewStoreFileName(UID_RETIRED_StoredPrintStorage, uid, imageFileName).good())
+  if (handle.makeNewStoreFileName(UID_RETIRED_StoredPrintStorage, uid, imageFileName, sizeof(imageFileName)).good())
   {
      // now store stored print object as filename
      result = saveStoredPrint(imageFileName, writeRequestedImageSize, OFTrue, uid);
@@ -3069,7 +3055,7 @@ OFCondition DVInterface::saveStoredPrint(OFBool writeRequestedImageSize)
        {
          result = EC_IllegalCall;
          DCMPSTAT_LOGFILE("Save stored print to database failed: could not register in index file");
-         DCMPSTAT_DEBUG("Unable to register stored print object '" << imageFileName << "' in database");
+         DCMPSTAT_WARN("Unable to register stored print object '" << imageFileName << "' in database");
        }
      }
   }
@@ -3125,7 +3111,7 @@ OFCondition DVInterface::loadPrintPreview(size_t idx, OFBool printLUT, OFBool ch
               if (pHardcopyImage->getStatus() == EIS_Normal)
               {
                 /* set display function for calibrated output */
-                if (displayFunction != NULL)
+                if (displayFunction[DVPSD_GSDF] != NULL)
                   pHardcopyImage->setDisplayFunction(displayFunction[DVPSD_GSDF]);
                 /* adapt polarity if necessary */
                 const char *polarity = pPrint->getImagePolarity(idx);
@@ -3400,12 +3386,12 @@ OFCondition DVInterface::startPrintSpooler()
 {
   const char *spooler_application = getSpoolerName();
   if (spooler_application==NULL) return EC_IllegalCall;
-  if (configPath.length()==0) return EC_IllegalCall;
+  if (configPath.empty()) return EC_IllegalCall;
 
   const char *printer = NULL;
   unsigned long sleepingTime = getSpoolerSleep();
   if (sleepingTime==0) sleepingTime=1; // default
-  char sleepStr[20];
+  char sleepStr[30];
   sprintf(sleepStr, "%lu", sleepingTime);
   OFBool detailedLog = getDetailedLog();
 
@@ -3430,13 +3416,13 @@ OFCondition DVInterface::startPrintSpooler()
       if (detailedLog)
       {
         if (execl(spooler_application, spooler_application, "--verbose", "--dump", "--spool", printJobIdentifier.c_str(),
-          "--printer", printer, "--config", configPath.c_str(), "--sleep", sleepStr, NULL) < 0)
+          "--printer", printer, "--config", configPath.c_str(), "--sleep", sleepStr, OFreinterpret_cast(char *, 0)) < 0)
         {
           DCMPSTAT_ERROR("Unable to execute '" << spooler_application << "'");
         }
       } else {
         if (execl(spooler_application, spooler_application, "--spool", printJobIdentifier.c_str(),
-          "--printer", printer, "--config", configPath.c_str(), "--sleep", sleepStr, NULL) < 0)
+          "--printer", printer, "--config", configPath.c_str(), "--sleep", sleepStr, OFreinterpret_cast(char *, 0)) < 0)
         {
           DCMPSTAT_ERROR("Unable to execute '" << spooler_application << "'");
         }
@@ -3450,7 +3436,7 @@ OFCondition DVInterface::startPrintSpooler()
     // Windows version - call CreateProcess()
     // initialize startup info
     PROCESS_INFORMATION procinfo;
-    STARTUPINFO sinfo;
+    STARTUPINFOA sinfo;
     OFBitmanipTemplate<char>::zeroMem((char *)&sinfo, sizeof(sinfo));
     sinfo.cb = sizeof(sinfo);
     char commandline[4096];
@@ -3463,9 +3449,9 @@ OFCondition DVInterface::startPrintSpooler()
         printJobIdentifier.c_str(), printer, configPath.c_str(), sleepStr);
     }
 #ifdef DEBUG
-    if (0 == CreateProcess(NULL, commandline, NULL, NULL, 0, 0, NULL, NULL, &sinfo, &procinfo))
+    if (0 == CreateProcessA(NULL, commandline, NULL, NULL, 0, 0, NULL, NULL, &sinfo, &procinfo))
 #else
-    if (0 == CreateProcess(NULL, commandline, NULL, NULL, 0, DETACHED_PROCESS, NULL, NULL, &sinfo, &procinfo))
+    if (0 == CreateProcessA(NULL, commandline, NULL, NULL, 0, DETACHED_PROCESS, NULL, NULL, &sinfo, &procinfo))
 #endif
     {
       DCMPSTAT_ERROR("Unable to execute '" << spooler_application << "'");
@@ -3500,7 +3486,7 @@ OFCondition DVInterface::createPrintJobFilenames(const char *printer, OFString& 
 OFCondition DVInterface::terminatePrintSpooler()
 {
   if (getSpoolerName()==NULL) return EC_IllegalCall;
-  if (configPath.length()==0) return EC_IllegalCall;
+  if (configPath.empty()) return EC_IllegalCall;
 
   DVPSHelper::cleanChildren(); // clean up old child processes before creating new ones
   OFString spoolFilename;
@@ -3540,7 +3526,7 @@ OFCondition DVInterface::startPrintServer()
 {
   const char *application = getPrintServerName();
   if (application==NULL) return EC_IllegalCall;
-  if (configPath.length()==0) return EC_IllegalCall;
+  if (configPath.empty()) return EC_IllegalCall;
 
   const char *printer = NULL;
   OFBool detailedLog = getDetailedLog();
@@ -3566,12 +3552,12 @@ OFCondition DVInterface::startPrintServer()
       if (detailedLog)
       {
         if (execl(application, application, "--logfile", "--verbose", "--dump", "--printer", printer, "--config",
-            configPath.c_str(), NULL) < 0)
+            configPath.c_str(), OFreinterpret_cast(char *, 0)) < 0)
         {
           DCMPSTAT_ERROR("Unable to execute '" << application << "'");
         }
       } else {
-        if (execl(application, application, "--logfile", "--printer", printer, "--config", configPath.c_str(), NULL) < 0)
+        if (execl(application, application, "--logfile", "--printer", printer, "--config", configPath.c_str(), OFreinterpret_cast(char *, 0)) < 0)
         {
           DCMPSTAT_ERROR("Unable to execute '" << application << "'");
         }
@@ -3585,7 +3571,7 @@ OFCondition DVInterface::startPrintServer()
     // Windows version - call CreateProcess()
     // initialize startup info
     PROCESS_INFORMATION procinfo;
-    STARTUPINFO sinfo;
+    STARTUPINFOA sinfo;
     OFBitmanipTemplate<char>::zeroMem((char *)&sinfo, sizeof(sinfo));
     sinfo.cb = sizeof(sinfo);
     char commandline[4096];
@@ -3596,9 +3582,9 @@ OFCondition DVInterface::startPrintServer()
       sprintf(commandline, "%s --logfile --printer %s --config %s", application, printer, configPath.c_str());
     }
 #ifdef DEBUG
-    if (0 == CreateProcess(NULL, commandline, NULL, NULL, 0, 0, NULL, NULL, &sinfo, &procinfo))
+    if (0 == CreateProcessA(NULL, commandline, NULL, NULL, 0, 0, NULL, NULL, &sinfo, &procinfo))
 #else
-    if (0 == CreateProcess(NULL, commandline, NULL, NULL, 0, DETACHED_PROCESS, NULL, NULL, &sinfo, &procinfo))
+    if (0 == CreateProcessA(NULL, commandline, NULL, NULL, 0, DETACHED_PROCESS, NULL, NULL, &sinfo, &procinfo))
 #endif
     {
       DCMPSTAT_ERROR("Unable to execute '" << application << "'");
@@ -3612,24 +3598,13 @@ OFCondition DVInterface::startPrintServer()
 OFCondition DVInterface::terminatePrintServer()
 {
   if (getPrintServerName()==NULL) return EC_IllegalCall;
-  if (configPath.length()==0) return EC_IllegalCall;
+  if (configPath.empty()) return EC_IllegalCall;
 
-#ifdef HAVE_GUSI_H
-  GUSISetup(GUSIwithSIOUXSockets);
-  GUSISetup(GUSIwithInternetSockets);
-#endif
-
-#ifdef HAVE_WINSOCK_H
-  WSAData winSockData;
-  /* we need at least version 1.1 */
-  WORD winSockVersionNeeded = MAKEWORD( 1, 1 );
-  WSAStartup(winSockVersionNeeded, &winSockData);
-#endif
+  OFStandard::initializeNetwork();
 
   OFCondition result = EC_Normal;
   T_ASC_Network *net=NULL;
   T_ASC_Parameters *params=NULL;
-  DIC_NODENAME localHost;
   DIC_NODENAME peerHost;
   T_ASC_Association *assoc=NULL;
   const char *target = NULL;
@@ -3644,8 +3619,8 @@ OFCondition DVInterface::terminatePrintServer()
   if (tlsFolder==NULL) tlsFolder = ".";
 
   /* key file format */
-  int keyFileFormat = SSL_FILETYPE_PEM;
-  if (! getTLSPEMFormat()) keyFileFormat = SSL_FILETYPE_ASN1;
+  DcmKeyFileFormat keyFileFormat = DCF_Filetype_PEM;
+  if (! getTLSPEMFormat()) keyFileFormat = DCF_Filetype_ASN1;
 #endif
 
   Uint32 numberOfPrinters = getNumberOfTargets(DVPSE_printLocal);
@@ -3698,30 +3673,8 @@ OFCondition DVInterface::terminatePrintServer()
           const char *tlsCACertificateFolder = getTLSCACertificateFolder();
           if (tlsCACertificateFolder==NULL) tlsCACertificateFolder = ".";
 
-          /* ciphersuites */
-#if OPENSSL_VERSION_NUMBER >= 0x0090700fL
-          OFString tlsCiphersuites(TLS1_TXT_RSA_WITH_AES_128_SHA ":" SSL3_TXT_RSA_DES_192_CBC3_SHA);
-#else
-          OFString tlsCiphersuites(SSL3_TXT_RSA_DES_192_CBC3_SHA);
-#endif
-          Uint32 tlsNumberOfCiphersuites = getTargetNumberOfCipherSuites(target);
-          if (tlsNumberOfCiphersuites > 0)
-          {
-            tlsCiphersuites.clear();
-            OFString currentSuite;
-            const char *currentOpenSSL;
-            for (Uint32 ui=0; ui<tlsNumberOfCiphersuites; ui++)
-            {
-              getTargetCipherSuite(target, ui, currentSuite);
-              if (NULL != (currentOpenSSL = DcmTLSTransportLayer::findOpenSSLCipherSuiteName(currentSuite.c_str())))
-              {
-                if (tlsCiphersuites.length() > 0) tlsCiphersuites += ":";
-                tlsCiphersuites += currentOpenSSL;
-              }
-            }
-          }
 
-          DcmTLSTransportLayer *tLayer = new DcmTLSTransportLayer(DICOM_APPLICATION_REQUESTOR, tlsRandomSeedFile.c_str());
+          DcmTLSTransportLayer *tLayer = new DcmTLSTransportLayer(NET_REQUESTOR, tlsRandomSeedFile.c_str(), OFTrue);
           if (tLayer)
           {
             if (tlsCACertificateFolder) tLayer->addTrustedCertificateDir(tlsCACertificateFolder, keyFileFormat);
@@ -3729,8 +3682,26 @@ OFCondition DVInterface::terminatePrintServer()
             tLayer->setPrivateKeyPasswd(tlsPrivateKeyPassword); // never prompt on console
             tLayer->setPrivateKeyFile(tlsPrivateKeyFile.c_str(), keyFileFormat);
             tLayer->setCertificateFile(tlsCertificateFile.c_str(), keyFileFormat);
-            tLayer->setCipherSuites(tlsCiphersuites.c_str());
             tLayer->setCertificateVerification(DCV_ignoreCertificate);
+
+           // determine TLS profile
+             OFString profileName;
+            const char *profileNamePtr = getTargetTLSProfile(target);
+            if (profileNamePtr) profileName = profileNamePtr;
+            DcmTLSSecurityProfile tlsProfile = TSP_Profile_BCP195;  // default
+            if (profileName == "BCP195-ND") tlsProfile = TSP_Profile_BCP195_ND;
+            else if (profileName == "BCP195-EX") tlsProfile = TSP_Profile_BCP195_Extended;
+            else if (profileName == "BCP195") tlsProfile = TSP_Profile_BCP195;
+            else if (profileName == "AES") tlsProfile = TSP_Profile_AES;
+            else if (profileName == "BASIC") tlsProfile = TSP_Profile_Basic;
+            else if (profileName == "NULL") tlsProfile = TSP_Profile_IHE_ATNA_Unencrypted;
+
+            // set TLS profile
+            (void) tLayer->setTLSProfile(tlsProfile);
+
+            // activate cipher suites
+            (void) tLayer->activateCipherSuites();
+
             ASC_setTransportLayer(net, tLayer, 1);
           }
 #else
@@ -3740,9 +3711,8 @@ OFCondition DVInterface::terminatePrintServer()
         }
 
         ASC_setAPTitles(params, getNetworkAETitle(), getTargetAETitle(target), NULL);
-        gethostname(localHost, sizeof(localHost) - 1);
         sprintf(peerHost, "%s:%d", getTargetHostname(target), OFstatic_cast(int, getTargetPort(target)));
-        ASC_setPresentationAddresses(params, localHost, peerHost);
+        ASC_setPresentationAddresses(params, OFStandard::getHostName().c_str(), peerHost);
 
         if (cond.good()) cond = ASC_setTransportLayerType(params, useTLS);
 
@@ -3760,9 +3730,7 @@ OFCondition DVInterface::terminatePrintServer()
     } else result = EC_IllegalCall;
   }
 
-#ifdef HAVE_WINSOCK_H
-  WSACleanup();
-#endif
+  OFStandard::shutdownNetwork();
 
   return result;    // result of last process only
 }
@@ -3826,7 +3794,7 @@ OFCondition DVInterface::addToPrintHardcopyFromDB(const char *studyUID, const ch
 
 OFCondition DVInterface::spoolStoredPrintFromDB(const char *studyUID, const char *seriesUID, const char *instanceUID)
 {
-  if ((studyUID==NULL)||(seriesUID==NULL)||(instanceUID==NULL)||(configPath.length()==0)) return EC_IllegalCall;
+  if ((studyUID==NULL)||(seriesUID==NULL)||(instanceUID==NULL)||configPath.empty()) return EC_IllegalCall;
   OFString spoolFilename;
   OFString tempFilename;
   const char *prt = getCurrentPrinter();
@@ -3866,7 +3834,7 @@ OFCondition DVInterface::printSCUcreateBasicFilmSession(DVPSPrintMessageHandler&
   OFCondition result = EC_Normal;
   DcmDataset dset;
   DcmElement *delem = NULL;
-  char buf[20];
+  char buf[30];
 
   if ((EC_Normal==result)&&(printerMediumType.size() > 0))
   {
@@ -3945,7 +3913,7 @@ OFCondition DVInterface::startExternalApplication(const char *application, const
   else
   {
     // we are the child process
-    if (execl(application, application, filename, NULL) < 0)
+    if (execl(application, application, filename, OFreinterpret_cast(char *, 0)) < 0)
     {
       DCMPSTAT_ERROR("Unable to execute '" << application << "'");
     }
@@ -3958,15 +3926,15 @@ OFCondition DVInterface::startExternalApplication(const char *application, const
 
   // initialize startup info
   PROCESS_INFORMATION procinfo;
-  STARTUPINFO sinfo;
+  STARTUPINFOA sinfo;
   OFBitmanipTemplate<char>::zeroMem((char *)&sinfo, sizeof(sinfo));
   sinfo.cb = sizeof(sinfo);
   char commandline[4096];
   sprintf(commandline, "%s %s", application, filename);
 #ifdef DEBUG
-  if (CreateProcess(NULL, commandline, NULL, NULL, 0, 0, NULL, NULL, &sinfo, &procinfo))
+  if (CreateProcessA(NULL, commandline, NULL, NULL, 0, 0, NULL, NULL, &sinfo, &procinfo))
 #else
-  if (CreateProcess(NULL, commandline, NULL, NULL, 0, DETACHED_PROCESS, NULL, NULL, &sinfo, &procinfo))
+  if (CreateProcessA(NULL, commandline, NULL, NULL, 0, DETACHED_PROCESS, NULL, NULL, &sinfo, &procinfo))
 #endif
   {
     return EC_Normal;
@@ -4050,8 +4018,8 @@ extern "C" int DVInterfacePasswordCallback(char *buf, int size, int rwflag, void
 int DVInterfacePasswordCallback(char *buf, int size, int /* rwflag */, void *userdata)
 {
   if (userdata == NULL) return -1;
-  OFString *password = (OFString *)userdata;
-  int passwordSize = password->length();
+  OFString *password = OFstatic_cast(OFString *, userdata);
+  int passwordSize = OFstatic_cast(int, password->length());
   if (passwordSize > size) passwordSize = size;
   strncpy(buf, password->c_str(), passwordSize);
   return passwordSize;
@@ -4087,7 +4055,7 @@ OFBool DVInterface::verifyUserPassword(const char * /*userID*/, const char * /*p
 
     /* attempt to load the private key with the given password*/
     EVP_PKEY *pkey = NULL;
-    BIO *in = BIO_new(BIO_s_file_internal());
+    BIO *in = BIO_new(BIO_s_file());
     if (in)
     {
       if (BIO_read_filename(in, filename.c_str()) > 0)
@@ -4228,644 +4196,3 @@ void DVInterface::disableImageAndPState()
 {
   pSignatureHandler->disableImageAndPState();
 }
-
-
-/*
- *  CVS/RCS Log:
- *  $Log: dviface.cc,v $
- *  Revision 1.165  2010-10-14 13:14:31  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.164  2010-09-24 13:32:58  joergr
- *  Compared names of SOP Class UIDs with 2009 edition of the DICOM standard. The
- *  resulting name changes are mainly caused by the fact that the corresponding
- *  SOP Class is now retired.
- *
- *  Revision 1.163  2010-08-09 13:21:56  joergr
- *  Updated data dictionary to 2009 edition of the DICOM standard. From now on,
- *  the official "keyword" is used for the attribute name which results in a
- *  number of minor changes (e.g. "PatientsName" is now called "PatientName").
- *
- *  Revision 1.162  2009-12-15 14:50:49  uli
- *  Fixes some issues with --logfile and the config's log options.
- *
- *  Revision 1.161  2009-12-15 12:34:40  uli
- *  Re-added and fixed the command line option --logfile.
- *
- *  Revision 1.160  2009-12-11 16:16:59  joergr
- *  Removed old command line option --logfile when executing external processes.
- *  Slightly modified log messages and log levels.
- *
- *  Revision 1.159  2009-12-09 13:10:55  uli
- *  Fixed include path which was still using an old file name.
- *
- *  Revision 1.158  2009-11-24 14:12:58  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.157  2009-10-13 14:57:49  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.156  2008-04-30 12:38:43  meichel
- *  Fixed compile errors due to changes in attribute tag names
- *
- *  Revision 1.155  2006/08/15 16:57:01  meichel
- *  Updated the code in module dcmpstat to correctly compile when
- *    all standard C++ classes remain in namespace std.
- *
- *  Revision 1.154  2005/12/08 15:46:15  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.153  2005/11/23 16:10:34  meichel
- *  Added support for AES ciphersuites in TLS module. All TLS-enabled
- *    tools now support the "AES TLS Secure Transport Connection Profile".
- *
- *  Revision 1.152  2005/11/16 14:58:24  meichel
- *  Set association timeout in ASC_initializeNetwork to 30 seconds. This improves
- *    the responsiveness of the tools if the peer blocks during assoc negotiation.
- *
- *  Revision 1.151  2005/04/04 10:11:59  meichel
- *  Module dcmpstat now uses the dcmqrdb API instead of imagectn for maintaining
- *    the index database
- *
- *  Revision 1.150  2004/08/03 11:43:18  meichel
- *  Headers libc.h and unistd.h are now included via ofstdinc.h
- *
- *  Revision 1.149  2004/02/13 11:49:36  joergr
- *  Adapted code for changed tag names (e.g. PresentationLabel -> ContentLabel).
- *
- *  Revision 1.148  2004/02/04 15:57:48  joergr
- *  Removed acknowledgements with e-mail addresses from CVS log.
- *
- *  Revision 1.147  2003/12/19 14:57:04  meichel
- *  Completed support for terminating TLS-based print server processes
- *
- *  Revision 1.146  2003/12/19 13:49:57  meichel
- *  DVInterface::terminatePrintServer now also correctly terminates
- *    TLS-based print server processes.
- *
- *  Revision 1.145  2003/11/03 10:56:07  joergr
- *  Modified static type casts on DVPSLogMessageLevel variables to compile with
- *  gcc 2.95.
- *
- *  Revision 1.144  2003/09/18 11:52:18  joergr
- *  Call addPrivateDcmtkCodingScheme() when saving a structured report.
- *  Fixed wrong "assert" (pointer check) statement in saveStructuredReport().
- *  Adapted type casts to new-style typecast operators defined in ofcast.h.
- *
- *  Revision 1.143  2003/06/04 12:30:28  meichel
- *  Added various includes needed by MSVC5 with STL
- *
- *  Revision 1.142  2003/04/29 10:13:56  meichel
- *  Moved configuration file parser from module dcmpstat to ofstd and renamed
- *    class to OFConfigFile. Cleaned up implementation (no more friend declarations).
- *
- *  Revision 1.141  2002/12/20 14:51:58  wilkens
- *  Modified name clash resulting in a compiler error on Solaris 2.5.1 using
- *  compiler SC 2.0.1.
- *
- *  Revision 1.140  2002/11/29 13:16:32  meichel
- *  Introduced new command line option --timeout for controlling the
- *    connection request timeout.
- *
- *  Revision 1.139  2002/11/27 15:48:05  meichel
- *  Adapted module dcmpstat to use of new header file ofstdinc.h
- *
- *  Revision 1.138  2002/04/16 14:02:20  joergr
- *  Added configurable support for C++ ANSI standard includes (e.g. streams).
- *
- *  Revision 1.137  2002/04/11 13:13:43  joergr
- *  Replaced direct call of system routines by new standard date and time
- *  functions.
- *
- *  Revision 1.136  2002/01/08 10:37:34  joergr
- *  Corrected spelling of function dcmGenerateUniqueIdentifier().
- *  Changed prefix of UIDs created for series and studies (now using constants
- *  SITE_SERIES_UID_ROOT and SITE_STUDY_UID_ROOT which are supposed to be used
- *  in these cases).
- *
- *  Revision 1.135  2001/11/28 13:56:50  joergr
- *  Check return value of DcmItem::insert() statements where appropriate to
- *  avoid memory leaks when insert procedure fails.
- *
- *  Revision 1.134  2001/10/12 13:46:54  meichel
- *  Adapted dcmpstat to OFCondition based dcmnet module (supports strict mode).
- *
- *  Revision 1.133  2001/09/26 15:36:21  meichel
- *  Adapted dcmpstat to class OFCondition
- *
- *  Revision 1.132  2001/06/05 10:30:55  joergr
- *  Replaced some #ifdef _WIN32 statements by #ifdef HAVE_WINDOWS_H or #ifdef
- *  __CYGWIN__ respectively to reflect the fact that the latest Cygwin/gcc
- *  version does not define _WIN32 any more.
- *
- *  Revision 1.131  2001/05/10 16:44:53  joergr
- *  Added dcmsr as a standard library to dcmpstat (removed preprecessor #ifdef).
- *
- *  Revision 1.130  2001/05/07 16:04:47  joergr
- *  Adapted read SR method call to new parameter scheme (integer flag instead of
- *  boolean mode).
- *
- *  Revision 1.129  2001/02/23 14:57:55  joergr
- *  Update signature status when signing a structured report (not only when
- *  saving/storing the report).
- *
- *  Revision 1.128  2001/02/23 13:31:10  joergr
- *  Changed behaviour of method verifyAndSignStructuredReport() with 'finalize'.
- *  Now the entire document is always signed independently from the tree items
- *  marked.
- *
- *  Revision 1.127  2001/01/29 17:34:41  joergr
- *  Added method to verify and digitally sign structured reports.
- *
- *  Revision 1.126  2001/01/29 14:55:46  meichel
- *  Added new methods for creating signatures and checking the signature
- *    status in module dcmpstat.
- *
- *  Revision 1.125  2001/01/25 15:18:09  meichel
- *  Added initial support for verification of digital signatures
- *    in presentation states, images and structured reports to module dcmpstat.
- *
- *  Revision 1.124  2000/12/13 13:30:22  joergr
- *  Added explicit typecast to keep gcc 2.5.8 (NeXTSTEP) quiet.
- *
- *  Revision 1.123  2000/12/13 13:24:23  meichel
- *  Removed unused local variables
- *
- *  Revision 1.122  2000/12/11 18:18:24  joergr
- *  Removed name of (conditionally) unused method parameters to avoid compiler
- *  warnings (SunCC 2.0.1).
- *
- *  Revision 1.121  2000/12/08 12:46:35  joergr
- *  Separated module dcmsr from dcmpstat (use #define WITH_DCMSR to re-include
- *  it - probably also requires modification of makefiles).
- *
- *  Revision 1.120  2000/11/20 13:22:41  joergr
- *  Fixed minor bugs (string related memory problems when used with JNI).
- *
- *  Revision 1.119  2000/11/14 16:35:21  joergr
- *  Added creation of new UIDs and setting of content date/time when starting
- *  a new SR document from a "template".
- *
- *  Revision 1.118  2000/11/14 13:25:59  meichel
- *  Imagectn was always invoked in debug mode from class DVInterface
- *    on Unix platforms. Fixed.
- *
- *  Revision 1.117  2000/11/13 15:50:45  meichel
- *  Added dcmpstat support methods for creating image references
- *    in SR documents.
- *
- *  Revision 1.116  2000/11/13 11:52:43  meichel
- *  Added support for user logins and certificates.
- *
- *  Revision 1.115  2000/11/13 10:43:20  joergr
- *  Added support for Structured Reporting "templates".
- *
- *  Revision 1.114  2000/11/10 16:21:17  meichel
- *  Fixed problem with DICOMscope being unable to shut down receiver processes
- *    that are operating with TLS encryption by adding a special shutdown mode to
- *    dcmpsrcv.
- *
- *  Revision 1.113  2000/10/16 11:46:45  joergr
- *  Added support for new structured reports.
- *  Added method allowing to select an instance by instance UID and SOP class
- *  UID (without series and study UID). Required for composite references in
- *  DICOM SR.
- *
- *  Revision 1.112  2000/10/10 12:24:39  meichel
- *  Added extensions for IPC message communication
- *
- *  Revision 1.111  2000/08/31 15:56:14  joergr
- *  Switched off interpolation for scaling of print preview images (this caused
- *  problems with "scrambled" presentation LUTs in stored print objects).
- *  Correct bug: pixel aspect ratio and photometric interpretation were ignored
- *  for print preview.
- *
- *  Revision 1.110  2000/07/18 16:05:08  joergr
- *  Moved method convertODtoLum/PValue from class DVInterface to DVPSStoredPrint
- *  and corrected implementation.
- *  Changed behaviour of methods getMin/MaxDensityValue (return default value if
- *  attribute empty/absent).
- *
- *  Revision 1.109  2000/07/17 14:48:21  joergr
- *  Added support for presentation states referencing to hardcopy grayscale
- *  images.
- *
- *  Revision 1.108  2000/07/17 12:05:29  joergr
- *  Added methods to select objects from the database directly.
- *
- *  Revision 1.107  2000/07/14 17:10:10  joergr
- *  Added changeStatus parameter to all methods loading instances from the
- *  database.
- *
- *  Revision 1.106  2000/07/14 11:59:05  joergr
- *  Fixed bug in getNumberOfPStates(study,series,instance) method.
- *
- *  Revision 1.105  2000/07/12 12:52:00  joergr
- *  Fixed bug in loadPrintPreview routine.
- *
- *  Revision 1.104  2000/07/07 14:15:13  joergr
- *  Added support for LIN OD presentation LUT shape.
- *
- *  Revision 1.103  2000/07/06 09:41:17  joergr
- *  Added flag to loadPrintPreview() method allowing to choose how to interpret
- *  the presentation LUT (hardcopy or softcopy definition).
- *
- *  Revision 1.102  2000/07/05 12:32:21  joergr
- *  Added check whether external processes were actually started before
- *  terminating them.
- *  Fixed bug concerning the termination of external processes.
- *
- *  Revision 1.101  2000/07/05 09:00:02  joergr
- *  Added new log output messages.
- *
- *  Revision 1.100  2000/07/04 16:06:28  joergr
- *  Added support for overriding the presentation LUT settings made for the
- *  image boxes.
- *  Added new log output messages.
- *
- *  Revision 1.99  2000/06/22 10:46:47  joergr
- *  Fixed bug creating config file for Q/R server when Q/R server name was not
- *  specified in application config file.
- *
- *  Revision 1.98  2000/06/21 15:41:00  meichel
- *  Added DICOMscope support for calling the Presentation State Checker.
- *
- *  Revision 1.97  2000/06/09 10:14:55  joergr
- *  Added method to get number of presentation states referencing an image
- *  (specified by the three UIDs).
- *
- *  Revision 1.96  2000/06/08 17:38:01  joergr
- *  Corrected bug and added log messages in addImageReferenceToPState().
- *  Added method convertODtoLum().
- *
- *  Revision 1.95  2000/06/07 14:25:38  joergr
- *  Added configuration file entry "LogLevel" to filter log messages.
- *  Added flag to constructor specifying whether the general log file should be
- *  used (default: off).
- *  Added missing transformations (polarity, GSDF, presentation LUT, aspect
- *  ratio) to print preview rendering.
- *  Added log message output to I/O routines.
- *
- *  Revision 1.94  2000/06/07 13:17:26  meichel
- *  added binary and textual log facilities to Print SCP.
- *
- *  Revision 1.93  2000/06/06 09:43:25  joergr
- *  Moved configuration file entry "LogDirectory" from "[PRINT]" to new
- *  (more general) section "[APPLICATION]".
- *
- *  Revision 1.92  2000/06/05 16:24:27  joergr
- *  Implemented log message methods.
- *  Added method allowing to specify the current presentation state to be used
- *  for resetting the pstate.
- *
- *  Revision 1.91  2000/06/02 16:00:55  meichel
- *  Adapted all dcmpstat classes to use OFConsole for log and error output
- *
- *  Revision 1.90  2000/06/02 13:54:35  joergr
- *  Implemented start/terminatePrintServer methods.
- *
- *  Revision 1.89  2000/05/31 12:58:13  meichel
- *  Added initial Print SCP support
- *
- *  Revision 1.88  2000/05/31 07:56:20  joergr
- *  Added support for Stored Print attributes Originator and Destination
- *  application entity title.
- *
- *  Revision 1.87  2000/05/30 14:22:13  joergr
- *  Renamed some variables to avoid compiler warnings (reported by gcc 2.9x with
- *  additional compiler flags).
- *
- *  Revision 1.86  2000/05/30 13:56:23  joergr
- *  Renamed GrayscaleHardcopy to HardcopyGrayscale (which is the correct term
- *  according to the DICOM standard).
- *  Added support for multi-frame images and multiple references from a single
- *  presentation to a number of images.
- *  Removed methods which were already marked as "retired".
- *  Added support for the folowwing new features:
- *    - start/terminate query/retrieve server
- *    - load stored print objects
- *    - create print preview from hardcopy grayscale images
- *
- *  Revision 1.85  2000/03/08 16:29:00  meichel
- *  Updated copyright header.
- *
- *  Revision 1.84  2000/02/29 12:16:19  meichel
- *  Fixed bug in dcmpstat library that caused Monochrome1 images
- *    to be printed inverse if a Presentation LUT was applied.
- *
- *  Revision 1.83  1999/11/25 11:41:10  joergr
- *  Changed config file entry "HighEndSystem" to "HighResolutionGraphics".
- *
- *  Revision 1.82  1999/11/18 18:23:06  meichel
- *  Corrected various memory leaks. DcmFileFormat can be instantiated
- *    with a DcmDataset* as a parameter, but in this case the dataset is
- *    copied and not taken over by the DcmFileFormat. The pointer must
- *    be freed explicitly by the caller.
- *
- *  Revision 1.81  1999/11/03 13:05:33  meichel
- *  Added support for transmitting annotations in the film session label.
- *    Added support for dump tool launched from DVInterface.
- *
- *  Revision 1.80  1999/10/21 15:31:45  joergr
- *  Fixed bug in method addToPrintHardcopyFromDB().
- *
- *  Revision 1.79  1999/10/20 10:54:13  joergr
- *  Added support for a down-scaled preview image of the current DICOM image
- *  (e.g. useful for online-windowing or print preview).
- *  Corrected bug concerning the minimum and maximum print bitmap size (first
- *  presentation state created in the constructor of DVInterface never used the
- *  correct values from the config file).
- *
- *  Revision 1.78  1999/10/19 16:24:56  meichel
- *  Corrected handling of MONOCHROME1 images when used with P-LUTs
- *
- *  Revision 1.77  1999/10/19 14:48:21  meichel
- *  added support for the Basic Annotation Box SOP Class
- *    as well as access methods for Max Density and Min Density.
- *
- *  Revision 1.76  1999/10/13 14:11:59  meichel
- *  Added config file entries and access methods
- *    for user-defined VOI presets, log directory, verbatim logging
- *    and an explicit list of image display formats for each printer.
- *
- *  Revision 1.75  1999/10/13 06:44:17  joergr
- *  Fixed bug in get/setAmbientLightValue()
- *
- *  Revision 1.74  1999/10/07 17:21:56  meichel
- *  Reworked management of Presentation LUTs in order to create tighter
- *    coupling between Softcopy and Print.
- *
- *  Revision 1.73  1999/09/27 10:41:56  meichel
- *  Print interface now copies current printer name, avoids JNI problems.
- *
- *  Revision 1.72  1999/09/24 15:24:32  meichel
- *  Added support for CP 173 (Presentation LUT clarifications)
- *
- *  Revision 1.71  1999/09/23 17:37:15  meichel
- *  Added support for Basic Film Session options to dcmpstat print code.
- *
- *  Revision 1.70  1999/09/17 14:33:50  meichel
- *  Completed print spool functionality including Supplement 22 support
- *
- *  Revision 1.69  1999/09/15 17:43:31  meichel
- *  Implemented print job dispatcher code for dcmpstat, adapted dcmprtsv
- *    and dcmpsprt applications.
- *
- *  Revision 1.68  1999/09/13 15:19:13  meichel
- *  Added implementations for a number of further print API methods.
- *
- *  Revision 1.67  1999/09/10 12:46:53  meichel
- *  Added implementations for a number of print API methods.
- *
- *  Revision 1.66  1999/09/10 09:36:28  joergr
- *  Added support for CIELAB display function. New methods to handle display
- *  functions. Old methods are marked as retired and should be removed asap.
- *
- *  Revision 1.64  1999/09/08 17:11:43  joergr
- *  Added support for new instance types in database (grayscale hardcopy and
- *  stored print).
- *
- *  Revision 1.63  1999/09/08 16:41:41  meichel
- *  Moved configuration file evaluation to separate class.
- *
- *  Revision 1.62  1999/09/01 16:15:06  meichel
- *  Added support for requested image size to print routines
- *
- *  Revision 1.61  1999/08/31 16:54:46  meichel
- *  Added new sample application that allows to create simple print jobs.
- *
- *  Revision 1.60  1999/08/31 14:02:08  meichel
- *  Added print related config file methods
- *
- *  Revision 1.59  1999/08/27 15:57:48  meichel
- *  Added methods for saving hardcopy images and stored print objects
- *    either in file or in the local database.
- *
- *  Revision 1.58  1999/07/22 16:39:54  meichel
- *  Adapted dcmpstat data structures and API to supplement 33 letter ballot text.
- *
- *  Revision 1.57  1999/07/14 12:03:43  meichel
- *  Updated data dictionary for supplement 29, 39, 33_lb, CP packet 4 and 5.
- *    Corrected dcmtk applications for changes in attribute name constants.
- *
- *  Revision 1.56  1999/05/05 14:26:21  joergr
- *  Modified parameter of CreateProcess call to avoid creation of new command
- *  line window under Windows.
- *  Added optional parameter to method loadPState (from database) to change
- *  instance reviewed flag for pstate and image.
- *
- *  Revision 1.55  1999/05/04 16:05:49  joergr
- *  Added releaseDatabase to savePState to avoid deadlocks.
- *  Change status of variable imageInDatabase in savePState to avoid unnecessary
- *  saving of (probabaly large) image files.
- *
- *  Revision 1.54  1999/05/04 10:53:08  meichel
- *  Added test for struct utimbuf declaration, absent on some platforms
- *
- *  Revision 1.53  1999/05/03 14:15:58  joergr
- *  Enhanced check in savePState() method whether image file is already stored
- *  in database.
- *
- *  Revision 1.52  1999/05/03 11:01:36  joergr
- *  Minor code purifications to keep Sun CC 2.0.1 quiet.
- *
- *  Revision 1.51  1999/04/29 15:26:14  joergr
- *  Added PresentationLabel to index file.
- *
- *  Revision 1.50  1999/04/28 17:00:17  joergr
- *  Removed additional declaration of local variable (hides first declaration)
- *  to avoid compiler warnings reported by gcc 2.7.2.1 (Linux).
- *
- *  Revision 1.49  1999/04/27 11:25:31  joergr
- *  Added new entry to index file: Presentation Description.
- *  Enhanced savePState() method: now image file is also added to index file
- *  and stored in image directory (if not already there).
- *
- *  Revision 1.48  1999/03/22 09:52:40  meichel
- *  Reworked data dictionary based on the 1998 DICOM edition and the latest
- *    supplement versions. Corrected dcmtk applications for minor changes
- *    in attribute name constants.
- *
- *  Revision 1.47  1999/03/03 13:29:33  joergr
- *  Added methods to get and set ambient light value (re: Barten transformation).
- *  Moved method 'isBartenTransformPossible()' from presentation state class to
- *  interface class.
- *
- *  Revision 1.46  1999/03/02 13:38:17  joergr
- *  Corrected typo (E_Normal instead of EC_Normal).
- *
- *  Revision 1.45  1999/03/02 13:02:20  joergr
- *  Added parameter to selectPState() specifying whether to change the review
- *  status of the loaded presentation state.
- *
- *  Revision 1.44  1999/02/27 16:59:20  joergr
- *  Changed implementation of deleteImageFile (imagectn method doesn't function
- *  under Window NT).
- *  Removed bug in createPStateCache (cache was reported invalid on second call).
- *  Modified method selectPState (image file is now implicitly loaded if
- *  necessary).
- *
- *  Revision 1.43  1999/02/25 18:44:08  joergr
- *  Renamed methods enable/disablePState().
- *  Performed some modifications in the implementation of enable/disablePState
- *  to avoid dmalloc warnings (not yet finished).
- *
- *  Revision 1.42  1999/02/24 20:23:05  joergr
- *  Added methods to get a list of presentation states referencing the
- *  currently selected image.
- *  Added support for exchanging current presentation state (load from file)
- *  without deleting the current image.
- *  Report an error when loading a presentation state and the referenced image
- *  file is absent.
- *  Removed bug concerning newInstancesReceived (Windows NT behaves different to
- *  Unix when closing/unlocking a file).
- *
- *  Revision 1.41  1999/02/23 11:45:24  joergr
- *  Added check whether new instances have been received before resetting
- *  database reference time (affects delete and instance reviewed methods).
- *
- *  Revision 1.40  1999/02/22 14:21:59  joergr
- *  Added deletion of image files (depending on directory where the file is
- *  stored).
- *  Reset reference time for file modification checking after the index file
- *  has been changed internally (delete and change status methods).
- *  Removed debug messages when creating and clearing index cache.
- *
- *  Revision 1.39  1999/02/19 19:15:21  joergr
- *  Corrected bug in disablePresentationState().
- *
- *  Revision 1.38  1999/02/19 19:03:04  joergr
- *  Added methods to disable and (re-)enable PresentationStates.
- *  Added (private) helper methods to reduce redundant lines of code.
- *  Removed bug concerning method newInstancesReceived (databaseFilename was
- *  never set).
- *  Implemented main part of delete methods (image files are not yet deleted).
- *  Removed implicit application of a shared lock to the database file when
- *  unlock an exclusive lock.
- *
- *  Revision 1.37  1999/02/19 09:48:27  joergr
- *  Added method getFilename() to get filename of currently selected instance.
- *  Modified implementation of instanceReviewed.
- *
- *  Revision 1.36  1999/02/18 18:48:01  joergr
- *  Re-implemented methods to access index file (delete methods are still
- *  missing).
- *  Removed parameter 'deletefile' from delete methods. This parameter is
- *  not necessary because the decision whether a images file is deleted only
- *  depends on the directory where the file is stored (see comments).
- *
- *  Revision 1.35  1999/02/18 11:07:28  meichel
- *  Added new parameter explicitVR to interface methods savePState,
- *    saveDICOMImage.  Allows to choose between explicit VR and implicit VR
- *    little endian format.  Added new method saveCurrentImage that allows to
- *    save the current image to file.
- *
- *  Revision 1.34  1999/02/17 12:46:10  vorwerk
- *  bug fixed in strippidxarray.
- *
- *  Revision 1.33  1999/02/17 10:05:33  meichel
- *  Moved creation of Display Function object from DVPresentationState to
- *    DVInterface to avoid unnecessary re-reads.
- *
- *  Revision 1.32  1999/02/16 16:36:08  meichel
- *  Added method newInstancesReceived() to DVInterface class.
- *
- *  Revision 1.31  1999/02/12 10:04:13  vorwerk
- *  added cache , changed delete methods.
- *
- *  Revision 1.30  1999/02/10 16:01:40  meichel
- *  Fixed memory leak in dviface.cc - Config file contents were never deleted.
- *
- *  Revision 1.29  1999/02/09 15:58:10  meichel
- *  Implemented methods that save images and presentation states in the DB.
- *
- *  Revision 1.28  1999/02/08 10:52:35  meichel
- *  Updated documentation of dviface.h in Doc++ style.
- *    Removed dummy parameter from constructor.
- *
- *  Revision 1.27  1999/02/05 17:45:37  meichel
- *  Added config file entry for monitor characteristics file.  Monitor charac-
- *    teristics are passed to dcmimage if present to activate Barten transform.
- *
- *  Revision 1.26  1999/02/05 12:45:12  vorwerk
- *  actualised version: comments see previous version.
- *
- *  Revision 1.24  1999/01/29 16:01:02  meichel
- *  Reworked index file handle acquisition and locking code.
- *
- *  Revision 1.23  1999/01/29 09:51:28  vorwerk
- *  locking bug removed.
- *
- *  Revision 1.22  1999/01/28 15:27:23  vorwerk
- *  Exclusive and shared locking mechanism in all browser-methods added.
- *
- *  Revision 1.21  1999/01/27 15:31:28  vorwerk
- *  record deletion bug removed. Errorhandling for indexfiles with length zero added.
- *
- *  Revision 1.20  1999/01/27 14:59:26  meichel
- *  Implemented DICOM network receive application "dcmpsrcv" which receives
- *    images and presentation states and stores them in the local database.
- *
- *  Revision 1.19  1999/01/25 18:18:22  meichel
- *  Defined private SOP class UID for network receiver
- *    shutdown function. Cleanup up some code.
- *
- *  Revision 1.18  1999/01/25 16:48:37  vorwerk
- *  Bug in getaninstance removed. getNumberOfSeries and getNumberOfInstances results
- *  are correct now. getStudyStatus bug removed. Error handling routines added.
- *
- *  Revision 1.17  1999/01/25 13:05:57  meichel
- *  Implemented DVInterface::startReceiver()
- *    and several config file related methods.
- *
- *  Revision 1.16  1999/01/20 19:25:30  meichel
- *  Implemented sendIOD method which creates a separate process for trans-
- *    mitting images from the local database to a remote communication peer.
- *
- *  Revision 1.15  1999/01/19 15:13:41  vorwerk
- *  Additional methods for attributes in the indexfile added.
- *  Method getFilename implemented.
- *
- *  Revision 1.14  1999/01/18 17:30:48  meichel
- *  minor syntax purifications to keep VC++ happy
- *
- *  Revision 1.13  1999/01/18 16:15:17  vorwerk
- *  Bug in isPresentationstateSeries() corrected.
- *
- *  Revision 1.12  1999/01/15 17:27:17  meichel
- *  added DVInterface method resetPresentationState() which allows to reset a
- *    presentation state to the initial state (after loading).
- *
- *  Revision 1.11  1999/01/14 17:50:27  meichel
- *  added new method saveDICOMImage() to class DVInterface.
- *    Allows to store a bitmap as a DICOM image.
- *
- *  Revision 1.10  1999/01/14 16:19:46  vorwerk
- *  getNumberOfSeries bug corrected. Error handling in deletion and reviewed methods added.
- *
- *  Revision 1.8  1999/01/11 10:10:18  vorwerk
- *  error handling for getNumberofStudies and selectStudy implemented.
- *
- *  Revision 1.7  1999/01/07 16:40:04  vorwerk
- *  getSeriesDescription implemented
- *
- *  Revision 1.5  1999/01/04 13:28:11  vorwerk
- *  line inserted
- *
- *  Revision 1.4  1999/01/04 13:10:30  vorwerk
- *  getSeriesPerformingPhysicainsName() changed in getSeriesPerformingPhysiciansName()
- *
- *  Revision 1.3  1998/12/22 17:57:13  meichel
- *  Implemented Presentation State interface for overlays,
- *    VOI LUTs, VOI windows, curves. Added test program that
- *    allows to add curve data to DICOM images.
- *
- *  Revision 1.2  1998/12/22 15:52:45  vorwerk
- *  - browser methods implemented
- *  - methods added for index.dat
- *
- *  Revision 1.1  1998/11/27 14:50:38  meichel
- *  Initial Release.
- *
- *
- */

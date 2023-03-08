@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2011, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -19,22 +19,15 @@
  *    class DcmExtendedNegotiationItem
  *    class DcmExtendedNegotiationMap
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:22 $
- *  CVS/RCS Revision: $Revision: 1.4 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCCFENMP_H
 #define DCCFENMP_H
 
 #include "dcmtk/config/osconfig.h"
-#include "dcmtk/ofstd/oflist.h"   /* for class OFList<> */
-#include "dcmtk/ofstd/ofcond.h"   /* for class OFCondition */
-#include "dcmtk/dcmnet/dcmsmap.h"  /* for class DcmSimpleMap<> */
+#include "dcmtk/ofstd/oflist.h"    /* for class OFList<> */
+#include "dcmtk/ofstd/ofcond.h"    /* for class OFCondition */
+#include "dcmtk/ofstd/ofmap.h"     /* for class OFMap */
 #include "dcmtk/dcmnet/dccfuidh.h" /* for class DcmUIDHandler */
 
 class DcmPresentationContextMap;
@@ -42,7 +35,7 @@ class DcmPresentationContextMap;
 /** this helper class is a extended negotiation list entry.
  *  Not intended for use by the end user.
  */
-class DcmExtendedNegotiationItem
+class DCMTK_DCMNET_EXPORT DcmExtendedNegotiationItem
 {
 public:
   /** constructor. Raw data is copied into this object.
@@ -55,11 +48,18 @@ public:
     const unsigned char *data,
     Uint32 length);
 
-  /// copy constructor
+  /** copy constructor
+   * @param arg the item to copy
+   */
   DcmExtendedNegotiationItem(const DcmExtendedNegotiationItem& arg);
  
   /// destructor
   ~DcmExtendedNegotiationItem();
+
+  /** assignment operator
+  * @param arg the item to assign
+  */
+  DcmExtendedNegotiationItem& operator=(const DcmExtendedNegotiationItem& arg);
 
   /** checks if the given argument matches the abstract syntax UID
    *  maintained by this object
@@ -111,9 +111,6 @@ public:
 
 private:
 
-  /// private undefined copy assignment operator
-  DcmExtendedNegotiationItem& operator=(const DcmExtendedNegotiationItem& arg);
-
   /// pointer to raw data block
   unsigned char *raw_;
 
@@ -133,7 +130,7 @@ typedef OFList<DcmExtendedNegotiationItem> DcmExtendedNegotiationList;
 /** this helper class maintains a map of extended negotiation lists.
  *  Not intended for use by the end user.
  */
-class DcmExtendedNegotiationMap
+class DCMTK_DCMNET_EXPORT DcmExtendedNegotiationMap
 {
 public:
   /// constructor
@@ -141,6 +138,20 @@ public:
 
   /// destructor
   ~DcmExtendedNegotiationMap();
+
+  /** Copy constructor, performs deep copy
+   * @param arg the map to copy
+   */
+  DcmExtendedNegotiationMap(const DcmExtendedNegotiationMap& arg);
+
+  /** Copy assignment operator, performs deep copy
+   * @param arg the map to assign
+   */
+  DcmExtendedNegotiationMap& operator=(const DcmExtendedNegotiationMap& arg);
+
+  /** Resets DcmExtendedNegotiationMap and frees any allocated memory
+   */
+  void clear();
 
   /** add new entry to list within map.
    *  If key is new, new list is created. Otherwise value
@@ -183,37 +194,11 @@ public:
   const DcmExtendedNegotiationList *getExtendedNegotiationList(const char *key) const;
 
 private:
-  /// private undefined copy constructor
-  DcmExtendedNegotiationMap(const DcmExtendedNegotiationMap& arg);
-
-  /// private undefined copy assignment operator
-  DcmExtendedNegotiationMap& operator=(const DcmExtendedNegotiationMap& arg);
 
   /// map of extended negotiation lists
-  DcmSimpleMap<DcmExtendedNegotiationList *> map_;
+  OFMap<OFString, DcmExtendedNegotiationList *> map_;
 
 };
 
 
 #endif
-
-/*
- * CVS/RCS Log
- * $Log: dccfenmp.h,v $
- * Revision 1.4  2010-10-14 13:17:22  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.3  2005/12/08 16:02:10  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.2  2003/06/18 08:16:16  meichel
- * Added comparison operators to keep MSVC5 compiler happy
- *
- * Revision 1.1  2003/06/10 14:27:33  meichel
- * Initial release of class DcmAssociationConfiguration and support
- *   classes. This class maintains a list of association negotiation
- *   profiles that can be addressed by symbolic keys. The profiles may
- *   be read from a configuration file.
- *
- *
- */

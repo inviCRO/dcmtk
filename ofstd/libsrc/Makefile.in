@@ -16,7 +16,10 @@ LOCALINCLUDES =
 LOCALDEFS =
 
 objs = oflist.o ofstring.o ofcmdln.o ofconapp.o offname.o ofconsol.o ofthread.o \
-	ofcond.o ofstd.o ofcrc32.o ofdate.o oftime.o ofdatime.o ofconfig.o
+	ofcond.o ofstd.o ofcrc32.o ofdate.o oftime.o ofdatime.o oftimer.o \
+	ofconfig.o ofchrenc.o oftempf.o ofxml.o ofuuid.o offile.o offilsys.o \
+	ofmath.o oferror.o ofsockad.o ofrand.o ofstrutl.o
+
 library = libofstd.$(LIBEXT)
 
 

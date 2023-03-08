@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: common defines for configuration
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:50 $
- *  CVS/RCS Revision: $Revision: 1.2 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef OFDEFINE_H
@@ -31,32 +24,14 @@
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 #include "dcmtk/ofstd/ofcast.h"
+#include "dcmtk/ofstd/ofexport.h"
 
-#define INCLUDE_CSTRING
-#include "dcmtk/ofstd/ofstdinc.h"
+#include <cstring>
 
-
-#ifdef HAVE_BZERO
-#ifndef HAVE_PROTOTYPE_BZERO
-BEGIN_EXTERN_C
-extern void bzero(char* s, int len);
-END_EXTERN_C
-#endif
-#endif
-
-
-/* memzero */
-#ifdef HAVE_MEMSET
-#  undef memzero
-#  define memzero(d, n) memset((d), 0, (n))
-#  define HAVE_MEMZERO /* This makes using this easier */
+#ifdef ofstd_EXPORTS
+#define DCMTK_OFSTD_EXPORT DCMTK_DECL_EXPORT
 #else
-#  ifdef HAVE_BZERO
-#    undef memzero
-// some platforms, e.g. OSF1, require the first parameter to be char *.
-#    define memzero(d, n) bzero(OFstatic_cast(char *, d), (n))
-#    define HAVE_MEMZERO /* This makes using this easier */
-#  endif
+#define DCMTK_OFSTD_EXPORT DCMTK_DECL_IMPORT
 #endif
 
 /* memcpy */
@@ -98,32 +73,11 @@ END_EXTERN_C
 #  endif
 #endif
 
-#endif
+/* define OFconstexpr to 'constexpr' or '' if not supported */
+#ifdef HAVE_CXX11
+#define OFconstexpr constexpr
+#else // C++11
+#define OFconstexpr
+#endif // NOT C++11
 
-/*
- * CVS/RCS Log:
- * $Log: ofdefine.h,v $
- * Revision 1.2  2010-10-14 13:15:50  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.1  2009-09-28 12:19:02  joergr
- * Moved general purpose definition file from module dcmdata to ofstd, and
- * added new defines in order to make the usage easier.
- *
- * Revision 1.8  2005/12/08 16:28:05  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.7  2002/11/27 12:07:21  meichel
- * Adapted module dcmdata to use of new header file ofstdinc.h
- *
- * Revision 1.6  2001/06/01 15:48:35  meichel
- * Updated copyright header
- *
- * Revision 1.5  2000/03/08 16:26:12  meichel
- * Updated copyright header.
- *
- * Revision 1.4  1999/03/31 09:24:33  meichel
- * Updated copyright header in module dcmdata
- *
- *
- */
+#endif

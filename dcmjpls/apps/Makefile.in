@@ -44,34 +44,34 @@ dcmjplslib = -ldcmjpls
 
 libcharlsdir = $(dcmjplsdir)
 libcharlslibdir = -L$(dcmjplsdir)/libcharls
-libcharlslib = -lcharls
+libcharlslib = -ldcmtkcharls
 
 LOCALINCLUDES = $(dcmjplsinc) $(ofstdinc) $(ofloginc) $(dcmdatainc) $(dcmimageinc) $(dcmimgleinc)
 LIBDIRS = -L$(top_srcdir)/libsrc $(dcmjplslibdir) $(libcharlslibdir) $(dcmimagelibdir) \
 	$(dcmimglelibdir) $(dcmdatalibdir) $(ofloglibdir) $(ofstdlibdir)
 LOCALLIBS = $(dcmjplslib) $(dcmimagelib) $(dcmimglelib) $(dcmdatalib) $(ofloglib) $(ofstdlib) \
-	$(libcharlslib) $(ZLIBLIBS)
-PNMLIBS = $(TIFFLIBS) $(PNGLIBS) $(ZLIBLIBS)
+	$(libcharlslib) $(TIFFLIBS) $(PNGLIBS) $(ZLIBLIBS) $(CHARCONVLIBS) $(MATHLIBS)
 
 objs = dcmdjpls.o dcmcjpls.o dcml2pnm.o
 progs = dcmdjpls dcmcjpls dcml2pnm
 
+
 all: $(progs)
 
 dcmdjpls: dcmdjpls.o
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(LIBDIRS) -o $@ $@.o $(LOCALLIBS) $(MATHLIBS) $(LIBS)
+	$(CXX) $(CXXFLAGS) $(LIBDIRS) $(LDFLAGS) -o $@ $@.o $(LOCALLIBS) $(LIBS)
 
 dcmcjpls: dcmcjpls.o
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(LIBDIRS) -o $@ $@.o $(LOCALLIBS) $(MATHLIBS) $(LIBS)
+	$(CXX) $(CXXFLAGS) $(LIBDIRS) $(LDFLAGS) -o $@ $@.o $(LOCALLIBS) $(LIBS)
 
 dcml2pnm: dcml2pnm.o
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(LIBDIRS) -o $@ $@.o $(LOCALLIBS) $(PNMLIBS) $(MATHLIBS) $(LIBS)
+	$(CXX) $(CXXFLAGS) $(LIBDIRS) $(LDFLAGS) -o $@ $@.o $(LOCALLIBS) $(LIBS)
 
 
 install: all
 	$(configdir)/mkinstalldirs $(DESTDIR)$(bindir)
 	for prog in $(progs); do \
-		$(INSTALL_PROGRAM) $$prog$(BINEXT) $(DESTDIR)$(bindir) && strip $(DESTDIR)$(bindir)/$$prog$(BINEXT) ;\
+		$(INSTALL_PROGRAM) $$prog$(BINEXT) $(DESTDIR)$(bindir) && $(STRIP) $(DESTDIR)$(bindir)/$$prog$(BINEXT) ;\
 	done
 
 

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -19,13 +19,6 @@
  *    This file contains the interface to routines which provide
  *    DICOM object encoding/decoding, search and lookup facilities.
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-29 10:57:21 $
- *  CVS/RCS Revision: $Revision: 1.68 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -33,6 +26,7 @@
 
 #include "dcmtk/ofstd/ofstd.h"
 #include "dcmtk/ofstd/ofstream.h"
+#include "dcmtk/dcmdata/dcjson.h"
 #include "dcmtk/dcmdata/dcobject.h"
 #include "dcmtk/dcmdata/dcdeftag.h"
 #include "dcmtk/dcmdata/dcvr.h"
@@ -41,24 +35,25 @@
 #include "dcmtk/dcmdata/dcistrma.h"    /* for class DcmInputStream */
 #include "dcmtk/dcmdata/dcostrma.h"    /* for class DcmOutputStream */
 
-#define INCLUDE_CSTDIO
-#define INCLUDE_IOMANIP
-#include "dcmtk/ofstd/ofstdinc.h"
-
-
 // global flags
 
-OFGlobal<OFBool> dcmEnableAutomaticInputDataCorrection(OFTrue);
-OFGlobal<OFBool> dcmAcceptOddAttributeLength(OFTrue);
-OFGlobal<OFBool> dcmEnableCP246Support(OFTrue);
-OFGlobal<OFBool> dcmEnableOldSignatureFormat(OFFalse);
-OFGlobal<OFBool> dcmAutoDetectDatasetXfer(OFFalse);
-OFGlobal<OFBool> dcmAcceptUnexpectedImplicitEncoding(OFFalse);
-OFGlobal<OFBool> dcmReadImplPrivAttribMaxLengthAsSQ(OFFalse);
-OFGlobal<OFBool> dcmIgnoreParsingErrors(OFFalse);
+OFGlobal<OFBool>    dcmEnableAutomaticInputDataCorrection(OFTrue);
+OFGlobal<OFBool>    dcmAcceptOddAttributeLength(OFTrue);
+OFGlobal<OFBool>    dcmEnableCP246Support(OFTrue);
+OFGlobal<OFBool>    dcmEnableOldSignatureFormat(OFFalse);
+OFGlobal<OFBool>    dcmAutoDetectDatasetXfer(OFFalse);
+OFGlobal<OFBool>    dcmAcceptUnexpectedImplicitEncoding(OFFalse);
+OFGlobal<OFBool>    dcmPreferVRFromDataDictionary(OFFalse);
+OFGlobal<OFBool>    dcmPreferLengthFieldSizeFromDataDictionary(OFFalse);
+OFGlobal<OFBool>    dcmReadImplPrivAttribMaxLengthAsSQ(OFFalse);
+OFGlobal<OFBool>    dcmIgnoreParsingErrors(OFFalse);
 OFGlobal<DcmTagKey> dcmStopParsingAfterElement(DCM_UndefinedTagKey); // (0xffff,0xffff)
-OFGlobal<OFBool> dcmWriteOversizedSeqsAndItemsUndefined(OFTrue);
-OFGlobal<OFBool> dcmIgnoreFileMetaInformationGroupLength(OFFalse);
+OFGlobal<OFBool>    dcmWriteOversizedSeqsAndItemsUndefined(OFTrue);
+OFGlobal<OFBool>    dcmIgnoreFileMetaInformationGroupLength(OFFalse);
+OFGlobal<OFBool>    dcmReplaceWrongDelimitationItem(OFFalse);
+OFGlobal<OFBool>    dcmConvertUndefinedLengthOBOWtoSQ(OFFalse);
+OFGlobal<OFBool>    dcmConvertVOILUTSequenceOWtoSQ(OFFalse);
+OFGlobal<OFBool>    dcmUseExplLengthPixDataForEncTS(OFFalse);
 
 // ****** public methods **********************************
 
@@ -70,6 +65,7 @@ DcmObject::DcmObject(const DcmTag &tag,
 , Length(len)
 , fTransferState(ERW_init)
 , fTransferredBytes(0)
+, Parent(NULL)
 {
 }
 
@@ -80,6 +76,7 @@ DcmObject::DcmObject(const DcmObject &obj)
 , Length(obj.Length)
 , fTransferState(obj.fTransferState)
 , fTransferredBytes(obj.fTransferredBytes)
+, Parent(NULL)
 {
 }
 
@@ -98,6 +95,7 @@ DcmObject &DcmObject::operator=(const DcmObject &obj)
         errorFlag = obj.errorFlag;
         fTransferState = obj.fTransferState;
         fTransferredBytes = obj.fTransferredBytes;
+        Parent = NULL;
     }
     return *this;
 }
@@ -122,7 +120,93 @@ void DcmObject::transferEnd()
 // ********************************
 
 
-DcmObject * DcmObject::nextInContainer(const DcmObject * /*obj*/)
+OFBool DcmObject::isNested() const
+{
+    OFBool nested = OFFalse;
+    if (Parent != NULL)
+    {
+        // check for surrounding structure of item and sequence
+        DcmEVR parentIdent = Parent->ident();
+        if ((parentIdent == EVR_item) || (parentIdent == EVR_dirRecord))
+        {
+            if (Parent->getParent() != NULL)
+            {
+                parentIdent = Parent->getParent()->ident();
+                if ((parentIdent == EVR_SQ) || (parentIdent == EVR_pixelSQ))
+                    nested = OFTrue;
+            }
+        }
+    }
+    return nested;
+}
+
+
+DcmItem *DcmObject::getRootItem()
+{
+    DcmItem *rootItem = NULL;
+    DcmObject *parent = this;
+    // search for the root object
+    do {
+        // stop at top-level dataset/item
+        if ((parent->getParent() == NULL) || (parent->getParent()->ident() == EVR_fileFormat))
+            break;
+        parent = parent->getParent();
+    } while (parent != NULL);
+    if (parent != NULL)
+    {
+        // make sure that it is really a class derived from DcmItem
+        switch (parent->ident())
+        {
+            case EVR_metainfo:
+            case EVR_dataset:
+            case EVR_item:
+            case EVR_dirRecord:
+                rootItem = OFreinterpret_cast(DcmItem *, parent);
+                break;
+            default:
+                // Don't generate a message when there is no root
+                if (this != parent)
+                {
+                    DCMDATA_DEBUG("DcmObject::getRootItem() Root object has wrong class identifier: "
+                        << OFstatic_cast(int, parent->ident())
+                        << " (" << DcmVR(parent->ident()).getVRName() << ")");
+                }
+                break;
+        }
+    }
+    return rootItem;
+}
+
+
+DcmItem *DcmObject::getParentItem()
+{
+    DcmItem *parentItem = NULL;
+    if (Parent != NULL)
+    {
+        // make sure that it is really a class derived from DcmItem
+        switch (Parent->ident())
+        {
+            case EVR_metainfo:
+            case EVR_dataset:
+            case EVR_item:
+            case EVR_dirRecord:
+                parentItem = OFreinterpret_cast(DcmItem *, Parent);
+                break;
+            default:
+                DCMDATA_DEBUG("DcmObject::getParentItem() Parent object has wrong class identifier: "
+                    << OFstatic_cast(int, Parent->ident())
+                    << " (" << DcmVR(Parent->ident()).getVRName() << ")");
+                break;
+        }
+    }
+    return parentItem;
+}
+
+
+// ********************************
+
+
+DcmObject *DcmObject::nextInContainer(const DcmObject * /*obj*/)
 {
     return NULL;
 }
@@ -156,19 +240,30 @@ OFCondition DcmObject::writeXML(STD_NAMESPACE ostream& /*out*/,
     return EC_IllegalCall;
 }
 
+
+// ********************************
+
+
+OFCondition DcmObject::writeJson(STD_NAMESPACE ostream& /*out*/,
+                                 DcmJsonFormat& /*format*/)
+{
+    return EC_IllegalCall;
+}
+
+
 // ***********************************************************
 // ****** protected methods **********************************
 // ***********************************************************
 
 
-void DcmObject::printNestingLevel(STD_NAMESPACE ostream&out,
+void DcmObject::printNestingLevel(STD_NAMESPACE ostream &out,
                                   const size_t flags,
                                   const int level)
 {
     if (flags & DCMTypes::PF_showTreeStructure)
     {
         if (flags & DCMTypes::PF_useANSIEscapeCodes)
-            out << ANSI_ESCAPE_CODE_LINE;
+            out << DCMDATA_ANSI_ESCAPE_CODE_LINE;
         /* show vertical bar for the tree structure */
         for (int i = 1; i < level; i++)
             out << "| ";
@@ -196,40 +291,38 @@ void DcmObject::printInfoLineStart(STD_NAMESPACE ostream &out,
         if (flags & DCMTypes::PF_useANSIEscapeCodes)
         {
             if (*tag == DCM_Item)
-                out << ANSI_ESCAPE_CODE_ITEM;
+                out << DCMDATA_ANSI_ESCAPE_CODE_ITEM;
             else if ((vr.getEVR() == EVR_SQ) || (vr.getEVR() == EVR_pixelSQ))
             {
                 if (level == 1)
-                    out << ANSI_ESCAPE_CODE_SEQUENCE_1;
+                    out << DCMDATA_ANSI_ESCAPE_CODE_SEQUENCE_1;
                 else
-                    out << ANSI_ESCAPE_CODE_SEQUENCE;
+                    out << DCMDATA_ANSI_ESCAPE_CODE_SEQUENCE;
             } else if (level == 1)
-                out << ANSI_ESCAPE_CODE_NAME_1;
+                out << DCMDATA_ANSI_ESCAPE_CODE_NAME_1;
             else
-                out << ANSI_ESCAPE_CODE_NAME;
+                out << DCMDATA_ANSI_ESCAPE_CODE_NAME;
         }
         /* print tag name */
         out << tag->getTagName() << ' ';
         /* add padding spaces if required */
-        const signed long padLength = DCM_OptPrintAttributeNameLength - strlen(tag->getTagName()) - 2 * level;
+        const STD_NAMESPACE ptrdiff_t padLength = DCM_OptPrintAttributeNameLength - strlen(tag->getTagName()) - 2 * level;
         if (padLength > 0)
             out << OFString(OFstatic_cast(size_t, padLength), ' ');
     } else {
         if (flags & DCMTypes::PF_useANSIEscapeCodes)
-            out << ANSI_ESCAPE_CODE_TAG;
+            out << DCMDATA_ANSI_ESCAPE_CODE_TAG;
         /* print line start: tag */
-        out << STD_NAMESPACE hex << STD_NAMESPACE setfill('0') << "("
-            << STD_NAMESPACE setw(4) << tag->getGTag() << ","
-            << STD_NAMESPACE setw(4) << tag->getETag() << ") ";
+        out << *tag << " ";
         if (flags & DCMTypes::PF_useANSIEscapeCodes)
-            out << ANSI_ESCAPE_CODE_VR;
+            out << DCMDATA_ANSI_ESCAPE_CODE_VR;
         /* print line start: VR */
         out << vr.getVRName() << " "
             << STD_NAMESPACE dec << STD_NAMESPACE setfill(' ');
     }
     /* set color for subsequent element value */
     if (flags & DCMTypes::PF_useANSIEscapeCodes)
-        out << ANSI_ESCAPE_CODE_VALUE;
+        out << DCMDATA_ANSI_ESCAPE_CODE_VALUE;
 }
 
 
@@ -247,39 +340,38 @@ void DcmObject::printInfoLineEnd(STD_NAMESPACE ostream &out,
         vm = getVM();
         length = Length;
     }
-    if (flags & DCMTypes::PF_showTreeStructure)
+    if (!(flags & DCMTypes::PF_showTreeStructure))
     {
-        /* finish the current line */
-        out << OFendl;
-    } else {
         /* fill with spaces if necessary */
         if (printedLength < DCM_OptPrintValueLength)
             out << OFString(OFstatic_cast(size_t, DCM_OptPrintValueLength - printedLength), ' ');
         if (flags & DCMTypes::PF_useANSIEscapeCodes)
-            out << ANSI_ESCAPE_CODE_COMMENT;
+            out << DCMDATA_ANSI_ESCAPE_CODE_COMMENT;
         out << " # ";
         /* print line end: length */
         if (flags & DCMTypes::PF_useANSIEscapeCodes)
-            out << ANSI_ESCAPE_CODE_LENGTH;
+            out << DCMDATA_ANSI_ESCAPE_CODE_LENGTH;
         if (length == DCM_UndefinedLength)
             out << "u/l";   // means "undefined/length"
         else
             out << STD_NAMESPACE setw(3) << length;
         if (flags & DCMTypes::PF_useANSIEscapeCodes)
-            out << ANSI_ESCAPE_CODE_COMMENT;
+            out << DCMDATA_ANSI_ESCAPE_CODE_COMMENT;
         out << ",";
         /* print line end: VM */
         if (flags & DCMTypes::PF_useANSIEscapeCodes)
-            out << ANSI_ESCAPE_CODE_VM;
+            out << DCMDATA_ANSI_ESCAPE_CODE_VM;
         out << STD_NAMESPACE setw(2) << vm << " ";
         /* print line end: name */
         if (flags & DCMTypes::PF_useANSIEscapeCodes)
-            out << ANSI_ESCAPE_CODE_NAME;
-        out << tag->getTagName() << OFendl;
+            out << DCMDATA_ANSI_ESCAPE_CODE_NAME;
+        out << tag->getTagName();
     }
     /* reset all colors and styles */
     if (flags & DCMTypes::PF_useANSIEscapeCodes)
-        out << ANSI_ESCAPE_CODE_RESET;
+        out << DCMDATA_ANSI_ESCAPE_CODE_RESET;
+    /* finish the current line */
+    out << OFendl;
 }
 
 
@@ -293,12 +385,12 @@ void DcmObject::printInfoLine(STD_NAMESPACE ostream &out,
     /* print tag and VR */
     printInfoLineStart(out, flags, level, tag);
     /* check whether info text fits into the limit */
-    unsigned long printedLength = 0;
+    size_t printedLength = 0;
     /* check for valid info text */
     if (info != NULL)
     {
         if (isInfo && (flags & DCMTypes::PF_useANSIEscapeCodes))
-            out << ANSI_ESCAPE_CODE_INFO;
+            out << DCMDATA_ANSI_ESCAPE_CODE_INFO;
         /* check info text length */
         printedLength = strlen(info);
         if (printedLength > DCM_OptPrintValueLength)
@@ -318,7 +410,7 @@ void DcmObject::printInfoLine(STD_NAMESPACE ostream &out,
             out << info;
     }
     /* print length, VM and tag name */
-    printInfoLineEnd(out, flags, printedLength, tag);
+    printInfoLineEnd(out, flags, OFstatic_cast(unsigned long, printedLength), tag);
 }
 
 
@@ -367,13 +459,18 @@ Uint32 DcmObject::getTagAndLengthSize(const E_TransferSyntax oxfer) const
 
     if (oxferSyn.isExplicitVR())
     {
-       /* map "UN" to "OB" if generation of "UN" is disabled */
-       DcmVR outvr(getTag().getVR().getValidEVR());
+        /* map "UN" to "OB" if generation of "UN" is disabled */
+        DcmVR outvr(getTag().getVR().getValidEVR());
 
-       if (outvr.usesExtendedLengthEncoding())
-       {
-           return 12;
-       }
+        if (Length > 0xffff || outvr.usesExtendedLengthEncoding())
+        {
+            /* We are either using extended length encoding or the */
+            /* element length is > 64k (i.e. we have to convert to OB/UN). */
+            /* In any case we need a 12-byte header field. */
+            /* This is also the case for any object with undefined length, */
+            /* so we don't need to check that as a special case. */
+            return 12;
+        }
     }
     return 8;
 }
@@ -429,6 +526,18 @@ OFCondition DcmObject::writeTagAndLength(DcmOutputStream &outStream,
 
             /* getValidEVR() will convert datatype "UN" to "OB" if generation of "UN" is disabled */
             DcmEVR vr = myvr.getValidEVR();
+            myvr.setVR(vr);
+
+            if (Length > 0xffff && (!myvr.usesExtendedLengthEncoding()))
+            {
+                /* Attribute length is larger than 64 kBytes. */
+                /* We need to encode this as UN (or OB, if generation of UN is disabled */
+                if (dcmEnableUnknownVRGeneration.get()) vr = EVR_UN; else vr = EVR_OB;
+                myvr.setVR(vr);
+                /* output debug information to the logger */
+                DCMDATA_DEBUG("DcmObject::writeTagAndLength() Length of element " << Tag
+                    << " exceeds maximum of 16-bit length field, changing VR to " << myvr.getVRName());
+            }
 
             /* get name of data type */
             const char *vrname = myvr.getValidVRName();
@@ -466,7 +575,10 @@ OFCondition DcmObject::writeTagAndLength(DcmOutputStream &outStream,
                 outStream.write(&valueLength, 2);                                   // write length, 2 bytes wide
                 writtenBytes += 2;                                                  // remember that 2 bytes were written in total
             }
-            /* ... if not, report an error message and return an error code. */
+            /* ... if not, report an error message and return an error code.
+             * This should never happen because we automatically convert such
+             * elements to UN/OB, but just in case, we leave the check in here.
+             */
             else {
                 DcmTag tag(Tag);
                 DCMDATA_ERROR("DcmObject: Length of element " << tag.getTagName() << " " << tag
@@ -515,201 +627,13 @@ OFBool DcmObject::isAffectedBySpecificCharacterSet() const
 }
 
 
+OFCondition DcmObject::convertCharacterSet(DcmSpecificCharacterSet & /*converter*/)
+{
+    return EC_Normal;
+}
+
+
 OFBool DcmObject::isEmpty(const OFBool /*normalize*/)
 {
     return (Length == 0);
 }
-
-
-/*
- * CVS/RCS Log:
- * $Log: dcobject.cc,v $
- * Revision 1.68  2010-10-29 10:57:21  joergr
- * Added support for colored output to the print() method.
- *
- * Revision 1.67  2010-10-14 13:14:08  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.66  2010-02-25 13:50:15  joergr
- * Fixed issue with element values which exceed the maximum of a 16-bit length
- * field.
- *
- * Revision 1.65  2009-11-13 13:11:21  joergr
- * Fixed minor issues in log output.
- *
- * Revision 1.64  2009-11-04 09:58:10  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.63  2009-08-07 14:35:49  joergr
- * Enhanced isEmpty() method by checking whether the data element value consists
- * of non-significant characters only.
- *
- * Revision 1.62  2009-06-04 16:52:53  joergr
- * Added new parsing flag that allows for ignoring the value of File Meta
- * Information Group Length (0002,0000).
- *
- * Revision 1.61  2009-03-25 10:21:22  joergr
- * Added new method isEmpty() to DICOM object, item and sequence class.
- *
- * Revision 1.60  2009-03-05 14:08:05  onken
- * Fixed typo.
- *
- * Revision 1.59  2009-03-05 13:35:07  onken
- * Added checks for sequence and item lengths which prevents overflow in length
- * field, if total length of contained items (or sequences) exceeds 32-bit
- * length field. Also introduced new flag (default: enabled) for writing
- * in explicit length mode, which allows for automatically switching encoding
- * of only that very sequence/item to undefined length coding (thus permitting
- * to actually write the file).
- *
- * Revision 1.58  2009-02-11 13:16:36  onken
- * Added global parser flag permitting to stop parsing after a specific
- * element was parsed on dataset level (useful for removing garbage at
- * end of file).
- *
- * Revision 1.57  2009-02-04 17:58:53  joergr
- * Fixed various layout and formatting issues.
- *
- * Revision 1.56  2009-02-04 14:04:57  onken
- * Introduced global flag that, if enabled, tells the parser to continue
- * parsing if possible.
- *
- * Revision 1.55  2009-01-29 15:35:32  onken
- * Added global parsing option that allows for reading private attributes in
- * implicit encoding having a maximum length to be read as sequences instead
- * of relying on the dictionary.
- *
- * Revision 1.54  2009-01-06 16:27:03  joergr
- * Reworked print() output format for option PF_showTreeStructure.
- *
- * Revision 1.53  2009-01-05 15:31:42  joergr
- * Added global flag that allows for reading incorrectly encoded DICOM datasets
- * where particular data elements are encoded with a differing transfer syntax
- * (Implicit VR Little endian instead of Explicit VR encoding as declared).
- *
- * Revision 1.52  2007/11/23 15:42:36  meichel
- * Copy assignment operators in dcmdata now safe for self assignment
- *
- * Revision 1.51  2007/06/29 14:17:49  meichel
- * Code clean-up: Most member variables in module dcmdata are now private,
- *   not protected anymore.
- *
- * Revision 1.50  2007/02/19 15:04:16  meichel
- * Removed searchErrors() methods that are not used anywhere and added
- *   error() methods only in the DcmObject subclasses where really used.
- *
- * Revision 1.49  2006/12/15 14:14:44  joergr
- * Added new method that checks whether a DICOM object or element is affected
- * by SpecificCharacterSet (0008,0005).
- *
- * Revision 1.48  2006/12/13 13:59:49  joergr
- * Added new optional parameter "checkAllStrings" to method containsExtended
- * Characters().
- *
- * Revision 1.47  2006/08/15 15:49:54  meichel
- * Updated all code in module dcmdata to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.46  2006/05/11 08:50:19  joergr
- * Moved checkForNonASCIICharacters() from application to library.
- *
- * Revision 1.45  2005/12/08 15:41:19  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.44  2005/12/02 08:53:57  joergr
- * Changed macro NO_XFER_DETECTION_FOR_DATASETS into a global option that can
- * be enabled and disabled at runtime.
- *
- * Revision 1.43  2005/11/24 12:50:59  meichel
- * Fixed bug in code that prepares a byte stream that is fed into the MAC
- *   algorithm when creating or verifying a digital signature. The previous
- *   implementation was non-conformant when signatures included compressed
- *   (encapsulated) pixel data because the item length was included in the byte
- *   stream, while it should not. The global variable dcmEnableOldSignatureFormat
- *   and a corresponding command line option in dcmsign allow to re-enable the old
- *   implementation.
- *
- * Revision 1.42  2005/05/10 15:27:18  meichel
- * Added support for reading UN elements with undefined length according
- *   to CP 246. The global flag dcmEnableCP246Support allows to revert to the
- *   prior behaviour in which UN elements with undefined length were parsed
- *   like a normal explicit VR SQ element.
- *
- * Revision 1.41  2004/04/27 09:21:27  wilkens
- * Fixed a bug in dcelem.cc which occurs when one is serializing a dataset
- * (that contains an attribute whose length value is coded with 2 bytes) into
- * a given buffer. Although the number of available bytes in the buffer was
- * sufficient, the dataset->write(...) method would always return
- * EC_StreamNotifyClient to indicate that there are not sufficient bytes
- * available in the buffer. This code modification fixes the problem.
- *
- * Revision 1.40  2004/02/04 16:35:46  joergr
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- * Removed acknowledgements with e-mail addresses from CVS log.
- *
- * Revision 1.39  2002/12/06 13:15:12  joergr
- * Enhanced "print()" function by re-working the implementation and replacing
- * the boolean "showFullData" parameter by a more general integer flag.
- * Made source code formatting more consistent with other modules/files.
- *
- * Revision 1.38  2002/11/27 12:06:49  meichel
- * Adapted module dcmdata to use of new header file ofstdinc.h
- *
- * Revision 1.37  2002/08/27 16:55:52  meichel
- * Initial release of new DICOM I/O stream classes that add support for stream
- *   compression (deflated little endian explicit VR transfer syntax)
- *
- * Revision 1.36  2002/08/20 12:18:48  meichel
- * Changed parameter list of loadFile and saveFile methods in class
- *   DcmFileFormat. Removed loadFile and saveFile from class DcmObject.
- *
- * Revision 1.35  2002/07/08 14:44:40  meichel
- * Improved dcmdata behaviour when reading odd tag length. Depending on the
- *   global boolean flag dcmAcceptOddAttributeLength, the parser now either accepts
- *   odd length attributes or implements the old behaviour, i.e. assumes a real
- *   length larger by one.
- *
- * Revision 1.34  2002/04/25 10:17:19  joergr
- * Added support for XML output of DICOM objects.
- *
- * Revision 1.33  2002/04/16 13:43:19  joergr
- * Added configurable support for C++ ANSI standard includes (e.g. streams).
- *
- * Revision 1.32  2002/04/11 12:27:10  joergr
- * Added new methods for loading and saving DICOM files.
- *
- * Revision 1.31  2001/11/16 15:55:03  meichel
- * Adapted digital signature code to final text of supplement 41.
- *
- * Revision 1.30  2001/11/01 14:55:41  wilkens
- * Added lots of comments.
- *
- * Revision 1.29  2001/09/25 17:19:52  meichel
- * Adapted dcmdata to class OFCondition
- *
- * Revision 1.28  2001/06/01 15:49:06  meichel
- * Updated copyright header
- *
- * Revision 1.27  2000/04/14 16:10:09  meichel
- * Global flag dcmEnableAutomaticInputDataCorrection now derived from OFGlobal
- *   and, thus, safe for use in multi-thread applications.
- *
- * Revision 1.26  2000/03/08 16:26:38  meichel
- * Updated copyright header.
- *
- * Revision 1.25  2000/03/07 15:41:00  joergr
- * Added explicit type casts to make Sun CC 2.0.1 happy.
- *
- * Revision 1.24  2000/02/10 10:52:20  joergr
- * Added new feature to dcmdump (enhanced print method of dcmdata): write
- * pixel data/item value fields to raw files.
- *
- * Revision 1.23  2000/02/01 10:12:09  meichel
- * Avoiding to include <stdlib.h> as extern "C" on Borland C++ Builder 4,
- *   workaround for bug in compiler header files.
- *
- * Revision 1.22  1999/03/31 09:25:34  meichel
- * Updated copyright header in module dcmdata
- *
- *
- */

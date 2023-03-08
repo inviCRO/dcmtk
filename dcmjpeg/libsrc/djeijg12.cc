@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2010, OFFIS e.V.
+ *  Copyright (C) 1997-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -15,14 +15,7 @@
  *
  *  Author:  Marco Eichelberg, Norbert Olges
  *
- *  Purpose: compression routines of the IJG JPEG library configured for 12 bits/sample. 
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:21 $
- *  CVS/RCS Revision: $Revision: 1.16 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
+ *  Purpose: compression routines of the IJG JPEG library configured for 12 bits/sample.
  *
  */
 
@@ -30,11 +23,9 @@
 #include "dcmtk/dcmjpeg/djeijg12.h"
 #include "dcmtk/dcmjpeg/djcparam.h"
 #include "dcmtk/dcmdata/dcerror.h"
-
-#define INCLUDE_CSTDIO
-#define INCLUDE_CSETJMP
-#define INCLUDE_CSTRING
 #include "dcmtk/ofstd/ofstdinc.h"
+#include "dcmtk/ofstd/ofdiag.h"
+#include <csetjmp>
 
 // These two macros are re-defined in the IJG header files.
 // We undefine them here and hope that IJG's configure has
@@ -61,11 +52,12 @@ BEGIN_EXTERN_C
 #undef const
 #endif
 
-#ifdef USE_STD_CXX_INCLUDES
 // Solaris defines longjmp() in namespace std, other compilers don't...
-namespace std { }
-using namespace std;
-#endif
+using STD_NAMESPACE longjmp;
+using STD_NAMESPACE jmp_buf;
+
+#include DCMTK_DIAGNOSTIC_PUSH
+#include DCMTK_DIAGNOSTIC_IGNORE_VISUAL_STUDIO_DECLSPEC_PADDING_WARNING
 
 // private error handler struct
 struct DJEIJG12ErrorStruct
@@ -80,12 +72,25 @@ struct DJEIJG12ErrorStruct
   DJCompressIJG12Bit *instance;
 };
 
+#include DCMTK_DIAGNOSTIC_POP
+
 // callback forward declarations
 void DJEIJG12ErrorExit(j_common_ptr);
 void DJEIJG12EmitMessage(j_common_ptr cinfo, int msg_level);
 void DJEIJG12initDestination(j_compress_ptr cinfo);
 ijg_boolean DJEIJG12emptyOutputBuffer(j_compress_ptr cinfo);
 void DJEIJG12termDestination(j_compress_ptr cinfo);
+
+// helper methods to fix old-style casts warnings
+static void OFjpeg_create_compress(j_compress_ptr cinfo)
+{
+  jpeg_create_compress(cinfo);
+}
+
+static void OF_ERREXIT1(j_compress_ptr cinfo, int code, int p1)
+{
+  ERREXIT1(cinfo, code, p1);
+}
 
 END_EXTERN_C
 
@@ -94,14 +99,14 @@ END_EXTERN_C
 
 void DJEIJG12ErrorExit(j_common_ptr cinfo)
 {
-  DJEIJG12ErrorStruct *myerr = (DJEIJG12ErrorStruct *)cinfo->err;
+  DJEIJG12ErrorStruct *myerr = OFreinterpret_cast(DJEIJG12ErrorStruct*, cinfo->err);
   longjmp(myerr->setjmp_buffer, 1);
 }
 
 // message handler for warning messages and the like
 void DJEIJG12EmitMessage(j_common_ptr cinfo, int msg_level)
 {
-  DJEIJG12ErrorStruct *myerr = (DJEIJG12ErrorStruct *)cinfo->err;
+  DJEIJG12ErrorStruct *myerr = OFreinterpret_cast(DJEIJG12ErrorStruct*, cinfo->err);
   myerr->instance->emitMessage(cinfo, msg_level);
 }
 
@@ -109,19 +114,19 @@ void DJEIJG12EmitMessage(j_common_ptr cinfo, int msg_level)
 
 void DJEIJG12initDestination(j_compress_ptr cinfo)
 {
-  DJCompressIJG12Bit *encoder = (DJCompressIJG12Bit *)cinfo->client_data;
+  DJCompressIJG12Bit *encoder = OFreinterpret_cast(DJCompressIJG12Bit*, cinfo->client_data);
   encoder->initDestination(cinfo);
 }
 
 ijg_boolean DJEIJG12emptyOutputBuffer(j_compress_ptr cinfo)
 {
-  DJCompressIJG12Bit *encoder = (DJCompressIJG12Bit *)cinfo->client_data;
+  DJCompressIJG12Bit *encoder = OFreinterpret_cast(DJCompressIJG12Bit*, cinfo->client_data);
   return encoder->emptyOutputBuffer(cinfo);
 }
 
 void DJEIJG12termDestination(j_compress_ptr cinfo)
 {
-  DJCompressIJG12Bit *encoder = (DJCompressIJG12Bit *)cinfo->client_data;
+  DJCompressIJG12Bit *encoder = OFreinterpret_cast(DJCompressIJG12Bit*, cinfo->client_data);
   encoder->termDestination(cinfo);
 }
 
@@ -139,7 +144,10 @@ static void jpeg_simple_spectral_selection(j_compress_ptr cinfo)
   int nscans = 0;
 
   /* Safety check to ensure start_compress not called yet. */
-  if (cinfo->global_state != CSTATE_START) ERREXIT1(cinfo, JERR_BAD_STATE, cinfo->global_state);
+  if (cinfo->global_state != CSTATE_START)
+  {
+    OF_ERREXIT1(cinfo, JERR_BAD_STATE, cinfo->global_state);
+  }
 
   if (ncomps == 3 && cinfo->jpeg_color_space == JCS_YCbCr) nscans = 7;
   else nscans = 1 + 2 * ncomps;	/* 1 DC scan; 2 AC scans per component */
@@ -154,9 +162,9 @@ static void jpeg_simple_spectral_selection(j_compress_ptr cinfo)
   if (cinfo->script_space == NULL || cinfo->script_space_size < nscans)
   {
     cinfo->script_space_size = nscans > 7 ? nscans : 7;
-    cinfo->script_space = (jpeg_scan_info *)
-      (*cinfo->mem->alloc_small) ((j_common_ptr) cinfo, 
-      JPOOL_PERMANENT, cinfo->script_space_size * sizeof(jpeg_scan_info));
+    cinfo->script_space = OFreinterpret_cast(jpeg_scan_info*,
+      (*cinfo->mem->alloc_small) (OFreinterpret_cast(j_common_ptr, cinfo),
+      JPOOL_PERMANENT, cinfo->script_space_size * sizeof(jpeg_scan_info)));
   }
   scanptr = cinfo->script_space;
   cinfo->scan_info = scanptr;
@@ -175,7 +183,7 @@ static void jpeg_simple_spectral_selection(j_compress_ptr cinfo)
     scanptr[0].Se = 0;
     scanptr[0].Ah = 0;
     scanptr[0].Al = 0;
-    
+
     // AC scans
     // First two Y AC coefficients
     scanptr[1].component_index[0] = 0;
@@ -184,7 +192,7 @@ static void jpeg_simple_spectral_selection(j_compress_ptr cinfo)
     scanptr[1].Se = 2;
     scanptr[1].Ah = 0;
     scanptr[1].Al = 0;
-    
+
     // Three more
     scanptr[2].component_index[0] = 0;
     scanptr[2].comps_in_scan = 1;
@@ -192,7 +200,7 @@ static void jpeg_simple_spectral_selection(j_compress_ptr cinfo)
     scanptr[2].Se = 5;
     scanptr[2].Ah = 0;
     scanptr[2].Al = 0;
-    
+
     // All AC coefficients for Cb
     scanptr[3].component_index[0] = 1;
     scanptr[3].comps_in_scan = 1;
@@ -200,7 +208,7 @@ static void jpeg_simple_spectral_selection(j_compress_ptr cinfo)
     scanptr[3].Se = 63;
     scanptr[3].Ah = 0;
     scanptr[3].Al = 0;
-    
+
     // All AC coefficients for Cr
     scanptr[4].component_index[0] = 2;
     scanptr[4].comps_in_scan = 1;
@@ -208,7 +216,7 @@ static void jpeg_simple_spectral_selection(j_compress_ptr cinfo)
     scanptr[4].Se = 63;
     scanptr[4].Ah = 0;
     scanptr[4].Al = 0;
-    
+
     // More Y coefficients
     scanptr[5].component_index[0] = 0;
     scanptr[5].comps_in_scan = 1;
@@ -216,7 +224,7 @@ static void jpeg_simple_spectral_selection(j_compress_ptr cinfo)
     scanptr[5].Se = 9;
     scanptr[5].Ah = 0;
     scanptr[5].Al = 0;
-    
+
     // Remaining Y coefficients
     scanptr[6].component_index[0] = 0;
     scanptr[6].comps_in_scan = 1;
@@ -229,7 +237,7 @@ static void jpeg_simple_spectral_selection(j_compress_ptr cinfo)
   {
     /* All-purpose script for other color spaces. */
     int j=0;
-    
+
     // Interleaved DC scan for all components
     for (j=0; j<ncomps; j++) scanptr[0].component_index[j] = j;
     scanptr[0].comps_in_scan = ncomps;
@@ -239,7 +247,7 @@ static void jpeg_simple_spectral_selection(j_compress_ptr cinfo)
     scanptr[0].Al = 0;
 
     // first AC scan for each component
-    for (j=0; j<ncomps; j++) 
+    for (j=0; j<ncomps; j++)
     {
       scanptr[j+1].component_index[0] = j;
       scanptr[j+1].comps_in_scan = 1;
@@ -250,7 +258,7 @@ static void jpeg_simple_spectral_selection(j_compress_ptr cinfo)
     }
 
     // second AC scan for each component
-    for (j=0; j<ncomps; j++) 
+    for (j=0; j<ncomps; j++)
     {
       scanptr[j+ncomps+1].component_index[0] = j;
       scanptr[j+ncomps+1].comps_in_scan = 1;
@@ -329,7 +337,10 @@ OFCondition DJCompressIJG12Bit::encode(
   return EC_IllegalCall;
 }
 
-OFCondition DJCompressIJG12Bit::encode( 
+#include DCMTK_DIAGNOSTIC_PUSH
+#include DCMTK_DIAGNOSTIC_IGNORE_VISUAL_STUDIO_OBJECT_DESTRUCTION_WARNING
+
+OFCondition DJCompressIJG12Bit::encode(
   Uint16 columns,
   Uint16 rows,
   EP_Interpretation colorSpace,
@@ -348,15 +359,15 @@ OFCondition DJCompressIJG12Bit::encode(
   if (setjmp(jerr.setjmp_buffer))
   {
     // the IJG error handler will cause the following code to be executed
-    char buffer[JMSG_LENGTH_MAX];    
-    (*cinfo.err->format_message)((jpeg_common_struct *)(&cinfo), buffer); /* Create the message */
+    char buffer[JMSG_LENGTH_MAX];
+    (*cinfo.err->format_message)(OFreinterpret_cast(jpeg_common_struct*, &cinfo), buffer); /* Create the message */
     jpeg_destroy_compress(&cinfo);
     return makeOFCondition(OFM_dcmjpeg, EJCode_IJG12_Compression, OF_error, buffer);
   }
-  jpeg_create_compress(&cinfo);
+  OFjpeg_create_compress(&cinfo);
 
   // initialize client_data
-  cinfo.client_data = (void *)this;
+  cinfo.client_data = this;
 
   // Specify destination manager
   jpeg_destination_mgr dest;
@@ -399,11 +410,11 @@ OFCondition DJCompressIJG12Bit::encode(
      jpeg_simple_lossless(&cinfo,psv,pt);
      break;
   }
-  
+
   cinfo.smoothing_factor = cparam->getSmoothingFactor();
 
   // initialize sampling factors
-  if (cinfo.jpeg_color_space == JCS_YCbCr)
+  if ((cinfo.jpeg_color_space == JCS_YCbCr) && (modeofOperation != EJM_lossless))
   {
     switch(cparam->getSampleFactors())
     {
@@ -423,7 +434,8 @@ OFCondition DJCompressIJG12Bit::encode(
   }
   else
   {
-    // JPEG color space is not YCbCr, disable subsampling.
+    // JPEG color space is not YCbCr, or we are using lossless compression.
+    // Disable subsampling.
     cinfo.comp_info[0].h_samp_factor = 1;
     cinfo.comp_info[0].v_samp_factor = 1;
   }
@@ -438,22 +450,22 @@ OFCondition DJCompressIJG12Bit::encode(
   JSAMPROW row_pointer[1];
   jpeg_start_compress(&cinfo,TRUE);
   int row_stride = columns * samplesPerPixel;
-  while (cinfo.next_scanline < cinfo.image_height) 
+  while (cinfo.next_scanline < cinfo.image_height)
   {
     // JSAMPLE is signed, typecast to avoid a warning
-    row_pointer[0] = (JSAMPLE *)(& image_buffer[cinfo.next_scanline * row_stride]);
+    row_pointer[0] = OFreinterpret_cast(JSAMPLE*, image_buffer + (cinfo.next_scanline * row_stride));
     jpeg_write_scanlines(&cinfo, row_pointer, 1);
   }
   jpeg_finish_compress(&cinfo);
   jpeg_destroy_compress(&cinfo);
 
-  length = bytesInLastBlock;
-  if (pixelDataList.size() > 1) length += (pixelDataList.size() - 1)*IJGE12_BLOCKSIZE;
-  if (length % 2) length++; // ensure even length    
+  length = OFstatic_cast(Uint32, bytesInLastBlock);
+  if (pixelDataList.size() > 1) length += OFstatic_cast(Uint32, (pixelDataList.size() - 1)*IJGE12_BLOCKSIZE);
+  OFBool length_is_odd = (length % 2) > 0;
+  if (length_is_odd) length++; // ensure even length
 
   to = new Uint8[length];
   if (to == NULL) return EC_MemoryExhausted;
-  if (length > 0) to[length-1] = 0;    
 
   size_t offset=0;
   OFListIterator(unsigned char *) first = pixelDataList.begin();
@@ -474,10 +486,13 @@ OFCondition DJCompressIJG12Bit::encode(
     }
     ++first;
   }
+  if (length_is_odd) DcmJpegHelper::fixPadding(to, length);
   cleanup();
 
   return EC_Normal;
 }
+
+#include DCMTK_DIAGNOSTIC_POP
 
 void DJCompressIJG12Bit::initDestination(jpeg_compress_struct *cinfo)
 {
@@ -488,12 +503,12 @@ void DJCompressIJG12Bit::initDestination(jpeg_compress_struct *cinfo)
   {
     pixelDataList.push_back(newBlock);
     cinfo->dest->next_output_byte = newBlock;
-    cinfo->dest->free_in_buffer = IJGE12_BLOCKSIZE;    
+    cinfo->dest->free_in_buffer = IJGE12_BLOCKSIZE;
   }
   else
   {
     cinfo->dest->next_output_byte = NULL;
-    cinfo->dest->free_in_buffer = 0;    
+    cinfo->dest->free_in_buffer = 0;
   }
 }
 
@@ -505,13 +520,13 @@ int DJCompressIJG12Bit::emptyOutputBuffer(jpeg_compress_struct *cinfo)
   {
     pixelDataList.push_back(newBlock);
     cinfo->dest->next_output_byte = newBlock;
-    cinfo->dest->free_in_buffer = IJGE12_BLOCKSIZE;    
+    cinfo->dest->free_in_buffer = IJGE12_BLOCKSIZE;
   }
   else
   {
     cinfo->dest->next_output_byte = NULL;
-    cinfo->dest->free_in_buffer = 0;    
-    ERREXIT1(cinfo, JERR_OUT_OF_MEMORY, 0xFF);
+    cinfo->dest->free_in_buffer = 0;
+    OF_ERREXIT1(cinfo, JERR_OUT_OF_MEMORY, 0xFF);
   }
   return TRUE;
 }
@@ -536,7 +551,7 @@ void DJCompressIJG12Bit::cleanup()
 
 void DJCompressIJG12Bit::emitMessage(void *arg, int msg_level) const
 {
-  jpeg_common_struct *cinfo = (jpeg_common_struct *)arg;
+  jpeg_common_struct *cinfo = OFreinterpret_cast(jpeg_common_struct*, arg);
 
   // This is how we map the message levels:
   // -1 - 0: Warning (could also be errors, but no way to find out)
@@ -558,73 +573,10 @@ void DJCompressIJG12Bit::emitMessage(void *arg, int msg_level) const
     break;
   }
 
-  if (cinfo && DCM_dcmjpegGetLogger().isEnabledFor(level))
+  if (cinfo && DCM_dcmjpegLogger.isEnabledFor(level))
   {
     char buffer[JMSG_LENGTH_MAX];
     (*cinfo->err->format_message)(cinfo, buffer); /* Create the message */
-    DCM_dcmjpegGetLogger().forcedLog(level, buffer, __FILE__, __LINE__);
+    DCM_dcmjpegLogger.forcedLog(level, buffer, __FILE__, __LINE__);
   }
 }
-
-
-/*
- * CVS/RCS Log
- * $Log: djeijg12.cc,v $
- * Revision 1.16  2010-10-14 13:14:21  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.15  2010-06-25 09:15:19  uli
- * Fixed issues with compiling with HAVE_STD_STRING.
- *
- * Revision 1.14  2010-03-01 09:08:48  uli
- * Removed some unnecessary include directives in the headers.
- *
- * Revision 1.13  2010-02-22 11:39:54  uli
- * Remove some unneeded includes.
- *
- * Revision 1.12  2009-11-18 16:17:54  uli
- * Use more than just the INFO log level.
- *
- * Revision 1.11  2009-10-07 12:44:34  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.10  2009-08-19 12:19:19  meichel
- * Unlike some other compilers, Sun Studio 11 on Solaris
- *   declares longjmp() in namespace std. Added code to handle this case.
- *
- * Revision 1.9  2006-08-16 16:30:21  meichel
- * Updated all code in module dcmjpeg to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.8  2005/12/08 15:43:39  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.7  2005/11/28 17:09:52  meichel
- * Fixed bug affecting JPEG compression with 12 or 16 bits/pixel,
- *   where Huffman table optimization is required but was not always enabled.
- *
- * Revision 1.6  2005/11/14 17:09:39  meichel
- * Changed some function return types from int to ijg_boolean, to avoid
- *   compilation errors if the ijg_boolean type is ever changed.
- *
- * Revision 1.5  2003/10/13 13:25:49  meichel
- * Added workaround for name clash of typedef "boolean" in the IJG header files
- *   and the standard headers for Borland C++.
- *
- * Revision 1.4  2002/11/27 15:40:00  meichel
- * Adapted module dcmjpeg to use of new header file ofstdinc.h
- *
- * Revision 1.3  2001/12/18 09:48:58  meichel
- * Modified configure test for "const" support of the C compiler
- *   in order to avoid a macro recursion error on Sun CC 2.0.1
- *
- * Revision 1.2  2001/11/19 15:13:31  meichel
- * Introduced verbose mode in module dcmjpeg. If enabled, warning
- *   messages from the IJG library are printed on ofConsole, otherwise
- *   the library remains quiet.
- *
- * Revision 1.1  2001/11/13 15:58:29  meichel
- * Initial release of module dcmjpeg
- *
- *
- */

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1996-2010, OFFIS e.V.
+ *  Copyright (C) 1996-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: DicomImage (Source)
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:18 $
- *  CVS/RCS Revision: $Revision: 1.46 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -39,10 +32,6 @@
 #include "dcmtk/dcmimgle/diutils.h"
 #include "dcmtk/ofstd/ofstd.h"
 
-#define INCLUDE_CSTRING
-#include "dcmtk/ofstd/ofstdinc.h"
-
-
 /*----------------*
  *  constructors  *
  *----------------*/
@@ -56,6 +45,7 @@ DiImage::DiImage(const DiDocument *docu,
     NumberOfFrames(0),
     TotalNumberOfFrames(0),
     RepresentativeFrame(0),
+    FrameTime(0),
     Rows(0),
     Columns(0),
     PixelWidth(1),
@@ -105,6 +95,17 @@ DiImage::DiImage(const DiDocument *docu,
             else
                 RepresentativeFrame = us - 1;
         }
+        double ds = 0.0;
+        if (Document->getValue(DCM_FrameTime, ds))
+        {
+            if (ds <= 0)
+            {
+                /* there are rare cases, where a frame time of 0 makes sense */
+                if ((ds < 0) || (NumberOfFrames > 1))
+                    DCMIMGLE_WARN("invalid value for 'FrameTime' (" << ds << ") ... ignoring");
+            } else
+                FrameTime = ds;
+        }
         FirstFrame = (docu->getFrameStart() < NumberOfFrames) ? docu->getFrameStart() : NumberOfFrames - 1;
         /* store total number of frames in the dataset */
         TotalNumberOfFrames = NumberOfFrames;
@@ -115,7 +116,14 @@ DiImage::DiImage(const DiDocument *docu,
         /* start from first processed frame (might still exceed number of loaded frames) */
         RepresentativeFrame -= FirstFrame;
         int ok = (Document->getValue(DCM_Rows, Rows) > 0);
-        ok &= (Document->getValue(DCM_Columns, Columns) > 0);
+        if (!ok)
+            DCMIMGLE_ERROR("mandatory attribute 'Rows' is missing");
+        if (Document->getValue(DCM_Columns, Columns) == 0)
+        {
+            ok = 0;
+            DCMIMGLE_ERROR("mandatory attribute 'Columns' is missing");
+        }
+        /* check whether to proceed */
         if (!ok || ((Rows > 0) && (Columns > 0)))
         {
             ok &= (Document->getValue(DCM_BitsAllocated, BitsAllocated) > 0);
@@ -125,19 +133,50 @@ DiImage::DiImage(const DiDocument *docu,
                 HighBit = BitsStored - 1;
                 DCMIMGLE_WARN("missing value for 'HighBit' ... assuming " << HighBit);
             }
-            ok &= (Document->getValue(DCM_PixelRepresentation, us) > 0);
             BitsPerSample = BitsStored;
-            hasSignedRepresentation = (us == 1);
-            if ((us != 0) && (us != 1))
-                DCMIMGLE_WARN("invalid value for 'PixelRepresentation' (" << us << ") ... assuming 'unsigned' (0)");
+            if (Document->getValue(DCM_PixelRepresentation, us) > 0)
+            {
+                hasSignedRepresentation = (us == 1);
+                if ((us != 0) && (us != 1))
+                    DCMIMGLE_WARN("invalid value for 'PixelRepresentation' (" << us << ") ... assuming 'unsigned' (0)");
+            } else {
+                ok = 0;
+                /* pixel representation is mandatory, the error status is set below */
+                DCMIMGLE_ERROR("mandatory attribute 'PixelRepresentation' is missing");
+            }
             if (!(Document->getFlags() & CIF_UsePresentationState))
             {
+                /* check whether pixels are non-square (start with pixel spacing attribute) */
                 hasPixelSpacing = (Document->getValue(DCM_PixelSpacing, PixelHeight, 0) > 0);
                 if (hasPixelSpacing)
                 {
                     if (Document->getValue(DCM_PixelSpacing, PixelWidth, 1) < 2)
                         DCMIMGLE_WARN("missing second value for 'PixelSpacing' ... assuming 'Width' = " << PixelWidth);
                 } else {
+                    /* then check for functional groups sequence */
+                    DcmSequenceOfItems *seq = NULL;
+                    if (docu->getSequence(DCM_SharedFunctionalGroupsSequence, seq))
+                    {
+                        DcmItem *item = seq->getItem(0);
+                        if ((item != NULL) && docu->getSequence(DCM_PixelMeasuresSequence, seq, item))
+                        {
+                            item = seq->getItem(0);
+                            if (item != NULL)
+                            {
+                                hasPixelSpacing = (docu->getValue(DCM_PixelSpacing, PixelHeight, 0, item) > 0);
+                                if (hasPixelSpacing)
+                                {
+                                    DCMIMGLE_DEBUG("found 'PixelSpacing' in 'SharedFunctionalGroupsSequence'");
+                                    if (docu->getValue(DCM_PixelSpacing, PixelWidth, 1, item) < 2)
+                                        DCMIMGLE_WARN("missing second value for 'PixelSpacing' ... assuming 'Width' = " << PixelWidth);
+                                }
+                            }
+                        }
+                    }
+                }
+                /* if there is no pixel spacing, check for various other attributes */
+                if (!hasPixelSpacing)
+                {
                     hasImagerPixelSpacing = (Document->getValue(DCM_ImagerPixelSpacing, PixelHeight, 0) > 0);
                     if (hasImagerPixelSpacing)
                     {
@@ -195,6 +234,7 @@ DiImage::DiImage(const DiDocument *docu,
     NumberOfFrames(0),
     TotalNumberOfFrames(0),
     RepresentativeFrame(0),
+    FrameTime(0),
     Rows(0),
     Columns(0),
     PixelWidth(1),
@@ -227,6 +267,7 @@ DiImage::DiImage(const DiImage *image,
     NumberOfFrames(fcount),
     TotalNumberOfFrames(image->TotalNumberOfFrames),
     RepresentativeFrame(image->RepresentativeFrame),
+    FrameTime(image->FrameTime),
     Rows(image->Rows),
     Columns(image->Columns),
     PixelWidth(image->PixelWidth),
@@ -262,6 +303,7 @@ DiImage::DiImage(const DiImage *image,
     NumberOfFrames(image->NumberOfFrames),
     TotalNumberOfFrames(image->TotalNumberOfFrames),
     RepresentativeFrame(image->RepresentativeFrame),
+    FrameTime(image->FrameTime),
     Rows(rows),
     Columns(columns),
     PixelWidth(1),
@@ -328,6 +370,7 @@ DiImage::DiImage(const DiImage *image,
     NumberOfFrames(image->NumberOfFrames),
     TotalNumberOfFrames(image->TotalNumberOfFrames),
     RepresentativeFrame(image->RepresentativeFrame),
+    FrameTime(image->FrameTime),
     Rows(((degree == 90) ||(degree == 270)) ? image->Columns : image->Rows),
     Columns(((degree == 90) ||(degree == 270)) ? image->Rows : image->Columns),
     PixelWidth(((degree == 90) ||(degree == 270)) ? image->PixelHeight : image->PixelWidth),
@@ -361,13 +404,14 @@ DiImage::DiImage(const DiImage *image,
     NumberOfFrames(1),
     TotalNumberOfFrames(image->TotalNumberOfFrames),
     RepresentativeFrame(0),
+    FrameTime(0),
     Rows(image->Rows),
     Columns(image->Columns),
     PixelWidth(image->PixelWidth),
     PixelHeight(image->PixelHeight),
-    BitsAllocated(alloc),
-    BitsStored(stored),
-    HighBit(stored - 1),
+    BitsAllocated(OFstatic_cast(const Uint16, alloc)),
+    BitsStored(OFstatic_cast(const Uint16, stored)),
+    HighBit(OFstatic_cast(const Uint16, (stored - 1))),
     BitsPerSample(image->BitsPerSample),
     SamplesPerPixel(image->SamplesPerPixel),
     Polarity(image->Polarity),
@@ -476,7 +520,7 @@ void DiImage::checkPixelExtension()
         else if (PixelWidth < 0)
         {
             DCMIMGLE_WARN("negative value for 'PixelWidth' (" << PixelWidth << ") ... assuming " << -PixelWidth);
-            PixelHeight = -PixelHeight;
+            PixelWidth = -PixelWidth;
         }
     }
 }
@@ -574,7 +618,7 @@ void DiImage::convertPixelData()
         else if (InputData->getData() == NULL)
         {
             ImageStatus = EIS_InvalidImage;
-            DCMIMGLE_ERROR("can't convert input pixel data, probably unsupported compression");
+            DCMIMGLE_ERROR("can't convert input pixel data");
         }
         else if (InputData->getPixelStart() >= InputData->getCount())
         {
@@ -586,7 +630,7 @@ void DiImage::convertPixelData()
     else
     {
         ImageStatus = EIS_NotSupportedValue;
-        DCMIMGLE_ERROR("'PixelData' has an other value representation than OB (with 'BitsAllocated' <= 16) or OW");
+        DCMIMGLE_ERROR("'PixelData' has a value representation other than OB (with 'BitsAllocated' <= 16) or OW");
     }
 }
 
@@ -663,7 +707,7 @@ void DiImage::updateImagePixelModuleAttributes(DcmItem &dataset)
     /* update PixelAspectRatio & Co. */
     char buffer[32];
     OFStandard::ftoa(buffer, 15, PixelHeight, OFStandard::ftoa_format_f);
-    strcat(buffer, "\\");
+    OFStandard::strlcat(buffer, "\\", 32);
     OFStandard::ftoa(strchr(buffer, 0), 15, PixelWidth, OFStandard::ftoa_format_f);
 
     if (hasPixelSpacing)
@@ -720,8 +764,8 @@ int DiImage::writeFrameToDataset(DcmItem &dataset,
             dataset.putAndInsertUint16(DCM_BitsAllocated, 16);
         else
             dataset.putAndInsertUint16(DCM_BitsAllocated, 32);
-        dataset.putAndInsertUint16(DCM_BitsStored, bitsStored);
-        dataset.putAndInsertUint16(DCM_HighBit, bitsStored - 1);
+        dataset.putAndInsertUint16(DCM_BitsStored, OFstatic_cast(const Uint16, bitsStored));
+        dataset.putAndInsertUint16(DCM_HighBit, OFstatic_cast(Uint16, bitsStored - 1));
         dataset.putAndInsertUint16(DCM_PixelRepresentation, 0);
         /* handle VOI transformations */
         if (dataset.tagExists(DCM_WindowCenter) ||
@@ -778,7 +822,7 @@ int DiImage::writeBMP(FILE *stream,
             infoHeader.biWidth = Columns;
             infoHeader.biHeight = Rows;
             infoHeader.biPlanes = 1;
-            infoHeader.biBitCount = bits;
+            infoHeader.biBitCount = OFstatic_cast(const Uint16, bits);
             infoHeader.biCompression = 0;
             infoHeader.biSizeImage = 0;
             infoHeader.biXPelsPerMeter = 0;
@@ -810,216 +854,35 @@ int DiImage::writeBMP(FILE *stream,
                     swapBytes(OFreinterpret_cast(Uint8 *, palette), 256 * 4 /*byteLength*/, 4 /*valWidth*/);
             }
             /* write bitmap file header: do not write the struct because of 32-bit alignment */
-            fwrite(&fileHeader.bfType, sizeof(fileHeader.bfType), 1, stream);
-            fwrite(&fileHeader.bfSize, sizeof(fileHeader.bfSize), 1, stream);
-            fwrite(&fileHeader.bfReserved1, sizeof(fileHeader.bfReserved1), 1, stream);
-            fwrite(&fileHeader.bfReserved2, sizeof(fileHeader.bfReserved2), 1, stream);
-            fwrite(&fileHeader.bfOffBits, sizeof(fileHeader.bfOffBits), 1, stream);
+            int ok = (fwrite(&fileHeader.bfType, sizeof(fileHeader.bfType), 1, stream) == 1);
+            ok &= (fwrite(&fileHeader.bfSize, sizeof(fileHeader.bfSize), 1, stream) == 1);
+            ok &= (fwrite(&fileHeader.bfReserved1, sizeof(fileHeader.bfReserved1), 1, stream) == 1);
+            ok &= (fwrite(&fileHeader.bfReserved2, sizeof(fileHeader.bfReserved2), 1, stream) == 1);
+            ok &= (fwrite(&fileHeader.bfOffBits, sizeof(fileHeader.bfOffBits), 1, stream) == 1);
             /* write bitmap info header: do not write the struct because of 32-bit alignment  */
-            fwrite(&infoHeader.biSize, sizeof(infoHeader.biSize), 1, stream);
-            fwrite(&infoHeader.biWidth, sizeof(infoHeader.biWidth), 1, stream);
-            fwrite(&infoHeader.biHeight, sizeof(infoHeader.biHeight), 1, stream);
-            fwrite(&infoHeader.biPlanes, sizeof(infoHeader.biPlanes), 1, stream);
-            fwrite(&infoHeader.biBitCount, sizeof(infoHeader.biBitCount), 1, stream);
-            fwrite(&infoHeader.biCompression, sizeof(infoHeader.biCompression), 1, stream);
-            fwrite(&infoHeader.biSizeImage, sizeof(infoHeader.biSizeImage), 1, stream);
-            fwrite(&infoHeader.biXPelsPerMeter, sizeof(infoHeader.biXPelsPerMeter), 1, stream);
-            fwrite(&infoHeader.biYPelsPerMeter, sizeof(infoHeader.biYPelsPerMeter), 1, stream);
-            fwrite(&infoHeader.biClrUsed, sizeof(infoHeader.biClrUsed), 1, stream);
-            fwrite(&infoHeader.biClrImportant, sizeof(infoHeader.biClrImportant), 1, stream);
+            ok &= (fwrite(&infoHeader.biSize, sizeof(infoHeader.biSize), 1, stream) == 1);
+            ok &= (fwrite(&infoHeader.biWidth, sizeof(infoHeader.biWidth), 1, stream) == 1);
+            ok &= (fwrite(&infoHeader.biHeight, sizeof(infoHeader.biHeight), 1, stream) == 1);
+            ok &= (fwrite(&infoHeader.biPlanes, sizeof(infoHeader.biPlanes), 1, stream) == 1);
+            ok &= (fwrite(&infoHeader.biBitCount, sizeof(infoHeader.biBitCount), 1, stream) == 1);
+            ok &= (fwrite(&infoHeader.biCompression, sizeof(infoHeader.biCompression), 1, stream) == 1);
+            ok &= (fwrite(&infoHeader.biSizeImage, sizeof(infoHeader.biSizeImage), 1, stream) == 1);
+            ok &= (fwrite(&infoHeader.biXPelsPerMeter, sizeof(infoHeader.biXPelsPerMeter), 1, stream) == 1);
+            ok &= (fwrite(&infoHeader.biYPelsPerMeter, sizeof(infoHeader.biYPelsPerMeter), 1, stream) == 1);
+            ok &= (fwrite(&infoHeader.biClrUsed, sizeof(infoHeader.biClrUsed), 1, stream) == 1);
+            ok &= (fwrite(&infoHeader.biClrImportant, sizeof(infoHeader.biClrImportant), 1, stream) == 1);
             /* write color palette (if applicable) */
             if (palette != NULL)
-                fwrite(palette, 4, 256, stream);
+                ok &= (fwrite(palette, 4, 256, stream) == 256);
             /* write pixel data */
-            fwrite(data, 1, OFstatic_cast(size_t, bytes), stream);
+            ok &= (fwrite(data, 1, OFstatic_cast(size_t, bytes), stream) == OFstatic_cast(size_t, bytes));
             /* delete color palette */
             delete[] palette;
-            result = 1;
+            if (ok)
+                result = 1;
         }
         /* delete pixel data */
         delete OFstatic_cast(char *, data);     // type cast necessary to avoid compiler warnings using gcc >2.95
     }
     return result;
 }
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: diimage.cc,v $
- * Revision 1.46  2010-10-14 13:14:18  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.45  2010-10-05 14:56:19  joergr
- * Also remove PixelPaddingRangeLimit element from the dataset (if required).
- *
- * Revision 1.44  2010-03-05 13:33:08  joergr
- * Fixed issue with processNextFrames() when called with non-default parameter.
- *
- * Revision 1.43  2009-11-25 16:39:17  joergr
- * Adapted code for new approach to access individual frames of a DICOM image.
- *
- * Revision 1.42  2009-10-28 14:26:02  joergr
- * Fixed minor issues in log output.
- *
- * Revision 1.41  2009-10-28 09:53:40  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.40  2009-04-03 11:46:22  joergr
- * Do not write PixelAspectRatio for square pixels (width == height).
- *
- * Revision 1.39  2009-04-03 10:29:08  joergr
- * Avoid setting the value of PixelSpacing and PixelAspectRatio twice.
- *
- * Revision 1.38  2009-02-12 12:05:28  joergr
- * Never update value of ImagerPixelSpacing when image is scaled, use
- * PixelSpacing instead.
- * Added support for NominalScannedPixelSpacing in order to determine the pixel
- * aspect ratio (used for the new SC image IODs).
- *
- * Revision 1.37  2007-10-23 16:53:04  joergr
- * Fixed bug in writeFrameToDataset() for images with BitsAllocated = 32.
- *
- * Revision 1.36  2006/08/15 16:30:11  meichel
- * Updated the code in module dcmimgle to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.35  2006/07/27 14:02:40  joergr
- * Fixed typo.
- *
- * Revision 1.34  2006/07/19 08:31:52  joergr
- * Fixed wrong warning when HightBit = 0 and BitsStored = 1.
- *
- * Revision 1.33  2006/07/10 10:54:26  joergr
- * Added support for 32-bit BMP images.
- *
- * Revision 1.32  2005/12/08 15:42:51  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.31  2005/12/01 09:52:07  joergr
- * Added heuristics for images where the value of HighBit is 0.
- *
- * Revision 1.30  2005/03/09 17:41:16  joergr
- * Added heuristics for images where the attribute HighBit is missing.
- * Fixed possibly uninitialized variable when determining the pixel height.
- *
- * Revision 1.29  2004/09/22 11:35:01  joergr
- * Introduced new member variable "TotalNumberOfFrames".
- *
- * Revision 1.28  2004/03/16 08:18:54  joergr
- * Added support for non-standard encoding of pixel data (OB with BitsAllocated
- * > 8 and <= 16).
- *
- * Revision 1.27  2004/02/06 11:09:21  joergr
- * Fixed inconsistency in re-calculation of PixelSpacing and ImagerPixelSpacing
- * when scaling images.
- *
- * Revision 1.26  2003/12/23 16:03:18  joergr
- * Replaced post-increment/decrement operators by pre-increment/decrement
- * operators where appropriate (e.g. 'i++' by '++i').
- *
- * Revision 1.25  2003/12/08 17:17:04  joergr
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- *
- * Revision 1.24  2002/12/13 09:28:22  joergr
- * Added explicit type cast to pointer initialization to avoid warning reported
- * by gcc 2.7.2.1.
- *
- * Revision 1.23  2002/12/04 10:41:23  meichel
- * Changed toolkit to use OFStandard::ftoa instead of sprintf for all
- *   double to string conversions that are supposed to be locale independent
- *
- * Revision 1.22  2002/11/26 14:48:12  joergr
- * Added Smallest/LargestImagePixelValue to the list of attributes to be
- * removed from a newly created dataset.
- *
- * Revision 1.21  2002/08/02 15:04:53  joergr
- * Enhanced writeFrameToDataset() routine (remove out-data DICOM attributes
- * from the dataset).
- * Re-compute Imager/Pixel Spacing and Pixel Aspect Ratio for scaled images.
- *
- * Revision 1.20  2002/06/26 16:11:12  joergr
- * Added support for polarity flag to color images.
- * Added new method to write a selected frame to a DICOM dataset (incl. required
- * attributes from the "Image Pixel Module").
- *
- * Revision 1.19  2001/11/29 16:59:53  joergr
- * Fixed bug in dcmimgle that caused incorrect decoding of some JPEG compressed
- * images (certain DICOM attributes, e.g. photometric interpretation, might
- * change during decompression process).
- *
- * Revision 1.18  2001/11/27 18:21:38  joergr
- * Added support for plugable output formats in class DicomImage. First
- * implementation is JPEG.
- *
- * Revision 1.17  2001/11/19 12:57:17  joergr
- * Adapted code to support new dcmjpeg module and JPEG compressed images.
- *
- * Revision 1.16  2001/11/13 18:01:41  joergr
- * Added type cast to delete a void pointer to keep gcc 2.95 compiler quiet.
- *
- * Revision 1.15  2001/11/09 16:29:04  joergr
- * Added support for Windows BMP file format.
- *
- * Revision 1.14  2001/09/28 13:14:22  joergr
- * Corrected wrong warning message regarding the optional RepresentativeFrame
- * Number.
- *
- * Revision 1.13  2001/06/01 15:49:55  meichel
- * Updated copyright header
- *
- * Revision 1.12  2000/05/25 10:35:02  joergr
- * Removed ununsed variable from parameter list (avoid compiler warnings).
- *
- * Revision 1.11  2000/05/03 09:47:23  joergr
- * Removed most informational and some warning messages from release built
- * (#ifndef DEBUG).
- *
- * Revision 1.10  2000/04/28 12:33:44  joergr
- * DebugLevel - global for the module - now derived from OFGlobal (MT-safe).
- *
- * Revision 1.9  2000/04/27 13:10:27  joergr
- * Dcmimgle library code now consistently uses ofConsole for error output.
- *
- * Revision 1.8  2000/03/08 16:24:28  meichel
- * Updated copyright header.
- *
- * Revision 1.7  2000/03/03 14:09:18  meichel
- * Implemented library support for redirecting error messages into memory
- *   instead of printing them to stdout/stderr for GUI applications.
- *
- * Revision 1.6  1999/10/06 13:45:55  joergr
- * Corrected creation of PrintBitmap pixel data: VOI windows should be applied
- * before clipping to avoid that the region outside the image (border) is also
- * windowed (this requires a new method in dcmimgle to create a DicomImage
- * with the grayscale transformations already applied).
- *
- * Revision 1.5  1999/09/17 13:15:20  joergr
- * Corrected typos and formatting.
- *
- * Revision 1.4  1999/07/23 14:21:31  joergr
- * Corrected bug in method 'detachPixelData' (data has never really been
- * removed from memory).
- *
- * Revision 1.2  1999/04/28 15:01:44  joergr
- * Introduced new scheme for the debug level variable: now each level can be
- * set separately (there is no "include" relationship).
- *
- * Revision 1.1  1998/11/27 16:01:43  joergr
- * Added copyright message.
- * Added methods and constructors for flipping and rotating, changed for
- * scaling and clipping.
- * Added method to directly create java AWT bitmaps.
- * Introduced global debug level for dcmimage module to control error output.
- * Renamed variable 'Status' to 'ImageStatus' because of possible conflicts
- * with X windows systems.
- * Added method to detach pixel data if it is no longer needed.
- *
- * Revision 1.7  1998/06/25 08:51:41  joergr
- * Removed some wrong newline characters.
- *
- * Revision 1.6  1998/05/11 14:52:29  joergr
- * Added CVS/RCS header to each file.
- *
- *
- */

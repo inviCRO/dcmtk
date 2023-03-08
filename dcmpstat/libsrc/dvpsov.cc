@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose:
  *    classes: DVPSOverlay
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:32 $
- *  CVS/RCS Revision: $Revision: 1.19 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -85,88 +78,88 @@ OFCondition DVPSOverlay::read(DcmItem &dset, Uint8 ovGroup, Uint8 asGroup)
   overlayData.setGTag(gtag);
   overlayDescription.setGTag(gtag);
   overlayLabel.setGTag(gtag);
-  READ_FROM_DATASET(DcmUnsignedShort, overlayRows)
-  READ_FROM_DATASET(DcmUnsignedShort, overlayColumns)
-  READ_FROM_DATASET(DcmCodeString, overlayType)
-  READ_FROM_DATASET(DcmSignedShort, overlayOrigin)
-  READ_FROM_DATASET(DcmUnsignedShort, overlayBitsAllocated)
-  READ_FROM_DATASET(DcmUnsignedShort, overlayBitPosition)
-  READ_FROM_DATASET(DcmOverlayData, overlayData)
-  READ_FROM_DATASET(DcmLongString, overlayDescription)
-  READ_FROM_DATASET(DcmLongString, overlayLabel)
+  READ_FROM_DATASET(DcmUnsignedShort, EVR_US, overlayRows)
+  READ_FROM_DATASET(DcmUnsignedShort, EVR_US, overlayColumns)
+  READ_FROM_DATASET(DcmCodeString, EVR_CS, overlayType)
+  READ_FROM_DATASET(DcmSignedShort, EVR_SS, overlayOrigin)
+  READ_FROM_DATASET(DcmUnsignedShort, EVR_US, overlayBitsAllocated)
+  READ_FROM_DATASET(DcmUnsignedShort, EVR_US, overlayBitPosition)
+  READ_FROM_DATASET(DcmOverlayData, EVR_OverlayData, overlayData)
+  READ_FROM_DATASET(DcmLongString, EVR_LO, overlayDescription)
+  READ_FROM_DATASET(DcmLongString, EVR_LO, overlayLabel)
 
   /* Now perform basic sanity checks and adjust use flags */
   if (overlayRows.getLength() == 0)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains an overlay with overlayRows absent or empty");
+    DCMPSTAT_WARN("presentation state contains an overlay with overlayRows absent or empty");
   }
   else if (overlayRows.getVM() != 1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains an overlay with overlayRows VM != 1");
+    DCMPSTAT_WARN("presentation state contains an overlay with overlayRows VM != 1");
   }
 
   if (overlayColumns.getLength() == 0)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains an overlay with overlayColumns absent or empty");
+    DCMPSTAT_WARN("presentation state contains an overlay with overlayColumns absent or empty");
   }
   else if (overlayColumns.getVM() != 1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains an overlay with overlayColumns VM != 1");
+    DCMPSTAT_WARN("presentation state contains an overlay with overlayColumns VM != 1");
   }
 
   if (overlayType.getLength() == 0)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains an overlay with overlayType absent or empty");
+    DCMPSTAT_WARN("presentation state contains an overlay with overlayType absent or empty");
   }
   else if (overlayType.getVM() != 1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains an overlay with overlayType VM != 1");
+    DCMPSTAT_WARN("presentation state contains an overlay with overlayType VM != 1");
   }
 
   if (overlayOrigin.getLength() == 0)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains an overlay with overlayOrigin absent or empty");
+    DCMPSTAT_WARN("presentation state contains an overlay with overlayOrigin absent or empty");
   }
   else if (overlayOrigin.getVM() != 2)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains an overlay with overlayOrigin VM != 2");
+    DCMPSTAT_WARN("presentation state contains an overlay with overlayOrigin VM != 2");
   }
 
   if (overlayBitsAllocated.getLength() == 0)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains an overlay with overlayBitsAllocated absent or empty");
+    DCMPSTAT_WARN("presentation state contains an overlay with overlayBitsAllocated absent or empty");
   }
   else if (overlayBitsAllocated.getVM() != 1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains an overlay with overlayBitsAllocated VM != 1");
+    DCMPSTAT_WARN("presentation state contains an overlay with overlayBitsAllocated VM != 1");
   }
 
   if (overlayBitPosition.getLength() == 0)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains an overlay with overlayBitPosition absent or empty");
+    DCMPSTAT_WARN("presentation state contains an overlay with overlayBitPosition absent or empty");
   }
   else if (overlayBitPosition.getVM() != 1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains an overlay with overlayBitPosition VM != 1");
+    DCMPSTAT_WARN("presentation state contains an overlay with overlayBitPosition VM != 1");
   }
 
   /* in a presentation state object, the overlay data must always be present in this group */
   if (overlayData.getLength() == 0)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains an overlay with overlayData absent or empty");
+    DCMPSTAT_WARN("presentation state contains an overlay with overlayData absent or empty");
   }
 
   return result;
@@ -258,75 +251,3 @@ OFCondition DVPSOverlay::getValues(
   if (result.good()) result = overlayRows.getUint16(sizeY,0);
   return result;
 }
-
-
-/*
- *  $Log: dvpsov.cc,v $
- *  Revision 1.19  2010-10-14 13:14:32  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.18  2009-11-24 14:12:58  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.17  2006-08-15 16:57:02  meichel
- *  Updated the code in module dcmpstat to correctly compile when
- *    all standard C++ classes remain in namespace std.
- *
- *  Revision 1.16  2005/12/08 15:46:36  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.15  2003/08/27 14:59:42  meichel
- *  Changed API of class DVPSOverlay to avoid dependency on module dcmimgle
- *
- *  Revision 1.14  2002/12/09 13:28:16  joergr
- *  Renamed parameter/local variable to avoid name clashes with global
- *  declaration left and/or right (used for as iostream manipulators).
- *
- *  Revision 1.13  2001/12/18 10:36:41  meichel
- *  Minor modifications to avoid warning on Sun CC 2.0.1
- *
- *  Revision 1.12  2001/09/26 15:36:28  meichel
- *  Adapted dcmpstat to class OFCondition
- *
- *  Revision 1.11  2001/06/01 15:50:34  meichel
- *  Updated copyright header
- *
- *  Revision 1.10  2000/06/02 16:01:03  meichel
- *  Adapted all dcmpstat classes to use OFConsole for log and error output
- *
- *  Revision 1.9  2000/05/31 13:02:37  meichel
- *  Moved dcmpstat macros and constants into a common header file
- *
- *  Revision 1.8  2000/03/08 16:29:07  meichel
- *  Updated copyright header.
- *
- *  Revision 1.7  2000/03/03 14:14:01  meichel
- *  Implemented library support for redirecting error messages into memory
- *    instead of printing them to stdout/stderr for GUI applications.
- *
- *  Revision 1.6  1999/05/03 11:01:37  joergr
- *  Minor code purifications to keep Sun CC 2.0.1 quiet.
- *
- *  Revision 1.5  1999/02/09 15:59:08  meichel
- *  Implemented bitmap shutter activation amd method for
- *    exchanging graphic layers.
- *
- *  Revision 1.4  1998/12/23 14:02:26  meichel
- *  Updated for changed interfaces in dcmimage overlays.
- *    Fixed bug affecting overlay origin delivered to dcmimage.
- *
- *  Revision 1.3  1998/12/22 17:57:17  meichel
- *  Implemented Presentation State interface for overlays,
- *    VOI LUTs, VOI windows, curves. Added test program that
- *    allows to add curve data to DICOM images.
- *
- *  Revision 1.2  1998/12/14 16:10:44  meichel
- *  Implemented Presentation State interface for graphic layers,
- *    text and graphic annotations, presentation LUTs.
- *
- *  Revision 1.1  1998/11/27 14:50:44  meichel
- *  Initial Release.
- *
- *
- */
-

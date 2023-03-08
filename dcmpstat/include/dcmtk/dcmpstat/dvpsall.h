@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2012, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose:
  *    classes: DVPSOverlayCurveActivationLayer
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:36 $
- *  CVS/RCS Revision: $Revision: 1.13 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DVPSALL_H
@@ -33,6 +26,7 @@
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 #include "dcmtk/dcmdata/dcitem.h"
 #include "dcmtk/dcmpstat/dvpstyp.h"     /* for enum types */
+#include "dcmtk/dcmpstat/dpdefine.h"
 
 class DVPSGraphicLayer_PList;
 class DVPSOverlay_PList;
@@ -46,7 +40,7 @@ class DVPSOverlayCurveActivationLayer;
  *  contained in a Presentation State object.
  */
 
-class DVPSOverlayCurveActivationLayer_PList
+class DCMTK_DCMPSTAT_EXPORT DVPSOverlayCurveActivationLayer_PList
 {
 public:
   /// default constructor
@@ -179,51 +173,3 @@ private:
 };
 
 #endif
-
-/*
- *  $Log: dvpsall.h,v $
- *  Revision 1.13  2010-10-14 13:16:36  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.12  2010-10-07 14:31:35  joergr
- *  Removed leading underscore characters from preprocessor symbols (reserved).
- *
- *  Revision 1.11  2009-11-24 14:12:57  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.10  2009-09-30 10:42:38  uli
- *  Make dcmpstat's include headers self-sufficient by including all
- *  needed headers directly and stop using dctk.h
- *
- *  Revision 1.9  2005-12-08 16:03:35  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.8  2003/06/04 10:18:06  meichel
- *  Replaced private inheritance from template with aggregation
- *
- *  Revision 1.7  2001/09/26 15:36:08  meichel
- *  Adapted dcmpstat to class OFCondition
- *
- *  Revision 1.6  2001/06/01 15:50:12  meichel
- *  Updated copyright header
- *
- *  Revision 1.5  2000/06/02 16:00:43  meichel
- *  Adapted all dcmpstat classes to use OFConsole for log and error output
- *
- *  Revision 1.4  2000/03/08 16:28:49  meichel
- *  Updated copyright header.
- *
- *  Revision 1.3  1998/12/22 17:57:04  meichel
- *  Implemented Presentation State interface for overlays,
- *    VOI LUTs, VOI windows, curves. Added test program that
- *    allows to add curve data to DICOM images.
- *
- *  Revision 1.2  1998/12/14 16:10:26  meichel
- *  Implemented Presentation State interface for graphic layers,
- *    text and graphic annotations, presentation LUTs.
- *
- *  Revision 1.1  1998/11/27 14:50:25  meichel
- *  Initial Release.
- *
- *
- */

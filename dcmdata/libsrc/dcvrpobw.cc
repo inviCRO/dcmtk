@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2010, OFFIS e.V.
+ *  Copyright (C) 1997-2020, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -20,18 +20,10 @@
  *  between OB and OW (e.g. Tag PixelData, OverlayData). This class shall
  *  not be used directly in applications. No identification exists.
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-20 16:44:17 $
- *  CVS/RCS Revision: $Revision: 1.23 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 #include "dcmtk/dcmdata/dcvrpobw.h"
-
 
 DcmPolymorphOBOW::DcmPolymorphOBOW(
     const DcmTag & tag,
@@ -40,7 +32,8 @@ DcmPolymorphOBOW::DcmPolymorphOBOW(
     changeVR(OFFalse),
     currentVR(EVR_OW)
 {
-    if (getTag().getEVR() == EVR_ox || getTag().getEVR() == EVR_lt) setTagVR(EVR_OW);
+    if (getTag().getEVR() == EVR_ox || getTag().getEVR() == EVR_px || getTag().getEVR() == EVR_lt)
+        setTagVR(EVR_OW);
 }
 
 DcmPolymorphOBOW::DcmPolymorphOBOW(const DcmPolymorphOBOW & oldObj)
@@ -63,6 +56,45 @@ DcmPolymorphOBOW &DcmPolymorphOBOW::operator=(const DcmPolymorphOBOW & obj)
     currentVR = obj.currentVR;
   }
   return *this;
+}
+
+int DcmPolymorphOBOW::compare(const DcmElement& rhs) const
+{
+    /* check tag and VR */
+    int result = DcmElement::compare(rhs);
+    if (result != 0)
+    {
+        return result;
+    }
+
+    /* cast away constness (dcmdata is not const correct...) */
+    DcmPolymorphOBOW* myThis = NULL;
+    DcmPolymorphOBOW* myRhs = NULL;
+    myThis = OFconst_cast(DcmPolymorphOBOW*, this);
+    myRhs =  OFstatic_cast(DcmPolymorphOBOW*, OFconst_cast(DcmElement*, &rhs));
+
+    /* compare length */
+    Uint32 myLength = myThis->getLength();
+    Uint32 rhsLength = myRhs->getLength();
+    if (myLength < rhsLength)
+        return -1;
+    else if (myLength > rhsLength)
+        return 1;
+      /* finally check whether values are the same */
+    else
+    {
+        // Get values, always compare in Little Endian byte order (only relevant for OW)
+        void* myValue = myThis->getValue(EBO_LittleEndian);
+        void* rhsValue = myRhs->getValue(EBO_LittleEndian);
+        result = memcmp(myValue, rhsValue, myLength);
+        if (result < 0)
+            return -1;
+        else if (result > 0)
+            return 1;
+        else
+            return 0;
+    }
+  /* we never get here */
 }
 
 OFCondition DcmPolymorphOBOW::copyFrom(const DcmObject& rhs)
@@ -133,7 +165,7 @@ DcmPolymorphOBOW::createUint8Array(
 {
     currentVR = EVR_OB;
     setTagVR(EVR_OB);
-    errorFlag = createEmptyValue(sizeof(Uint8) * Uint32(numBytes));
+    errorFlag = createEmptyValue(OFstatic_cast(Uint32, sizeof(Uint8) * OFstatic_cast(size_t, numBytes)));
     setByteOrder(gLocalByteOrder);
     if (EC_Normal == errorFlag)
         bytes = OFstatic_cast(Uint8 *, this->getValue());
@@ -148,9 +180,18 @@ DcmPolymorphOBOW::createUint16Array(
     const Uint32 numWords,
     Uint16 * & words)
 {
+    // Check whether input would lead to a buffer allocation of more than
+    // 4 GB for a value, which is not possible in DICOM. The biggest input
+    // parameter value permitted is 2147483647, since 2147483647*2 is still
+    // < 2^32-1 (4 GB).
+    if (numWords > 2147483647)
+    {
+        errorFlag = EC_TooManyBytesRequested;
+        return errorFlag;
+    }
     currentVR = EVR_OW;
     setTagVR(EVR_OW);
-    errorFlag = createEmptyValue(sizeof(Uint16) * Uint32(numWords));
+    errorFlag = createEmptyValue(OFstatic_cast(Uint32, sizeof(Uint16) * OFstatic_cast(size_t, numWords)));
     setByteOrder(gLocalByteOrder);
     if (EC_Normal == errorFlag)
         words = OFstatic_cast(Uint16 *, this->getValue());
@@ -171,7 +212,16 @@ DcmPolymorphOBOW::putUint8Array(
     {
         if (byteValue)
         {
-            errorFlag = putValue(byteValue, sizeof(Uint8)*Uint32(numBytes));
+            // Check if more than 4 GB is requested, which is the maximum
+            // length DICOM can handle. Take into account that the alignValue()
+            // call adds a byte if an odd length is provided, thus, 4294967295
+            // would not work.
+            if (numBytes > 4294967294UL)
+            {
+                errorFlag = EC_TooManyBytesRequested;
+                return errorFlag;
+            }
+            errorFlag = putValue(byteValue, OFstatic_cast(Uint32, sizeof(Uint8) * OFstatic_cast(size_t, numBytes)));
             if (errorFlag == EC_Normal)
             {
                 if (getTag().getEVR() == EVR_OW && getByteOrder() == EBO_BigEndian)
@@ -201,7 +251,16 @@ DcmPolymorphOBOW::putUint16Array(
     {
         if (wordValue)
         {
-            errorFlag = putValue(wordValue, sizeof(Uint16)*Uint32(numWords));
+            // Check whether input would lead to a buffer allocation of more than
+            // 4 GB for a value, which is not possible in DICOM. The biggest input
+            // parameter value permitted is 2147483647, since 2147483647*2 is still
+            // < 2^32-1 (4 GB).
+            if (numWords > 2147483647)
+            {
+                errorFlag = EC_TooManyBytesRequested;
+                return EC_TooManyBytesRequested;
+            }
+            errorFlag = putValue(wordValue, OFstatic_cast(Uint32, sizeof(Uint16) * OFstatic_cast(size_t, numWords)));
             if (errorFlag == EC_Normal &&
                 getTag().getEVR() == EVR_OB && getByteOrder() == EBO_BigEndian)
             {
@@ -258,16 +317,32 @@ OFCondition DcmPolymorphOBOW::write(
     DcmXfer oXferSyn(oxfer);
     if (getTransferState() == ERW_init)
     {
-        if (getTag().getEVR() == EVR_OB && oXferSyn.isImplicitVR() &&  getByteOrder() == EBO_BigEndian)
+        if (getTag().getEVR() == EVR_OB && oXferSyn.isImplicitVR())
         {
-            // VR is OB and it will be written as OW in LittleEndianImplicit.
-            setTagVR(EVR_OW);
-            if (currentVR == EVR_OB) setByteOrder(EBO_LittleEndian);
-            currentVR = EVR_OB;
-            changeVR = OFTrue;
+          // This element was read or created as OB, but we are writing in
+          // implicit VR transfer syntax (which always uses OW). Therefore,
+          // change the VR associated with the tag to OW.
+          setTagVR(EVR_OW);
+
+          // If the data is currently in OB representation in memory,
+          // adjust the VR to OW and update the current byte order.
+          // OB data is equivalent to OW data in little endian byte order.
+          if (currentVR == EVR_OB)
+          {
+            setByteOrder(EBO_LittleEndian);
+            currentVR = EVR_OW;
+          }
+
+          // remember that we have changed the VR associated with the tag
+          changeVR = OFTrue;
         }
+
         else if (getTag().getEVR() == EVR_OW && currentVR == EVR_OB)
         {
+            // the element was originally read/created as OW
+            // but is currently in OB format. Change back to OW.
+
+            // OB data is equivalent to OW data in little endian byte order.
             setByteOrder(EBO_LittleEndian);
             currentVR = EVR_OW;
         }
@@ -275,9 +350,8 @@ OFCondition DcmPolymorphOBOW::write(
     errorFlag = DcmOtherByteOtherWord::write(outStream, oxfer, enctype, wcache);
     if (getTransferState() == ERW_ready && changeVR)
     {
-        // VR must be OB again. No Swapping is needed since the written
-        // transfer syntax was LittleEndianImplicit and so no swapping
-        // took place.
+        // Change the VR associated with the tag
+        // (not the current VR!) back from OW to OB
         setTagVR(EVR_OB);
     }
     return errorFlag;
@@ -292,16 +366,32 @@ OFCondition DcmPolymorphOBOW::writeSignatureFormat(
     DcmXfer oXferSyn(oxfer);
     if (getTransferState() == ERW_init)
     {
-        if (getTag().getEVR() == EVR_OB && oXferSyn.isImplicitVR() &&  getByteOrder() == EBO_BigEndian)
+        if (getTag().getEVR() == EVR_OB && oXferSyn.isImplicitVR())
         {
-            // VR is OB and it will be written as OW in LittleEndianImplicit.
-            setTagVR(EVR_OW);
-            if (currentVR == EVR_OB) setByteOrder(EBO_LittleEndian);
-            currentVR = EVR_OB;
-            changeVR = OFTrue;
+          // This element was read or created as OB, but we are writing in
+          // implicit VR transfer syntax (which always uses OW). Therefore,
+          // change the VR associated with the tag to OW.
+          setTagVR(EVR_OW);
+
+          // If the data is currently in OB representation in memory,
+          // adjust the VR to OW and update the current byte order.
+          // OB data is equivalent to OW data in little endian byte order.
+          if (currentVR == EVR_OB)
+          {
+            setByteOrder(EBO_LittleEndian);
+            currentVR = EVR_OW;
+          }
+
+          // remember that we have changed the VR associated with the tag
+          changeVR = OFTrue;
         }
+
         else if (getTag().getEVR() == EVR_OW && currentVR == EVR_OB)
         {
+            // the element was originally read/created as OW
+            // but is currently in OB format. Change back to OW.
+
+            // OB data is equivalent to OW data in little endian byte order.
             setByteOrder(EBO_LittleEndian);
             currentVR = EVR_OW;
         }
@@ -309,102 +399,9 @@ OFCondition DcmPolymorphOBOW::writeSignatureFormat(
     errorFlag = DcmOtherByteOtherWord::writeSignatureFormat(outStream, oxfer, enctype, wcache);
     if (getTransferState() == ERW_ready && changeVR)
     {
-        // VR must be OB again. No Swapping is needed since the written
-        // transfer syntax was LittleEndianImplicit and so no swapping
-        // took place.
+        // Change the VR associated with the tag
+        // (not the current VR!) back from OW to OB
         setTagVR(EVR_OB);
     }
     return errorFlag;
 }
-
-
-/*
-** CVS/RCS Log:
-** $Log: dcvrpobw.cc,v $
-** Revision 1.23  2010-10-20 16:44:17  joergr
-** Use type cast macros (e.g. OFstatic_cast) where appropriate.
-**
-** Revision 1.22  2010-10-14 13:14:10  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.21  2008-07-17 10:31:32  onken
-** Implemented copyFrom() method for complete DcmObject class hierarchy, which
-** permits setting an instance's value from an existing object. Implemented
-** assignment operator where necessary.
-**
-** Revision 1.20  2007-11-29 14:30:21  meichel
-** Write methods now handle large raw data elements (such as pixel data)
-**   without loading everything into memory. This allows very large images to
-**   be sent over a network connection, or to be copied without ever being
-**   fully in memory.
-**
-** Revision 1.19  2007/11/23 15:42:36  meichel
-** Copy assignment operators in dcmdata now safe for self assignment
-**
-** Revision 1.18  2007/06/29 14:17:49  meichel
-** Code clean-up: Most member variables in module dcmdata are now private,
-**   not protected anymore.
-**
-** Revision 1.17  2005/12/08 15:42:00  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.16  2005/11/15 16:59:25  meichel
-** Added new pseudo VR type EVR_lt that is used for LUT Data when read in
-**   implicit VR, which may be US, SS or OW. DCMTK always treats EVR_lt like OW.
-**
-** Revision 1.15  2004/02/04 16:08:14  joergr
-** Adapted type casts to new-style typecast operators defined in ofcast.h.
-**
-** Revision 1.14  2002/09/12 14:08:28  joergr
-** Added method "createUint8Array" which works similar to the 16 bit variant.
-**
-** Revision 1.13  2002/08/27 16:56:00  meichel
-** Initial release of new DICOM I/O stream classes that add support for stream
-**   compression (deflated little endian explicit VR transfer syntax)
-**
-** Revision 1.12  2001/09/25 17:19:59  meichel
-** Adapted dcmdata to class OFCondition
-**
-** Revision 1.11  2001/06/01 15:49:19  meichel
-** Updated copyright header
-**
-** Revision 1.10  2001/05/10 12:52:58  meichel
-** Added public createUint16Array() method in class DcmPolymorphOBOW.
-**
-** Revision 1.9  2000/11/07 16:56:25  meichel
-** Initial release of dcmsign module for DICOM Digital Signatures
-**
-** Revision 1.8  2000/03/08 16:26:49  meichel
-** Updated copyright header.
-**
-** Revision 1.7  1999/03/31 09:25:56  meichel
-** Updated copyright header in module dcmdata
-**
-** Revision 1.6  1998/11/12 17:12:35  meichel
-** fixed incorrect return value in DcmPolymorphOBOW::operator=().
-**
-** Revision 1.5  1998/11/12 16:48:28  meichel
-** Implemented operator= for all classes derived from DcmObject.
-**
-** Revision 1.4  1998/07/15 15:52:11  joergr
-** Removed several compiler warnings reported by gcc 2.8.1 with
-** additional options, e.g. missing copy constructors and assignment
-** operators, initialization of member variables in the body of a
-** constructor instead of the member initialization list, hiding of
-** methods by use of identical names, uninitialized member variables,
-** missing const declaration of char pointers. Replaced tabs by spaces.
-**
-** Revision 1.3  1997/09/18 07:28:11  meichel
-** Name clash for "changeVR" attribute/local variable removed.
-**
-** Revision 1.2  1997/07/31 06:59:03  andreas
-** Error correction and additonal functionality for
-** DcmPolymorphOBOW to support getting and putting of Uint8 and
-** Uint16 data independent of the VR.
-**
-** Revision 1.1  1997/07/21 07:54:06  andreas
-** - Support for CP 14. PixelData and OverlayData can have VR OW or OB
-**   (depending on the transfer syntax). New internal value
-**   representation (only for ident()) for OverlayData.
-**
-*/

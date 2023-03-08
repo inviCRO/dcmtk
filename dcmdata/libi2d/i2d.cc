@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2007-2010, OFFIS e.V.
+ *  Copyright (C) 2007-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,17 +17,10 @@
  *
  *  Purpose: Implements utility for converting standard image formats to DICOM
  *
- *  Last Update:      $Author: uli $
- *  Update Date:      $Date: 2010-11-01 10:42:44 $
- *  CVS/RCS Revision: $Revision: 1.15 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
-#include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
+#include "dcmtk/config/osconfig.h"   /* make sure OS specific configuration is included first */
 
 #include "dcmtk/dcmdata/libi2d/i2d.h"
 #include "dcmtk/dcmdata/dcpxitem.h"
@@ -36,63 +29,104 @@
 #include "dcmtk/dcmdata/dcuid.h"     /* for SITE_SERIES_UID_ROOT */
 #include "dcmtk/dcmdata/dcpixseq.h"  /* for DcmPixelSequence */
 #include "dcmtk/dcmdata/dcpath.h"    /* for override keys */
+#include "dcmtk/dcmdata/xml2dcm.h"   /* for DcmXMLParseHelper */
 
-OFLogger DCM_dcmdataLibi2dGetLogger()
+OFLogger DCM_dcmdataLibi2dLogger = OFLog::getLogger("dcmtk.dcmdata.libi2d");
+
+
+Image2Dcm::Image2Dcm()
+: m_overrideKeys()
+, m_templateFile("")
+, m_templateFileIsXML(OFFalse)
+, m_XMLvalidation(OFFalse)
+, m_XMLnamespaceCheck(OFFalse)
+, m_readStudyLevel(OFFalse)
+, m_readSeriesLevel(OFFalse)
+, m_studySeriesFile()
+, m_incInstNoFromFile(OFFalse)
+, m_disableAttribChecks(OFFalse)
+, m_inventMissingType2Attribs(OFTrue)
+, m_inventMissingType1Attribs(OFFalse)
+, m_rows(0)
+, m_cols(0)
+, m_samplesPerPixel(0)
+, m_bitsAllocated(0)
+, m_bitsStored(0)
+, m_highBit(0)
+, m_pixelRepresentation(0)
+, m_planarConfiguration(0)
+, m_pixelAspectRatioH(0)
+, m_pixelAspectRatioV(0)
+, m_frameLength(0)
+, m_photometricInterpretation()
+, m_compressionRatio(1.0)
+, m_conversionFlags(0)
+, m_output_buffer(NULL)
+, m_offsetList()
+, m_pixelSequence(NULL)
+, m_offsetTable(NULL)
 {
-    // We don't just use a global variable, because constructors of globals are
-    // executed in random order. This guarantees that the OFLogger is constructed
-    // before first use.
-    static OFLogger DCM_dcmdata_libi2dLogger = OFLog::getLogger("dcmtk.dcmdata.libi2d");
-    return DCM_dcmdata_libi2dLogger;
 }
 
 
-Image2Dcm::Image2Dcm() : m_overrideKeys(), m_templateFile(""),
-  m_readStudyLevel(OFFalse), m_readSeriesLevel(OFFalse), m_studySeriesFile(),
-  m_incInstNoFromFile(OFFalse), m_disableAttribChecks(OFFalse),
-  m_inventMissingType2Attribs(OFTrue), m_inventMissingType1Attribs(OFFalse),
-  m_insertLatin1(OFTrue)
+Image2Dcm::~Image2Dcm()
 {
-
 }
 
 
-OFCondition Image2Dcm::convert(I2DImgSource *inputPlug,
-                               I2DOutputPlug *outPlug,
-                               DcmDataset*& resultDset,
-                               E_TransferSyntax& proposedTS)
-
+OFCondition Image2Dcm::convertFirstFrame(
+  I2DImgSource *inputPlug,
+  I2DOutputPlug *outPlug,
+  size_t numberOfFrames,
+  DcmDataset*& resultDset,
+  E_TransferSyntax& proposedTS)
 {
-  if (!inputPlug || !outPlug)
+  if (!inputPlug || !outPlug || (numberOfFrames < 1))
     return EC_IllegalParameter;
 
   OFCondition cond;
+  resultDset = NULL;
+  OFunique_ptr<DcmDataset> tempDataset;
   DCMDATA_LIBI2D_DEBUG("Image2Dcm: Starting conversion of file: " << inputPlug->getImageFile());
 
   // If specified, copy DICOM template file to export file
-  if (m_templateFile.length() != 0)
+  if (!m_templateFile.empty())
   {
     DcmFileFormat dcmff;
+
+#ifdef WITH_LIBXML
+    if (m_templateFileIsXML)
+    {
+      DcmXMLParseHelper parser;
+      E_TransferSyntax xfer;
+      cond = parser.readXmlFile(m_templateFile.c_str(), dcmff, xfer, OFFalse /* ignore metaheader */, m_XMLnamespaceCheck, m_XMLvalidation, OFTrue /* stop on errors */);
+    }
+    else
+    {
+      cond = dcmff.loadFile(m_templateFile.c_str());
+    }
+#else
     cond = dcmff.loadFile(m_templateFile.c_str());
+#endif
     if (cond.bad())
       return cond;
+
     // remove problematic attributes from dataset
     cleanupTemplate(dcmff.getDataset());
     // copy from input file
-    resultDset = new DcmDataset(*(dcmff.getDataset()));
+    tempDataset.reset(new DcmDataset(*(dcmff.getDataset())));
   }
   else // otherwise, start with an empty DICOM file
-    resultDset = new DcmDataset();
-  if (!resultDset)
+    tempDataset.reset(new DcmDataset());
+  if (!tempDataset.get())
     return EC_MemoryExhausted;
 
   // Read patient and study or series information if desired and write to export file
   if (m_readStudyLevel || m_readSeriesLevel)
   {
-    cond = applyStudyOrSeriesFromFile(resultDset);
+    cond = applyStudyOrSeriesFromFile(tempDataset.get());
     if (cond.bad())
     {
-      delete resultDset; resultDset = NULL;
       return cond;
     }
   }
@@ -100,79 +134,110 @@ OFCondition Image2Dcm::convert(I2DImgSource *inputPlug,
   // Increment instance number
   if (m_incInstNoFromFile)
   {
-    cond = incrementInstanceNumber(resultDset);
+    cond = incrementInstanceNumber(tempDataset.get());
     if (cond.bad())
     {
-      delete resultDset; resultDset = NULL;
       return cond;
     }
   }
 
-  // Insert Latin 1 as standard character set if desired
-  if (m_insertLatin1)
-    cond = insertLatin1(resultDset);
-  if (cond.bad())
-    return cond;
-
   // Generate and insert UIDs as necessary
-  generateUIDs(resultDset);
+  generateUIDs(tempDataset.get());
 
   // Read and insert pixel data
-  cond = readAndInsertPixelData(inputPlug, resultDset, proposedTS);
+  m_compressionRatio = 1.0;
+  cond = readAndInsertPixelDataFirstFrame(inputPlug, numberOfFrames, tempDataset.get(), proposedTS, m_compressionRatio);
   if (cond.bad())
   {
-    delete resultDset; resultDset = NULL;
     return cond;
   }
 
-  // Insert Lossy Image Compression and Lossy Image Compression Method attributes if necessary
-  OFBool srcIsLossy = OFFalse; OFString comprMethod;
-  if (inputPlug->getLossyComprInfo(srcIsLossy, comprMethod).good()) //TODO)
-  {
-    if (srcIsLossy)
-    {
-      cond = resultDset->putAndInsertOFStringArray(DCM_LossyImageCompression, "01");
-      if (cond.good() && !comprMethod.empty())
-        cond = resultDset->putAndInsertOFStringArray(DCM_LossyImageCompressionMethod, comprMethod);
-      if (cond.bad()) return makeOFCondition(OFM_dcmdata, 18, OF_error, "Unable to write attribute Lossy Image Compression and/or Lossy Image Compression Method to result dataset");
-    }
-  }
-  else
-    DCMDATA_LIBI2D_DEBUG("Image2Dcm: No information regarding lossy compression available");
-
   // Insert SOP Class specific attributes (and values)
-  cond = outPlug->convert(*resultDset);
+  cond = outPlug->convert(*tempDataset);
   if (cond.bad())
   {
-    delete resultDset; resultDset = NULL;
+    return cond;
+  }
+
+  // Insert SOP Class specific attributes (and values)
+  cond = outPlug->insertMultiFrameAttributes(tempDataset.get(), numberOfFrames);
+  if (cond.bad())
+  {
     return cond;
   }
 
   // At last, apply override keys on dataset
-  applyOverrideKeys(resultDset);
+  cond = applyOverrideKeys(tempDataset.get());
+  if (cond.bad())
+  {
+    return cond;
+  }
 
   // Do some very basic attribute checking (e. g. existence (type 2) and values (type 1))
   if (!m_disableAttribChecks)
   {
     OFString err;
-    err = isValid(*resultDset);
-    err += outPlug->isValid(*resultDset);
+    err = isValid(*tempDataset);
+    err += outPlug->isValid(*tempDataset);
     if (!err.empty())
     {
-      delete resultDset; resultDset = NULL;
       return makeOFCondition(OFM_dcmdata, 18, OF_error, err.c_str());
     }
   }
 
+  resultDset = tempDataset.release();
   return EC_Normal;
 }
 
-
-OFCondition Image2Dcm::insertLatin1(DcmDataset *outputDset)
+OFCondition Image2Dcm::updateLossyCompressionInfo(
+  I2DImgSource *inputPlug,
+  size_t numberOfFrames,
+  DcmDataset *dset)
 {
-  if (outputDset == NULL)
+  // Insert Lossy Image Compression and Lossy Image Compression Method attributes if necessary
+  OFBool srcIsLossy = OFFalse;
+  OFString comprMethod;
+  OFCondition cond;
+  if (inputPlug->getLossyComprInfo(srcIsLossy, comprMethod).good())
+  {
+    if (srcIsLossy)
+    {
+      double compressionRatio = m_compressionRatio;
+      if (numberOfFrames > 0) compressionRatio = m_compressionRatio / OFstatic_cast(double, numberOfFrames);
+      cond = dset->putAndInsertOFStringArray(DCM_LossyImageCompression, "01");
+      if (cond.good() && !comprMethod.empty())
+        cond = dset->putAndInsertOFStringArray(DCM_LossyImageCompressionMethod, comprMethod);
+      if (cond.good())
+      {
+        char buf[64];
+        OFStandard::ftoa(buf, sizeof(buf), compressionRatio, OFStandard::ftoa_uppercase, 0, 5);
+        cond = dset->putAndInsertOFStringArray(DCM_LossyImageCompressionRatio, buf);
+      }
+      if (cond.bad()) return makeOFCondition(OFM_dcmdata, 18, OF_error, "Unable to write attribute Lossy Image Compression and/or Lossy Image Compression Method to result dataset");
+    }
+  }
+  else
+    DCMDATA_LIBI2D_DEBUG("Image2Dcm: No information regarding lossy compression available");
+  return EC_Normal;
+}
+
+OFCondition Image2Dcm::convertNextFrame(
+  I2DImgSource *inputPlug,
+  size_t frameNumber)
+{
+  if (!inputPlug || (frameNumber < 2))
     return EC_IllegalParameter;
-  return outputDset->putAndInsertString(DCM_SpecificCharacterSet, "ISO_IR 100");
+
+  DCMDATA_LIBI2D_DEBUG("Image2Dcm: Starting conversion of file: " << inputPlug->getImageFile());
+
+  // Read and insert pixel data
+  return readAndInsertPixelDataNextFrame(inputPlug, frameNumber);
+}
+
+
+void Image2Dcm::setConversionFlags(size_t conversionFlags)
+{
+  m_conversionFlags = conversionFlags;
 }
 
 
@@ -212,8 +277,9 @@ void Image2Dcm::cleanupTemplate(DcmDataset *targetDset)
 OFCondition Image2Dcm::applyStudyOrSeriesFromFile(DcmDataset *targetDset)
 {
   DCMDATA_LIBI2D_DEBUG("Image2Dcm: Applying study and/or series information from file");
-  if ( (!m_readSeriesLevel && !m_readStudyLevel) || (m_studySeriesFile.length() == 0) )
+  if ( (!m_readSeriesLevel && !m_readStudyLevel) || m_studySeriesFile.empty() )
     return EC_IllegalCall;
+
   DcmFileFormat dcmff;
   OFString errMsg;
   OFCondition cond;
@@ -231,8 +297,48 @@ OFCondition Image2Dcm::applyStudyOrSeriesFromFile(DcmDataset *targetDset)
   if (srcDset == NULL)
     return EC_IllegalCall;
 
-  // Patient level attributes (type 2 - if value cannot be read, insert empty value
+  // Determine the specific character set of the target dataset
   OFString value;
+  OFString targetCharSet;
+  (void) targetDset->findAndGetOFString(DCM_SpecificCharacterSet, targetCharSet);
+
+  // Determine the specific character set of the target dataset of the Study/Series file
+  (void) srcDset->findAndGetOFString(DCM_SpecificCharacterSet, value);
+
+  if (targetCharSet == value)
+  {
+    // case 1: character sets are identical (or both empty), nothing to do.
+  }
+  else if (value.empty())
+  {
+    // case 2: target dataset uses an extended character set,
+    // while the study/series file uses ASCII. Nothing to do.
+  }
+  else if (targetCharSet.empty())
+  {
+    // case 3: the target dataset uses ASCII, while the
+    // study/series file uses an extended character set.
+    // Use the character set from the study/series file.
+    cond = targetDset->putAndInsertOFStringArray(DCM_SpecificCharacterSet, value);
+    if (cond.bad())
+      return makeOFCondition(OFM_dcmdata, 18, OF_error, "Unable to write Specific Character Set to file");
+  }
+  else
+  {
+    // case 4: target dataset and study/series files use different
+    // extended character sets. We will try to convert the study/series file
+    // to the character set used in the target dataset and fail if this
+    // does not succeed.
+    DCMDATA_LIBI2D_DEBUG("Image2Dcm: target charset: " << targetCharSet << ", study/series file charset: " << value);
+    cond = dcmff.convertCharacterSet(targetCharSet, m_conversionFlags);
+    if (cond.bad())
+    {
+      return makeOFCondition(OFM_dcmdata, 18, OF_error, "Character set mismatch between template and study/series file");
+    }
+  }
+
+  // Patient level attributes (type 2 - if value cannot be read, insert empty value
+  value.clear();
   srcDset->findAndGetOFString(DCM_PatientName, value);
   cond = targetDset->putAndInsertOFStringArray(DCM_PatientName, value);
   if (cond.bad())
@@ -255,12 +361,6 @@ OFCondition Image2Dcm::applyStudyOrSeriesFromFile(DcmDataset *targetDset)
   cond = targetDset->putAndInsertOFStringArray(DCM_PatientBirthDate, value);
   if (cond.bad())
     return makeOFCondition(OFM_dcmdata, 18, OF_error, "Unable to write Patient's Birth Date to file");
-  value.clear();
-
-  srcDset->findAndGetOFString(DCM_SpecificCharacterSet, value);
-  cond = targetDset->putAndInsertOFStringArray(DCM_SpecificCharacterSet, value);
-  if (cond.bad())
-    return makeOFCondition(OFM_dcmdata, 18, OF_error, "Unable to write Specific Character Set to file");
   value.clear();
 
   // Study level attributes (type 2 except Study Instance UID)
@@ -328,6 +428,17 @@ OFCondition Image2Dcm::applyStudyOrSeriesFromFile(DcmDataset *targetDset)
     value.clear();
   }
 
+  // We need to copy Instance Number if we are supposed to increase it
+  if (m_incInstNoFromFile)
+  {
+    cond = srcDset->findAndGetOFString(DCM_InstanceNumber, value);
+    if (cond.bad())
+      value = "1";
+    cond = targetDset->putAndInsertOFStringArray(DCM_InstanceNumber, value);
+    if (cond.bad())
+      return makeOFCondition(OFM_dcmdata, 18, OF_error, "Unable to write Instance Number to file");
+  }
+
   return EC_Normal;
 }
 
@@ -365,7 +476,7 @@ OFCondition Image2Dcm::generateUIDs(DcmDataset *dset)
   if (!m_readSeriesLevel)
   {
     cond = dset->findAndGetOFString(DCM_SeriesInstanceUID, value);
-    if (cond.bad() || (value.length() == 0))
+    if (cond.bad() || value.empty())
     {
       char newUID[100];
       dcmGenerateUniqueIdentifier(newUID, SITE_SERIES_UID_ROOT);
@@ -380,7 +491,7 @@ OFCondition Image2Dcm::generateUIDs(DcmDataset *dset)
   if (!m_readStudyLevel)
   {
     cond = dset->findAndGetOFString(DCM_StudyInstanceUID, value);
-    if (cond.bad() || (value.length() == 0))
+    if (cond.bad() || value.empty())
     {
       char newUID[100];
       dcmGenerateUniqueIdentifier(newUID, SITE_STUDY_UID_ROOT);
@@ -393,7 +504,7 @@ OFCondition Image2Dcm::generateUIDs(DcmDataset *dset)
 
   // Generate SOP Instance UID if not already present
   cond = dset->findAndGetOFString(DCM_SOPInstanceUID, value);
-  if (cond.bad() || (value.length() == 0))
+  if (cond.bad() || value.empty())
   {
     char newUID[100];
     dcmGenerateUniqueIdentifier(newUID, SITE_INSTANCE_UID_ROOT);
@@ -406,66 +517,50 @@ OFCondition Image2Dcm::generateUIDs(DcmDataset *dset)
 }
 
 
-void Image2Dcm::setISOLatin1(OFBool insLatin1)
-{
-  m_insertLatin1 = insLatin1;
-}
-
-
-OFCondition Image2Dcm::insertEncapsulatedPixelData(DcmDataset* dset,
-                                                   char *pixData,
-                                                   Uint32 length,
-                                                   const E_TransferSyntax& outputTS) const
+OFCondition Image2Dcm::insertEncapsulatedPixelDataFirstFrame(
+  DcmDataset* dset,
+  char *pixData,
+  Uint32 length,
+  E_TransferSyntax outputTS)
 {
   OFCondition cond;
 
   DCMDATA_LIBI2D_DEBUG("Image2Dcm: Storing imported pixel data to DICOM file");
+
   // create initial pixel sequence
-  DcmPixelSequence* pixelSequence = new DcmPixelSequence(DcmTag(DCM_PixelData, EVR_OB));
-  if (pixelSequence == NULL)
-    return EC_MemoryExhausted;
+  delete m_pixelSequence;
+  m_pixelSequence = new DcmPixelSequence(DCM_PixelSequenceTag);
 
   // insert empty offset table into sequence
-  DcmPixelItem *offsetTable = new DcmPixelItem(DcmTag(DCM_Item, EVR_OB));
-  if (offsetTable == NULL)
-  {
-    delete pixelSequence; pixelSequence = NULL;
-    return EC_MemoryExhausted;
-  }
-  cond = pixelSequence->insert(offsetTable);
+  delete m_offsetTable;
+  m_offsetTable = new DcmPixelItem(DCM_PixelItemTag);
+  cond = m_pixelSequence->insert(m_offsetTable);
   if (cond.bad())
   {
-    delete offsetTable; offsetTable = NULL;
-    delete pixelSequence; pixelSequence = NULL;
+    delete m_offsetTable; m_offsetTable = NULL;
+    delete m_pixelSequence; m_pixelSequence = NULL;
     return cond;
   }
 
-  // store compressed frame into pixel seqeuence
-  DcmOffsetList dummyList;
-  cond = pixelSequence->storeCompressedFrame(dummyList, OFreinterpret_cast(Uint8*,pixData), length, 0);
-  // storeCompressedFrame(..) does a deep copy, so the pixdata memory can be freed now
-  delete[] pixData;
+  // store compressed frame into pixel sequence
+  cond = m_pixelSequence->storeCompressedFrame(m_offsetList, OFreinterpret_cast(Uint8*,pixData), length, 0);
   if (cond.bad())
   {
-    delete pixelSequence; pixelSequence = NULL;
+    delete m_pixelSequence; m_pixelSequence = NULL;
     return cond;
   }
 
   // insert pixel data attribute incorporating pixel sequence into dataset
   DcmPixelData *pixelData = new DcmPixelData(DCM_PixelData);
-  if (pixelData == NULL)
-  {
-    delete pixelSequence; pixelSequence = NULL;
-    return EC_MemoryExhausted;
-  }
+
   /* tell pixel data element that this is the original presentation of the pixel data
    * pixel data and how it compressed
    */
-  pixelData->putOriginalRepresentation(outputTS, NULL, pixelSequence);
+  pixelData->putOriginalRepresentation(outputTS, NULL, m_pixelSequence);
   cond = dset->insert(pixelData);
   if (cond.bad())
   {
-    delete pixelData; pixelData = NULL; // also deletes contained pixel sequence
+    delete m_pixelSequence; m_pixelSequence = NULL; // also deletes contained pixel sequence
     return cond;
   }
 
@@ -473,83 +568,263 @@ OFCondition Image2Dcm::insertEncapsulatedPixelData(DcmDataset* dset,
 }
 
 
-OFCondition Image2Dcm::readAndInsertPixelData(I2DImgSource* imgSource,
-                                              DcmDataset* dset,
-                                              E_TransferSyntax& outputTS)
+OFCondition Image2Dcm::insertEncapsulatedPixelDataNextFrame(
+  char *pixData,
+  Uint32 length)
 {
-  Uint16 samplesPerPixel, rows, cols, bitsAlloc, bitsStored, highBit, pixelRepr, planConf;
-  Uint16 pixAspectH =1; Uint16 pixAspectV = 1;
-  OFString photoMetrInt;
+  if (m_pixelSequence == NULL || m_offsetTable == NULL) return EC_IllegalCall;
+
+  DCMDATA_LIBI2D_DEBUG("Image2Dcm: Storing imported pixel data to DICOM file");
+
+  // store compressed frame into pixel sequence
+  return m_pixelSequence->storeCompressedFrame(m_offsetList, OFreinterpret_cast(Uint8*,pixData), length, 0);
+}
+
+
+OFCondition Image2Dcm::readAndInsertPixelDataFirstFrame(
+  I2DImgSource* imgSource,
+  size_t numberOfFrames,
+  DcmDataset* dset,
+  E_TransferSyntax& outputTS,
+  double& compressionRatio)
+{
+  m_pixelAspectRatioH =1;
+  m_pixelAspectRatioV = 1;
   outputTS = EXS_Unknown;
   char* pixData = NULL;
-  Uint32 length;
 
-  OFCondition cond = imgSource->readPixelData(rows, cols,
-    samplesPerPixel, photoMetrInt, bitsAlloc, bitsStored, highBit, pixelRepr,
-    planConf, pixAspectH, pixAspectV, pixData, length, outputTS);
+  OFCondition cond = imgSource->readPixelData(m_rows, m_cols,
+    m_samplesPerPixel, m_photometricInterpretation, m_bitsAllocated, m_bitsStored, m_highBit, m_pixelRepresentation,
+    m_planarConfiguration, m_pixelAspectRatioH, m_pixelAspectRatioV, pixData, m_frameLength, outputTS);
 
   if (cond.bad())
     return cond;
 
+  // compute compression ratio for this frame
+  compressionRatio = 1.0;
+  double uncompressedSize = m_cols * m_rows;
+  uncompressedSize = uncompressedSize * m_bitsStored * m_samplesPerPixel / 8.0;
+  if (m_frameLength > 0) compressionRatio = uncompressedSize / m_frameLength;
+
   DcmXfer transport(outputTS);
   if (transport.isEncapsulated())
-    insertEncapsulatedPixelData(dset, pixData, length, outputTS);
+  {
+    m_offsetList.clear();
+    insertEncapsulatedPixelDataFirstFrame(dset, pixData, m_frameLength, outputTS);
+    delete[] pixData;
+  }
   else
   {
     /* Not encapsulated */
-    dset->putAndInsertUint8Array(DCM_PixelData, OFreinterpret_cast(Uint8*, pixData), length);
+    DcmPixelData *pixelData = new DcmPixelData(DCM_PixelData);
+    if (pixelData == NULL)
+    {
+      delete[] pixData;
+      return EC_MemoryExhausted;
+    }
+
+    cond = dset->insert(pixelData);
+    if (cond.bad())
+    {
+      delete[] pixData;
+      delete pixelData;
+      return cond;
+    }
+
+    DCMDATA_LIBI2D_DEBUG("Image2Dcm: frame size=" << m_frameLength << ", number of frames=" << numberOfFrames << ", length of pixel data array=" << ((m_frameLength * numberOfFrames + 1)/2)*2);
+    Uint16 *array = NULL;
+    size_t arraySize = (m_frameLength * numberOfFrames + 1)/2;
+    cond = pixelData->createUint16Array(OFstatic_cast(Uint32, arraySize), array);
+    if (cond.bad())
+    {
+      delete[] pixData;
+      return cond;
+    }
+    m_output_buffer = OFreinterpret_cast(char *, array);
+    memcpy(array, pixData, m_frameLength);
     delete[] pixData;
   }
 
   DCMDATA_LIBI2D_DEBUG("Image2Dcm: Inserting Image Pixel module information");
 
-  cond = dset->putAndInsertUint16(DCM_SamplesPerPixel, samplesPerPixel);
+  cond = dset->putAndInsertUint16(DCM_SamplesPerPixel, m_samplesPerPixel);
   if (cond.bad())
     return cond;
 
-  cond = dset->putAndInsertOFStringArray(DCM_PhotometricInterpretation, photoMetrInt);
+  cond = dset->putAndInsertOFStringArray(DCM_PhotometricInterpretation, m_photometricInterpretation);
   if (cond.bad())
     return cond;
 
   // Should only be written if Samples per Pixel > 1
-  if (samplesPerPixel > 1)
+  if (m_samplesPerPixel > 1)
   {
-    cond = dset->putAndInsertUint16(DCM_PlanarConfiguration, planConf);
+    cond = dset->putAndInsertUint16(DCM_PlanarConfiguration, m_planarConfiguration);
     if (cond.bad())
       return cond;
   }
 
-  cond = dset->putAndInsertUint16(DCM_Rows, rows);
+  cond = dset->putAndInsertUint16(DCM_Rows, m_rows);
   if (cond.bad())
     return cond;
 
-  cond = dset->putAndInsertUint16(DCM_Columns, cols);
+  cond = dset->putAndInsertUint16(DCM_Columns, m_cols);
   if (cond.bad())
     return cond;
 
-  cond = dset->putAndInsertUint16(DCM_BitsAllocated, bitsAlloc);
+  cond = dset->putAndInsertUint16(DCM_BitsAllocated, m_bitsAllocated);
   if (cond.bad())
     return cond;
 
-  cond = dset->putAndInsertUint16(DCM_BitsStored, bitsStored);
+  cond = dset->putAndInsertUint16(DCM_BitsStored, m_bitsStored);
   if (cond.bad())
     return cond;
 
-  cond = dset->putAndInsertUint16(DCM_HighBit, highBit);
+  cond = dset->putAndInsertUint16(DCM_HighBit, m_highBit);
   if (cond.bad())
     return cond;
 
-  if ( pixAspectH != pixAspectV )
+  if ( m_pixelAspectRatioH != m_pixelAspectRatioV )
   {
     char buf[200];
-    int err = sprintf(buf, "%u\\%u", pixAspectV, pixAspectH);
+    int err = sprintf(buf, "%u\\%u", m_pixelAspectRatioV, m_pixelAspectRatioH);
     if (err == -1) return EC_IllegalCall;
     cond = dset->putAndInsertOFStringArray(DCM_PixelAspectRatio, buf);
     if (cond.bad())
       return cond;
   }
 
-  return dset->putAndInsertUint16(DCM_PixelRepresentation, pixelRepr);
+  return dset->putAndInsertUint16(DCM_PixelRepresentation, m_pixelRepresentation);
+}
+
+
+OFCondition Image2Dcm::readAndInsertPixelDataNextFrame(
+  I2DImgSource* imageSource,
+  size_t frameNumber)
+{
+
+  Uint16 next_pixelAspectRatioH = 1;
+  Uint16 next_pixelAspectRatioV = 1;
+  Uint16 next_rows = 0;
+  Uint16 next_cols = 0;
+  Uint16 next_samplesPerPixel = 0;
+  Uint16 next_bitsAllocated = 0;
+  Uint16 next_bitsStored = 0;
+  Uint16 next_highBit = 0;
+  Uint16 next_pixelRepresentation = 0;
+  Uint16 next_planarConfiguration = 0;
+  Uint32 next_frameLength = 0;
+  OFString next_photometricInterpretation;
+
+  char *pixData = NULL;
+  E_TransferSyntax outputTS;
+
+  OFCondition cond = imageSource->readPixelData(next_rows, next_cols,
+    next_samplesPerPixel, next_photometricInterpretation, next_bitsAllocated, next_bitsStored, next_highBit, next_pixelRepresentation,
+    next_planarConfiguration, next_pixelAspectRatioH, next_pixelAspectRatioV, pixData, next_frameLength, outputTS);
+
+  if (cond.bad())
+    return cond;
+
+  // create a transfer syntax object for the output transfer syntax
+  DcmXfer transport(outputTS);
+
+  // check consistency between current frame and first frame
+  if (next_rows != m_rows)
+  {
+    cond = makeOFCondition(OFM_dcmdata, 18, OF_error, "Image2Dcm: value of Rows not equal for all frames of the multi-frame image");
+    return cond;
+  }
+  if (next_cols != m_cols)
+  {
+    cond = makeOFCondition(OFM_dcmdata, 18, OF_error, "Image2Dcm: value of Columns not equal for all frames of the multi-frame image");
+    return cond;
+  }
+
+  if (next_samplesPerPixel != m_samplesPerPixel)
+  {
+    cond = makeOFCondition(OFM_dcmdata, 18, OF_error, "Image2Dcm: value of SamplesPerPixel not equal for all frames of the multi-frame image");
+    return cond;
+  }
+  if (next_photometricInterpretation != m_photometricInterpretation)
+  {
+    cond = makeOFCondition(OFM_dcmdata, 18, OF_error, "Image2Dcm: value of PhotometricInterpretation not equal for all frames of the multi-frame image");
+    return cond;
+  }
+  if (next_bitsAllocated != m_bitsAllocated)
+  {
+    cond = makeOFCondition(OFM_dcmdata, 18, OF_error, "Image2Dcm: value of BitsAllocated not equal for all frames of the multi-frame image");
+    return cond;
+  }
+  if (next_bitsStored != m_bitsStored)
+  {
+    cond = makeOFCondition(OFM_dcmdata, 18, OF_error, "Image2Dcm: value of BitsStored not equal for all frames of the multi-frame image");
+    return cond;
+  }
+  if (next_highBit != m_highBit)
+  {
+    cond = makeOFCondition(OFM_dcmdata, 18, OF_error, "Image2Dcm: value of HighBit not equal for all frames of the multi-frame image");
+    return cond;
+  }
+  if (next_pixelRepresentation != m_pixelRepresentation)
+  {
+    cond = makeOFCondition(OFM_dcmdata, 18, OF_error, "Image2Dcm: value of PixelRepresentation not equal for all frames of the multi-frame image");
+    return cond;
+  }
+  if (next_planarConfiguration != m_planarConfiguration)
+  {
+    cond = makeOFCondition(OFM_dcmdata, 18, OF_error, "Image2Dcm: value of PlanarConfiguration not equal for all frames of the multi-frame image");
+    return cond;
+  }
+  if (next_pixelAspectRatioH != m_pixelAspectRatioH)
+  {
+    cond = makeOFCondition(OFM_dcmdata, 18, OF_error, "Image2Dcm: value of horizontal PixelAspectRatio not equal for all frames of the multi-frame image");
+    return cond;
+  }
+  if (next_pixelAspectRatioV != m_pixelAspectRatioV)
+  {
+    cond = makeOFCondition(OFM_dcmdata, 18, OF_error, "Image2Dcm: value of vertical PixelAspectRatio not equal for all frames of the multi-frame image");
+    return cond;
+  }
+  if ((!transport.isEncapsulated()) && (next_frameLength != m_frameLength))
+  {
+    // in the case of uncompressed images, all frames must have exactly the same size.
+    // for compressed images, where we store the compressed bitstream as a pixel item, this does not matter.
+    cond = makeOFCondition(OFM_dcmdata, 18, OF_error, "Image2Dcm: frame size not equal for all frames of the multi-frame image");
+    return cond;
+  }
+
+  // compute compression ratio for this frame
+  double compressionRatio = 1.0;
+  double uncompressedSize = next_cols * next_rows;
+  uncompressedSize = uncompressedSize * next_bitsStored * next_samplesPerPixel / 8.0;
+  if (next_frameLength > 0) compressionRatio = uncompressedSize / next_frameLength;
+
+  // accumulate compression ratio in m_compressionRatio.
+  // We will divide this by the number of frames later.
+  m_compressionRatio += compressionRatio;
+
+  if (transport.isEncapsulated())
+  {
+    cond = insertEncapsulatedPixelDataNextFrame(pixData, next_frameLength);
+    delete[] pixData;
+    return cond;
+  }
+  else
+  {
+    /* Not encapsulated */
+    if (m_output_buffer == NULL)
+    {
+      cond = makeOFCondition(OFM_dcmdata, 18, OF_error, "Image2Dcm: output buffer not allocated");
+      delete[] pixData;
+      return cond;
+    }
+
+    char *array = m_output_buffer + m_frameLength * (frameNumber - 1);
+    memcpy(array, pixData, m_frameLength);
+    delete[] pixData;
+  }
+
+  return EC_Normal;
 }
 
 
@@ -631,6 +906,23 @@ void Image2Dcm::setTemplateFile(const OFString& file)
 }
 
 
+void Image2Dcm::setTemplateFileIsXML(OFBool isXML)
+{
+  m_templateFileIsXML = isXML;
+}
+
+
+void Image2Dcm::setXMLvalidation(OFBool enabled)
+{
+  m_XMLvalidation = enabled;
+}
+
+
+void Image2Dcm::setXMLnamespaceCheck(OFBool enabled)
+{
+  m_XMLnamespaceCheck = enabled;
+}
+
 
 void Image2Dcm::setIncrementInstanceNumber(OFBool incInstNo)
 {
@@ -693,11 +985,11 @@ OFString Image2Dcm::checkAndInventType1Attrib(const DcmTagKey& key,
       err += "\n";
       return err;
     }
-    //holds element to insert in item
+    // holds element to insert in item
     elem = NULL;
     DcmTag tag(key); OFBool wasError = OFFalse;
-    //if dicom element could be created, insert in to item and modify to value
-    if ( newDicomElement(elem, tag).good())
+    // if DICOM element could be created, insert in to item and modify to value
+    if ( DcmItem::newDicomElement(elem, tag).good())
     {
         if (targetDset->insert(elem, OFTrue).good())
         {
@@ -741,67 +1033,9 @@ OFString Image2Dcm::checkAndInventType2Attrib(const DcmTagKey& key,
 }
 
 
-Image2Dcm::~Image2Dcm()
+OFCondition Image2Dcm::updateOffsetTable()
 {
-  DCMDATA_LIBI2D_DEBUG("Freeing memory");
+  OFCondition result = EC_Normal;
+  if (m_offsetTable) result = m_offsetTable->createOffsetTable(m_offsetList);
+  return result;
 }
-
-
-/*
- * CVS/RCS Log:
- * $Log: i2d.cc,v $
- * Revision 1.15  2010-11-01 10:42:44  uli
- * Fixed some compiler warnings reported by gcc with additional flags.
- *
- * Revision 1.14  2010-10-14 13:18:23  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.13  2010-08-09 13:06:03  joergr
- * Updated data dictionary to 2009 edition of the DICOM standard. From now on,
- * the official "keyword" is used for the attribute name which results in a
- * number of minor changes (e.g. "PatientsName" is now called "PatientName").
- *
- * Revision 1.12  2010-03-25 09:26:58  onken
- * Pixel data is now already marked with the correct transfer syntax in
- * memory not only when writing to disk. This permits conversion in
- * memory, e. g. for sending the converted DICOM images directly over
- * the network.
- *
- * Revision 1.11  2009-11-04 09:58:08  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.10  2009-09-30 08:05:25  uli
- * Stop including dctk.h in libi2d's header files.
- *
- * Revision 1.9  2009-09-04 13:53:09  meichel
- * Minor const iterator related changes needed to compile with VC6 with HAVE_STL
- *
- * Revision 1.8  2009-08-05 08:51:02  joergr
- * Replaced numeric tag by pre-defined tag name (DCM_PixelDataProviderURL).
- * Fixed various inconsistencies in condition text values and log messages.
- *
- * Revision 1.7  2009-07-16 14:23:23  onken
- * Extended Image2Dcm engine to also work for uncompressed pixel data input.
- *
- * Revision 1.6  2009-07-10 13:16:07  onken
- * Added path functionality for --key option and lets the code make use
- * of the DcmPath classes.
- *
- * Revision 1.5  2009-03-31 13:05:27  onken
- * Changed implementation of lossy compression attribute detection and writing.
- *
- * Revision 1.3  2009-03-27 17:49:20  onken
- * Attribute "Pixel Aspect Ratio" (as found in JFIF header) is now written
- * to DICOM dataset if not equal to 1.
- *
- * Revision 1.2  2008-01-16 16:32:31  onken
- * Fixed some empty or doubled log messages in libi2d files.
- *
- * Revision 1.1  2008-01-16 14:36:02  onken
- * Moved library "i2dlib" from /dcmdata/libsrc/i2dlib to /dcmdata/libi2d
- *
- * Revision 1.1  2007/11/08 15:55:17  onken
- * Initial checkin of img2dcm application and corresponding library i2dlib.
- *
- *
- */

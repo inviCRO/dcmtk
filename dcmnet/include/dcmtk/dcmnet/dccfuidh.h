@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2011, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose: 
  *    class DcmUIDHandler
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:22 $
- *  CVS/RCS Revision: $Revision: 1.3 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCCFUIDH_H
@@ -32,6 +25,7 @@
 
 #include "dcmtk/config/osconfig.h"
 #include "dcmtk/ofstd/ofstring.h" /* for class OFString */
+#include "dcmtk/dcmnet/dndefine.h"
 
 /** helper class that manages a single DICOM UID.
  *  Unlike class DcmUniqueIdentifier, this class does not manage an 
@@ -45,7 +39,7 @@
  *  order and the opposite byte order of the system the application is 
  *  running on.
  */
-class DcmUIDHandler
+class DCMTK_DCMNET_EXPORT DcmUIDHandler
 {
 public:
   /// default constructor
@@ -119,21 +113,3 @@ private:
 
 
 #endif
-
-/*
- * CVS/RCS Log
- * $Log: dccfuidh.h,v $
- * Revision 1.3  2010-10-14 13:17:22  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.2  2005/12/08 16:02:15  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.1  2003/06/10 14:27:33  meichel
- * Initial release of class DcmAssociationConfiguration and support
- *   classes. This class maintains a list of association negotiation
- *   profiles that can be addressed by symbolic keys. The profiles may
- *   be read from a configuration file.
- *
- *
- */

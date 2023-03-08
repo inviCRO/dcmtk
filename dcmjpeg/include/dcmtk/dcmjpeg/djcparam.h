@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2010, OFFIS e.V.
+ *  Copyright (C) 1997-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: codec parameter class for dcmjpeg codecs
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:17 $
- *  CVS/RCS Revision: $Revision: 1.12 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DJCPARAM_H
@@ -35,7 +28,7 @@
 
 /** codec parameter for IJG codecs
  */
-class DJCodecParameter: public DcmCodecParameter
+class DCMTK_DCMJPEG_EXPORT DJCodecParameter: public DcmCodecParameter
 {
 public:
 
@@ -47,6 +40,10 @@ public:
    *    decompressed color images should be handled
    *  @param predictor6WorkaroundEnable enable workaround for buggy lossless compressed images with
    *    overflow in predictor 6 for images with 16 bits/pixel
+   *  @param cornellWorkaroundEnable enable workaround for buggy Cornell lossless compressed images with
+   *    Huffman table overflow
+   *  @param pForceSingleFragmentPerFrame while decompressing a multiframe image,
+   *    assume one fragment per frame even if the JPEG data for some frame is incomplete
    *  @param pOptimizeHuffman perform huffman table optimization for 8 bits/pixel compression?
    *  @param pSmoothingFactor smoothing factor for image compression, 0..100
    *  @param pForcedBitDepth forced bit depth for image compression, 0 (auto) or 8/12/16
@@ -78,6 +75,8 @@ public:
     E_UIDCreation pCreateSOPInstanceUID,
     E_PlanarConfiguration pPlanarConfiguration,
     OFBool predictor6WorkaroundEnable = OFFalse,
+    OFBool cornellWorkaroundEnable = OFFalse,
+    OFBool pForceSingleFragmentPerFrame = OFFalse,
     OFBool pOptimizeHuffman = OFFalse,
     int pSmoothingFactor = 0,
     int pForcedBitDepth = 0,
@@ -86,14 +85,14 @@ public:
     E_SubSampling pSampleFactors = ESS_444,
     OFBool pWriteYBR422 = OFFalse,
     OFBool pConvertToSC = OFFalse,
-    unsigned long pWindowType = 0,
-    unsigned long pWindowParameter = 0,
+    size_t pWindowType = 0,
+    size_t pWindowParameter = 0,
     double pVoiCenter = 0.0,
     double pVoiWidth = 0.0,
-    unsigned long pRoiLeft = 0,
-    unsigned long pRoiTop = 0,
-    unsigned long pRoiWidth = 0,
-    unsigned long pRoiHeight = 0,
+    size_t pRoiLeft = 0,
+    size_t pRoiTop = 0,
+    size_t pRoiWidth = 0,
+    size_t pRoiHeight = 0,
     OFBool pUsePixelValues = OFTrue,
     OFBool pUseModalityRescale = OFFalse,
     OFBool pAcceptWrongPaletteTags = OFFalse,
@@ -142,7 +141,7 @@ public:
   }
 
   /** returns maximum fragment size (in kbytes) for compression, 0 for unlimited.
-   *  @returnmaximum fragment size for compression
+   *  @return maximum fragment size for compression
    */
   Uint32 getFragmentSize() const
   {
@@ -193,7 +192,7 @@ public:
   /** returns mode for VOI transformation of monochrome images.
    *  @return mode for VOI transformation of monochrome images
    */
-  unsigned long getWindowType() const
+  size_t getWindowType() const
   {
     return windowType;
   }
@@ -201,7 +200,7 @@ public:
   /** returns parameter for VOI transform of monochrome images, used in VOI modes 1, 2, 4, 6
    *  @return parameter for VOI transform of monochrome images, used in VOI modes 1, 2, 4, 6
    */
-  unsigned long getWindowParameter() const
+  size_t getWindowParameter() const
   {
     return windowParameter;
   }
@@ -223,10 +222,10 @@ public:
    *  @param height ROI height returned in this parameter
    */
   void getROI(
-    unsigned long& left_pos,
-    unsigned long& top_pos,
-    unsigned long& width,
-    unsigned long& height) const
+    size_t& left_pos,
+    size_t& top_pos,
+    size_t& width,
+    size_t& height) const
   {
     left_pos = roiLeft;
     top_pos = roiTop;
@@ -308,6 +307,22 @@ public:
     return predictor6WorkaroundEnabled_;
   }
 
+  /** returns flag indicating whether the workaround for buggy Cornell JPEG lossless images with Huffman table overflow is enabled
+   *  @return flag indicating whether the workaround for buggy Cornell JPEG lossless images with Huffman table overflow is enabled
+   */
+  OFBool cornellWorkaroundEnabled() const
+  {
+    return cornellWorkaroundEnabled_;
+  }
+
+  /** returns flag indicating whether one fragment per frame should be enforced while decoding
+   *  @return flag indicating whether one fragment per frame should be enforced while decoding
+   */
+  OFBool getForceSingleFragmentPerFrame() const
+  {
+    return forceSingleFragmentPerFrame;
+  }
+
 private:
 
   /// private undefined copy assignment operator
@@ -363,10 +378,10 @@ private:
       6: compute VOI window using min-max algorithm ignoring extremes
       7: compute region of interest VOI window
    */
-  unsigned long windowType;
+  size_t windowType;
 
   /// parameter for VOI transform of monochrome images, used in modes 1, 2, 4, 6
-  unsigned long windowParameter;
+  size_t windowParameter;
 
   /// VOI window center for mode 5
   double voiCenter;
@@ -375,16 +390,16 @@ private:
   double voiWidth;
 
   /// Region of Interest left corner for for VOI transform of monochrome images, mode 7
-  unsigned long roiLeft;
+  size_t roiLeft;
 
   /// Region of Interest upper corner for for VOI transform of monochrome images, mode 7
-  unsigned long roiTop;
+  size_t roiTop;
 
   /// Region of Interest width for for VOI transform of monochrome images, mode 7
-  unsigned long roiWidth;
+  size_t roiWidth;
 
   /// Region of Interest height for for VOI transform of monochrome images, mode 7
-  unsigned long roiHeight;
+  size_t roiHeight;
 
   /// Check smallest and largest pixel value and optimize compression, mode 0 only
   OFBool usePixelValues;
@@ -404,56 +419,15 @@ private:
   /// flag indicating that the workaround for buggy JPEG lossless images with incorrect predictor 6 is enabled
   OFBool predictor6WorkaroundEnabled_;
 
+  /// flag indicating that the workaround for buggy Cornell JPEG lossless images with huffman table overflow is enabled
+  OFBool cornellWorkaroundEnabled_;
+
+  /** flag indicating that while decompressing a multiframe image one fragment per frame
+   *  should be assumed even if the JPEG data for some frame is incomplete
+   */
+  OFBool forceSingleFragmentPerFrame;
+
 };
 
 
 #endif
-
-/*
- * CVS/RCS Log
- * $Log: djcparam.h,v $
- * Revision 1.12  2010-10-14 13:17:17  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.11  2010-06-01 16:17:49  onken
- * Added some comments and line breaks (improved code readability).
- *
- * Revision 1.10  2010-03-24 15:01:34  joergr
- * Fixed minor formatting issues in API documentation.
- *
- * Revision 1.9  2009-10-07 12:44:33  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.8  2006-03-29 15:58:52  meichel
- * Added support for decompressing images with 16 bits/pixel compressed with
- *   a faulty lossless JPEG encoder that produces integer overflows in predictor 6.
- *
- * Revision 1.7  2005/12/08 16:59:13  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.6  2005/11/29 15:57:05  onken
- * Added commandline options --accept-acr-nema and --accept-palettes
- * (same as in dcm2pnm) to dcmcjpeg and extended dcmjpeg to support
- * these options. Thanks to Gilles Mevel for suggestion.
- *
- * Revision 1.4  2005/11/29 08:50:34  onken
- * Added support for "true" lossless compression in dcmjpeg, that doesn't
- *   use dcmimage classes, but compresses raw pixel data (8 and 16 bit) to
- *   avoid losses in quality caused by color space conversions or modality
- *   transformations etc.
- * Corresponding commandline option in dcmcjpeg (new default)
- *
- * Revision 1.3  2002/12/09 13:51:26  joergr
- * Renamed parameter/local variable to avoid name clashes with global
- * declaration left and/or right (used for as iostream manipulators).
- *
- * Revision 1.2  2001/11/19 15:13:26  meichel
- * Introduced verbose mode in module dcmjpeg. If enabled, warning
- *   messages from the IJG library are printed on ofConsole, otherwise
- *   the library remains quiet.
- *
- * Revision 1.1  2001/11/13 15:56:17  meichel
- * Initial release of module dcmjpeg
- *
- *
- */

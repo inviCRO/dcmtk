@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2019, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,26 +18,22 @@
  *  Purpose:
  *    classes: SiBaseRSAProfile
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:24 $
- *  CVS/RCS Revision: $Revision: 1.4 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef SIBRSAPR_H
 #define SIBRSAPR_H
 
 #include "dcmtk/config/osconfig.h"
-#include "dcmtk/dcmsign/sisprof.h"   /* for SiSecurityProfile */
 
 #ifdef WITH_OPENSSL
 
+#include "dcmtk/dcmsign/sisprof.h"   /* for SiSecurityProfile */
+
 /** Base RSA Digital Signature Profile
+ *  @remark This class is only available if DCMTK is compiled with
+ *  OpenSSL support enabled.
  */
-class SiBaseRSAProfile: public SiSecurityProfile
+class DCMTK_DCMSIGN_EXPORT SiBaseRSAProfile: public SiSecurityProfile
 {
 public:
 
@@ -46,7 +42,7 @@ public:
 
   /// destructor
   virtual ~SiBaseRSAProfile() { }
-  
+
   /** checks whether the given MAC type can be used with this security profile.
    *  @param macType MAC type to be checked
    *  @return true if MAC type is allowable for this profile, false otherwise.
@@ -66,11 +62,18 @@ public:
   virtual OFBool isAllowableTransferSyntax(E_TransferSyntax xfer) const;
 
   /** checks whether an attribute with the given tag is required to be signed
-   *  for the current security profile.
+   *  for the current security profile if the attribute is present in the dataset
    *  @param key tag key to be checked
    *  @return true if required, false otherwise.
    */
-  virtual OFBool attributeRequired(const DcmTagKey& key) const;
+  virtual OFBool attributeRequiredIfPresent(const DcmTagKey& key) const;
+
+  /** checks whether all attributes that are required unconditionally
+   *  to be signed in this profile are included in the given tagList.
+   *  @param taglist attribute tag list
+   *  @return true if requirements for profile are fulfilled, false otherwise.
+   */
+  virtual OFBool checkRequiredAttributeList(DcmAttributeTag& tagList) const;
 
   /** checks whether an attribute with the given tag must not be signed
    *  for the current security profile.
@@ -79,26 +82,22 @@ public:
    */
   virtual OFBool attributeForbidden(const DcmTagKey& key) const;
 
+  /** some digital signature profiles specify conditions under which certain
+   *  attributes must be included into the signature.
+   *  This method allows the signature profile to inspect the dataset in order
+   *  to determine whether or not the conditions are met.
+   *  This method should be called before DcmSignature::createSignature() is executed.
+   *  @param item the dataset or item to which the signature will be added
+   *  @return status code
+   */
+  virtual OFCondition inspectSignatureDataset(DcmItem &item);
+
+  /** returns true if this signature profile only applies to main dataset level
+   *  @return OFTrue if this signature profile only applies to main dataset level, OFFalse otherwise
+   */
+  virtual OFBool mainDatasetRequired() const;
+
 };
 
 #endif
 #endif
-
-/*
- *  $Log: sibrsapr.h,v $
- *  Revision 1.4  2010-10-14 13:17:24  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.3  2005-12-08 16:04:32  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.2  2003/06/04 14:21:03  meichel
- *  Simplified include structure to avoid preprocessor limitation
- *    (max 32 #if levels) on MSVC5 with STL.
- *
- *  Revision 1.1  2001/11/16 15:50:49  meichel
- *  Adapted digital signature code to final text of supplement 41.
- *
- *
- */
-

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2003-2010, OFFIS e.V.
+ *  Copyright (C) 2003-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose:
  *    classes: DSRXMLCursor
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:33 $
- *  CVS/RCS Revision: $Revision: 1.7 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -33,13 +26,31 @@
 
 #include "dcmtk/config/osconfig.h"   /* make sure OS specific configuration is included first */
 
+#include "dcmtk/dcmsr/dsdefine.h"
+
 #include "dcmtk/ofstd/oftypes.h"    /* for definition of OFBool */
 
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CSTDDEF
-#include "dcmtk/ofstd/ofstdinc.h"
-
 #ifdef WITH_LIBXML
+
+#ifdef __ibmxl__
+// IBM xlC defines __GNUC__ but does not support the GNUC extension
+// __attribute__ ((format (printf, 2, 3))).
+// This avoids a compiler warning in <libxml/parser.h>.
+#define LIBXML_ATTR_FORMAT(fmt,args)
+#endif
+
+// The libxml library also uses unicode. So we have to reuse some
+// workarounds for the ICU library here as well.
+// The type char16_t is only supported since C++11.
+#ifndef HAVE_CHAR16_T
+#define UCHAR_TYPE uint16_t
+#endif
+
+//If U_NOEXCEPT is not defined, ICU falls back to NOEXCEPT.
+#ifndef HAVE_CXX11
+#define U_NOEXCEPT
+#endif
+
 #include <libxml/parser.h>
 #endif
 
@@ -70,7 +81,7 @@ class DSRXMLDocument;
  *  therefore, allows to replace the XML library with little effort (if
  *  required).
  */
-class DSRXMLCursor
+class DCMTK_DCMSR_EXPORT DSRXMLCursor
 {
 
     // allow DSRXMLDocument to access private member variable 'Node' directly
@@ -140,33 +151,3 @@ class DSRXMLCursor
 
 
 #endif
-
-
-/*
- *  CVS/RCS Log:
- *  $Log: dsrxmlc.h,v $
- *  Revision 1.7  2010-10-14 13:16:33  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.6  2005-12-08 16:05:35  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.5  2003/10/06 09:51:43  joergr
- *  Replaced wrong newline character sequence.
- *
- *  Revision 1.4  2003/09/04 10:14:30  joergr
- *  Combined two #include "ofstdinc.h" statements.
- *
- *  Revision 1.3  2003/09/03 16:00:11  meichel
- *  Added standard includes needed on Win32
- *
- *  Revision 1.2  2003/08/29 12:52:02  joergr
- *  Replaced inclusion of unistd.h by cstddef/stddef.h to compile under Windows
- *  with libxml support (required for definition of NULL).
- *
- *  Revision 1.1  2003/08/07 12:16:37  joergr
- *  Added interface classes hiding the access to libxml (document and cursor
- *  class).
- *
- *
- */

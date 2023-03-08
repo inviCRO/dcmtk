@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were partly developed by
@@ -59,22 +59,17 @@
 ** Author, Date:  Stephen M. Moore, 15-Apr-93
 ** Intent:        Define tables and provide functions that implement
 **                the DICOM Upper Layer (DUL) finite state machine.
-** Last Update:   $Author: joergr $, $Date: 2010-12-01 08:26:36 $
-** Revision:      $Revision: 1.74 $
-** Status:        $State: Exp $
 */
 
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CSTDIO
-#define INCLUDE_CSTRING
-#define INCLUDE_CERRNO
-#define INCLUDE_CSIGNAL
-#define INCLUDE_CTIME
-#define INCLUDE_UNISTD
-#include "dcmtk/ofstd/ofstdinc.h"
+#ifdef HAVE_WINDOWS_H
+// on Windows, we need Winsock2 for network functions
+#include <winsock2.h>
+// and ws2tcpip for socklen_t
+#include <ws2tcpip.h>
+#endif
 
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
@@ -100,17 +95,17 @@ BEGIN_EXTERN_C
 #include <netinet/tcp.h>        /* for TCP_NODELAY */
 #endif
 END_EXTERN_C
-
-#ifdef HAVE_GUSI_H
-#include <GUSI.h>       /* Use the Grand Unified Sockets Interface (GUSI) on Macintosh */
+#ifdef DCMTK_HAVE_POLL
+#include <poll.h>
 #endif
 
 #include "dcmtk/ofstd/ofstream.h"
+#include "dcmtk/ofstd/ofstdinc.h"
 #include "dcmtk/dcmnet/dicom.h"
 #include "dcmtk/dcmnet/lst.h"
 #include "dcmtk/dcmnet/cond.h"
 #include "dcmtk/dcmnet/dul.h"
-#include "dulstruc.h"
+#include "dcmtk/dcmnet/dulstruc.h"
 #include "dulpriv.h"
 #include "dulfsm.h"
 #include "dcmtk/ofstd/ofbmanip.h"
@@ -119,6 +114,25 @@ END_EXTERN_C
 #include "dcmtk/dcmnet/dcmtrans.h"
 #include "dcmtk/dcmnet/dcmlayer.h"
 #include "dcmtk/dcmnet/diutil.h"
+#include "dcmtk/dcmnet/helpers.h"
+#include "dcmtk/ofstd/ofsockad.h" /* for class OFSockAddr */
+#include <ctime>
+
+
+/* At least Solaris doesn't define this */
+#ifndef INADDR_NONE
+#define INADDR_NONE 0xffffffff
+#endif
+
+/* platform independent definition of EINTR */
+enum
+{
+#ifdef HAVE_WINSOCK_H
+    DCMNET_EINTR = WSAEINTR
+#else
+    DCMNET_EINTR = EINTR
+#endif
+};
 
 static OFCondition
 AE_1_TransportConnect(PRIVATE_NETWORKKEY ** network,
@@ -275,7 +289,12 @@ defragmentTCP(DcmTransportConnection *connection, DUL_BLOCKOPTIONS block, time_t
 
 static OFString dump_pdu(const char *type, void *buffer, unsigned long length);
 
+#ifdef _WIN32
+static void setTCPBufferLength(SOCKET sock);
+#else
 static void setTCPBufferLength(int sock);
+#endif
+
 OFCondition
 translatePresentationContextList(LST_HEAD ** internalList,
                                  LST_HEAD ** SCUSCPRoleList,
@@ -286,10 +305,7 @@ findPresentationCtx(LST_HEAD ** lst, DUL_PRESENTATIONCONTEXTID contextID);
 PRV_SCUSCPROLE *
 findSCUSCPRole(LST_HEAD ** lst, char *abstractSyntax);
 
-void destroyPresentationContextList(LST_HEAD ** l);
-void destroyUserInformationLists(DUL_USERINFO * userInfo);
-
-static FSM_Event_Description Event_Table[] = {
+static volatile FSM_Event_Description Event_Table[] = {
     {A_ASSOCIATE_REQ_LOCAL_USER, "A-ASSOCIATE request (local user)"},
     {TRANS_CONN_CONFIRM_LOCAL_USER, "Transport conn confirmation (local)"},
     {A_ASSOCIATE_AC_PDU_RCV, "A-ASSOCIATE-AC PDU (on transport)"},
@@ -311,7 +327,7 @@ static FSM_Event_Description Event_Table[] = {
     {INVALID_PDU, "Unrecognized/invalid PDU"}
 };
 
-static FSM_FUNCTION FSM_FunctionTable[] = {
+static volatile FSM_FUNCTION FSM_FunctionTable[] = {
     {AE_1, AE_1_TransportConnect, "AE 1 Transport Connect"},
     {AE_2, AE_2_SendAssociateRQPDU, "AE 2 Send Associate RQ PDU"},
     {AE_3, AE_3_AssociateConfirmationAccept, "AE 3 Associate Confirmation Accept"},
@@ -346,8 +362,9 @@ static FSM_FUNCTION FSM_FunctionTable[] = {
     {AR_10, AR_10_ConfirmRelease, "AR 10 Confirm Release"}
 };
 
-static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
+static volatile FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
     {
+        // EVENT,                    STATE,  ACTION,   NEXT_STATE
         {A_ASSOCIATE_REQ_LOCAL_USER, STATE1, AE_1, STATE4, "", "", NULL},
         {A_ASSOCIATE_REQ_LOCAL_USER, STATE2, NOACTION, NOSTATE, "", "", NULL},
         {A_ASSOCIATE_REQ_LOCAL_USER, STATE3, NOACTION, NOSTATE, "", "", NULL},
@@ -360,7 +377,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_ASSOCIATE_REQ_LOCAL_USER, STATE10, NOACTION, NOSTATE, "", "", NULL},
         {A_ASSOCIATE_REQ_LOCAL_USER, STATE11, NOACTION, NOSTATE, "", "", NULL},
         {A_ASSOCIATE_REQ_LOCAL_USER, STATE12, NOACTION, NOSTATE, "", "", NULL},
-    {A_ASSOCIATE_REQ_LOCAL_USER, STATE13, NOACTION, NOSTATE, "", "", NULL}},
+        {A_ASSOCIATE_REQ_LOCAL_USER, STATE13, NOACTION, NOSTATE, "", "", NULL}},
 
     {
         {TRANS_CONN_CONFIRM_LOCAL_USER, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -375,7 +392,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {TRANS_CONN_CONFIRM_LOCAL_USER, STATE10, NOACTION, NOSTATE, "", "", NULL},
         {TRANS_CONN_CONFIRM_LOCAL_USER, STATE11, NOACTION, NOSTATE, "", "", NULL},
         {TRANS_CONN_CONFIRM_LOCAL_USER, STATE12, NOACTION, NOSTATE, "", "", NULL},
-    {TRANS_CONN_CONFIRM_LOCAL_USER, STATE13, NOACTION, NOSTATE, "", "", NULL}},
+        {TRANS_CONN_CONFIRM_LOCAL_USER, STATE13, NOACTION, NOSTATE, "", "", NULL}},
 
     {
         {A_ASSOCIATE_AC_PDU_RCV, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -390,7 +407,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_ASSOCIATE_AC_PDU_RCV, STATE10, AA_8, STATE13, "", "", NULL},
         {A_ASSOCIATE_AC_PDU_RCV, STATE11, AA_8, STATE13, "", "", NULL},
         {A_ASSOCIATE_AC_PDU_RCV, STATE12, AA_8, STATE13, "", "", NULL},
-    {A_ASSOCIATE_AC_PDU_RCV, STATE13, AA_6, STATE13, "", "", NULL}},
+        {A_ASSOCIATE_AC_PDU_RCV, STATE13, AA_6, STATE13, "", "", NULL}},
 
     {
         {A_ASSOCIATE_RJ_PDU_RCV, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -405,7 +422,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_ASSOCIATE_RJ_PDU_RCV, STATE10, AA_8, STATE13, "", "", NULL},
         {A_ASSOCIATE_RJ_PDU_RCV, STATE11, AA_8, STATE13, "", "", NULL},
         {A_ASSOCIATE_RJ_PDU_RCV, STATE12, AA_8, STATE13, "", "", NULL},
-    {A_ASSOCIATE_RJ_PDU_RCV, STATE13, AA_6, STATE13, "", "", NULL}},
+        {A_ASSOCIATE_RJ_PDU_RCV, STATE13, AA_6, STATE13, "", "", NULL}},
 
     {
         {TRANS_CONN_INDICATION, STATE1, AE_5, STATE2, "", "", NULL},
@@ -420,14 +437,14 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {TRANS_CONN_INDICATION, STATE10, NOACTION, NOSTATE, "", "", NULL},
         {TRANS_CONN_INDICATION, STATE11, NOACTION, NOSTATE, "", "", NULL},
         {TRANS_CONN_INDICATION, STATE12, NOACTION, NOSTATE, "", "", NULL},
-    {TRANS_CONN_INDICATION, STATE13, NOACTION, NOSTATE, "", "", NULL}},
+        {TRANS_CONN_INDICATION, STATE13, NOACTION, NOSTATE, "", "", NULL}},
 
     {
         {A_ASSOCIATE_RQ_PDU_RCV, STATE1, NOACTION, NOSTATE, "", "", NULL},
         {A_ASSOCIATE_RQ_PDU_RCV, STATE2, AE_6, NOSTATE, "", "", NULL},
         {A_ASSOCIATE_RQ_PDU_RCV, STATE3, AA_8, STATE13, "", "", NULL},
         {A_ASSOCIATE_RQ_PDU_RCV, STATE4, NOACTION, NOSTATE, "", "", NULL},
-        {A_ASSOCIATE_RQ_PDU_RCV, STATE5, AE_4, STATE1, "", "", NULL},
+        {A_ASSOCIATE_RQ_PDU_RCV, STATE5, AA_8, STATE13, "", "", NULL},
         {A_ASSOCIATE_RQ_PDU_RCV, STATE6, AA_8, STATE13, "", "", NULL},
         {A_ASSOCIATE_RQ_PDU_RCV, STATE7, AA_8, STATE13, "", "", NULL},
         {A_ASSOCIATE_RQ_PDU_RCV, STATE8, AA_8, STATE13, "", "", NULL},
@@ -435,7 +452,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_ASSOCIATE_RQ_PDU_RCV, STATE10, AA_8, STATE13, "", "", NULL},
         {A_ASSOCIATE_RQ_PDU_RCV, STATE11, AA_8, STATE13, "", "", NULL},
         {A_ASSOCIATE_RQ_PDU_RCV, STATE12, AA_8, STATE13, "", "", NULL},
-    {A_ASSOCIATE_RQ_PDU_RCV, STATE13, AA_7, STATE13, "", "", NULL}},
+        {A_ASSOCIATE_RQ_PDU_RCV, STATE13, AA_7, STATE13, "", "", NULL}},
 
     {
         {A_ASSOCIATE_RESPONSE_ACCEPT, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -450,7 +467,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_ASSOCIATE_RESPONSE_ACCEPT, STATE10, NOACTION, NOSTATE, "", "", NULL},
         {A_ASSOCIATE_RESPONSE_ACCEPT, STATE11, NOACTION, NOSTATE, "", "", NULL},
         {A_ASSOCIATE_RESPONSE_ACCEPT, STATE12, NOACTION, NOSTATE, "", "", NULL},
-    {A_ASSOCIATE_RESPONSE_ACCEPT, STATE13, NOACTION, NOSTATE, "", "", NULL}},
+        {A_ASSOCIATE_RESPONSE_ACCEPT, STATE13, NOACTION, NOSTATE, "", "", NULL}},
 
     {
         {A_ASSOCIATE_RESPONSE_REJECT, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -465,7 +482,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_ASSOCIATE_RESPONSE_REJECT, STATE10, NOACTION, NOSTATE, "", "", NULL},
         {A_ASSOCIATE_RESPONSE_REJECT, STATE11, NOACTION, NOSTATE, "", "", NULL},
         {A_ASSOCIATE_RESPONSE_REJECT, STATE12, NOACTION, NOSTATE, "", "", NULL},
-    {A_ASSOCIATE_RESPONSE_REJECT, STATE13, NOACTION, NOSTATE, "", "", NULL}},
+        {A_ASSOCIATE_RESPONSE_REJECT, STATE13, NOACTION, NOSTATE, "", "", NULL}},
 
     {
         {P_DATA_REQ, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -480,7 +497,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {P_DATA_REQ, STATE10, NOACTION, NOSTATE, "", "", NULL},
         {P_DATA_REQ, STATE11, NOACTION, NOSTATE, "", "", NULL},
         {P_DATA_REQ, STATE12, NOACTION, NOSTATE, "", "", NULL},
-    {P_DATA_REQ, STATE13, NOACTION, NOSTATE, "", "", NULL}},
+        {P_DATA_REQ, STATE13, NOACTION, NOSTATE, "", "", NULL}},
 
     {
         {P_DATA_TF_PDU_RCV, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -495,7 +512,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {P_DATA_TF_PDU_RCV, STATE10, AA_8, STATE13, "", "", NULL},
         {P_DATA_TF_PDU_RCV, STATE11, AA_8, STATE13, "", "", NULL},
         {P_DATA_TF_PDU_RCV, STATE12, AA_8, STATE13, "", "", NULL},
-    {P_DATA_TF_PDU_RCV, STATE13, AA_6, STATE13, "", "", NULL}},
+        {P_DATA_TF_PDU_RCV, STATE13, AA_6, STATE13, "", "", NULL}},
 
     {
         {A_RELEASE_REQ, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -510,7 +527,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_RELEASE_REQ, STATE10, NOACTION, NOSTATE, "", "", NULL},
         {A_RELEASE_REQ, STATE11, NOACTION, NOSTATE, "", "", NULL},
         {A_RELEASE_REQ, STATE12, NOACTION, NOSTATE, "", "", NULL},
-    {A_RELEASE_REQ, STATE13, NOACTION, NOSTATE, "", "", NULL}},
+        {A_RELEASE_REQ, STATE13, NOACTION, NOSTATE, "", "", NULL}},
 
     {
         {A_RELEASE_RQ_PDU_RCV, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -525,7 +542,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_RELEASE_RQ_PDU_RCV, STATE10, AA_8, STATE13, "", "", NULL},
         {A_RELEASE_RQ_PDU_RCV, STATE11, AA_8, STATE13, "", "", NULL},
         {A_RELEASE_RQ_PDU_RCV, STATE12, AA_8, STATE13, "", "", NULL},
-    {A_RELEASE_RQ_PDU_RCV, STATE13, AA_6, STATE13, "", "", NULL}},
+        {A_RELEASE_RQ_PDU_RCV, STATE13, AA_6, STATE13, "", "", NULL}},
 
     {
         {A_RELEASE_RP_PDU_RCV, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -540,7 +557,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_RELEASE_RP_PDU_RCV, STATE10, AR_10, STATE12, "", "", NULL},
         {A_RELEASE_RP_PDU_RCV, STATE11, AR_3, STATE1, "", "", NULL},
         {A_RELEASE_RP_PDU_RCV, STATE12, AA_8, STATE13, "", "", NULL},
-    {A_RELEASE_RP_PDU_RCV, STATE13, AA_6, STATE13, "", "", NULL}},
+        {A_RELEASE_RP_PDU_RCV, STATE13, AA_6, STATE13, "", "", NULL}},
 
     {
         {A_RELEASE_RESP, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -555,7 +572,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_RELEASE_RESP, STATE10, NOACTION, NOSTATE, "", "", NULL},
         {A_RELEASE_RESP, STATE11, NOACTION, NOSTATE, "", "", NULL},
         {A_RELEASE_RESP, STATE12, AR_4, STATE13, "", "", NULL},
-    {A_RELEASE_RESP, STATE13, NOACTION, NOSTATE, "", "", NULL}},
+        {A_RELEASE_RESP, STATE13, NOACTION, NOSTATE, "", "", NULL}},
 
     {
         {A_ABORT_REQ, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -570,7 +587,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_ABORT_REQ, STATE10, AA_1, STATE13, "", "", NULL},
         {A_ABORT_REQ, STATE11, AA_1, STATE13, "", "", NULL},
         {A_ABORT_REQ, STATE12, AA_1, STATE13, "", "", NULL},
-    {A_ABORT_REQ, STATE13, NOACTION, NOSTATE, "", "", NULL}},
+        {A_ABORT_REQ, STATE13, NOACTION, NOSTATE, "", "", NULL}},
 
     {
         {A_ABORT_PDU_RCV, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -585,7 +602,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {A_ABORT_PDU_RCV, STATE10, AA_3, STATE1, "", "", NULL},
         {A_ABORT_PDU_RCV, STATE11, AA_3, STATE1, "", "", NULL},
         {A_ABORT_PDU_RCV, STATE12, AA_3, STATE1, "", "", NULL},
-    {A_ABORT_PDU_RCV, STATE13, AA_2, STATE1, "", "", NULL}},
+        {A_ABORT_PDU_RCV, STATE13, AA_2, STATE1, "", "", NULL}},
 
     {
         {TRANS_CONN_CLOSED, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -600,25 +617,36 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {TRANS_CONN_CLOSED, STATE10, AA_4, STATE1, "", "", NULL},
         {TRANS_CONN_CLOSED, STATE11, AA_4, STATE1, "", "", NULL},
         {TRANS_CONN_CLOSED, STATE12, AA_4, STATE1, "", "", NULL},
-    {TRANS_CONN_CLOSED, STATE13, AR_5, STATE1, "", "", NULL}},
+        {TRANS_CONN_CLOSED, STATE13, AR_5, STATE1, "", "", NULL}},
 
     {
         {ARTIM_TIMER_EXPIRED, STATE1, NOACTION, NOSTATE, "", "", NULL},
-        {ARTIM_TIMER_EXPIRED, STATE2, AA_2, STATE1, "", "", NULL},
+        {ARTIM_TIMER_EXPIRED, STATE2, AA_2T, STATE1, "", "", NULL},
         {ARTIM_TIMER_EXPIRED, STATE3, NOACTION, NOSTATE, "", "", NULL},
         {ARTIM_TIMER_EXPIRED, STATE4, NOACTION, NOSTATE, "", "", NULL},
-        {ARTIM_TIMER_EXPIRED, STATE5, NOACTION, NOSTATE, "", "", NULL},
+
+        // DICOM part 8 does not define an action and state for the
+        // situation where a timeout occurs while we are waiting for an
+        // incoming A-ASSOCIATE-AC or A-ASSOCIATE-RJ. We close the transport
+        // connection, return an error code indicating a timeout,
+        // and reset the FSM to idle state (STATE1).
+        {ARTIM_TIMER_EXPIRED, STATE5, AA_2T, STATE1, "", "", NULL},
+
         {ARTIM_TIMER_EXPIRED, STATE6, NOACTION, NOSTATE, "", "", NULL},
-/* This next line is not per the standard.  We added a timeout action
-** in this state.
-*/
+
+        // DICOM part 8 does not define an action and state for the
+        // situation where a timeout occurs while we are waiting for an
+        // incoming A-RELEASE-RSP. We close the transport
+        // connection, return an error code indicating a timeout,
+        // and reset the FSM to idle state (STATE1).
         {ARTIM_TIMER_EXPIRED, STATE7, AA_2T, STATE1, "", "", NULL},
+
         {ARTIM_TIMER_EXPIRED, STATE8, NOACTION, NOSTATE, "", "", NULL},
         {ARTIM_TIMER_EXPIRED, STATE9, NOACTION, NOSTATE, "", "", NULL},
         {ARTIM_TIMER_EXPIRED, STATE10, NOACTION, NOSTATE, "", "", NULL},
         {ARTIM_TIMER_EXPIRED, STATE11, NOACTION, NOSTATE, "", "", NULL},
         {ARTIM_TIMER_EXPIRED, STATE12, NOACTION, NOSTATE, "", "", NULL},
-    {ARTIM_TIMER_EXPIRED, STATE13, AA_2, STATE1, "", "", NULL}},
+        {ARTIM_TIMER_EXPIRED, STATE13, AA_2, STATE1, "", "", NULL}},
 
     {
         {INVALID_PDU, STATE1, NOACTION, NOSTATE, "", "", NULL},
@@ -633,7 +661,7 @@ static FSM_ENTRY StateTable[DUL_NUMBER_OF_EVENTS][DUL_NUMBER_OF_STATES] = {
         {INVALID_PDU, STATE10, AA_8, STATE13, "", "", NULL},
         {INVALID_PDU, STATE11, AA_8, STATE13, "", "", NULL},
         {INVALID_PDU, STATE12, AA_8, STATE13, "", "", NULL},
-    {INVALID_PDU, STATE13, AA_7, STATE13, "", "", NULL}}
+        {INVALID_PDU, STATE13, AA_7, STATE13, "", "", NULL}}
 };
 
 
@@ -714,7 +742,7 @@ PRV_StateMachine(PRIVATE_NETWORKKEY ** network,
                  PRIVATE_ASSOCIATIONKEY ** association, int event, int state,
                  void *params)
 {
-    FSM_ENTRY
+    volatile FSM_ENTRY
         * entry;
 
     /* check if the given event is valid, if not return an error */
@@ -741,8 +769,8 @@ PRV_StateMachine(PRIVATE_NETWORKKEY ** network,
 
     /* dump information if required */
     DCMNET_TRACE("DUL  FSM Table: State: " << state << " Event: " << event << OFendl
-            << "DUL  Event:  " << entry->eventName << OFendl
-            << "DUL  Action: " << entry->actionName);
+            << "DUL  Event:  " << OFconst_cast(const char *, entry->eventName) << OFendl
+            << "DUL  Action: " << OFconst_cast(const char *, entry->actionName));
 
     /* if the state table's entry specifies an action function, execute this function and return */
     /* it's result value. If there is no action function defined, return a corresponding error. */
@@ -859,7 +887,7 @@ AE_3_AssociateConfirmationAccept(PRIVATE_NETWORKKEY ** /*network*/,
     DUL_ASSOCIATESERVICEPARAMETERS
     * service;
     unsigned char
-        *buffer=NULL,
+        * buffer = NULL,
         pduType,
         pduReserve;
     unsigned long
@@ -870,7 +898,7 @@ AE_3_AssociateConfirmationAccept(PRIVATE_NETWORKKEY ** /*network*/,
         * prvCtx;
     DUL_PRESENTATIONCONTEXT
         * userPresentationCtx,
-        *requestedPresentationCtx;
+        * requestedPresentationCtx;
     DUL_SUBITEM
         * subItem;
     PRV_SCUSCPROLE
@@ -906,10 +934,9 @@ AE_3_AssociateConfirmationAccept(PRIVATE_NETWORKKEY ** /*network*/,
         free(buffer);
         if (cond.bad()) return makeDcmnetSubCondition(DULC_ILLEGALPDU, OF_error, "DUL Illegal or ill-formed PDU", cond);
 
-        (void) strcpy(service->respondingAPTitle, assoc.calledAPTitle);
-        (void) strcpy(service->callingAPTitle, assoc.callingAPTitle);
-        (void) strcpy(service->applicationContextName,
-                      assoc.applicationContext.data);
+        OFStandard::strlcpy(service->respondingAPTitle, assoc.calledAPTitle, sizeof(service->respondingAPTitle));
+        OFStandard::strlcpy(service->callingAPTitle, assoc.callingAPTitle, sizeof(service->callingAPTitle));
+        OFStandard::strlcpy(service->applicationContextName, assoc.applicationContext.data, sizeof(service->applicationContextName));
 
         if ((service->acceptedPresentationContext = LST_Create()) == NULL) return EC_MemoryExhausted;
 
@@ -920,15 +947,16 @@ AE_3_AssociateConfirmationAccept(PRIVATE_NETWORKKEY ** /*network*/,
             userPresentationCtx = (DUL_PRESENTATIONCONTEXT*)malloc(sizeof(DUL_PRESENTATIONCONTEXT));
             if (userPresentationCtx == NULL) return EC_MemoryExhausted;
 
-            (void) memset(userPresentationCtx, 0, sizeof(userPresentationCtx));
+            (void) memset(userPresentationCtx, 0, sizeof(DUL_PRESENTATIONCONTEXT));
             userPresentationCtx->result = prvCtx->result;
             userPresentationCtx->presentationContextID = prvCtx->contextID;
             userPresentationCtx->proposedTransferSyntax = NULL;
             requestedPresentationCtx = findPresentationCtx(
                  &service->requestedPresentationContext, prvCtx->contextID);
             if (requestedPresentationCtx != NULL) {
-                strcpy(userPresentationCtx->abstractSyntax,
-                       requestedPresentationCtx->abstractSyntax);
+                OFStandard::strlcpy(userPresentationCtx->abstractSyntax,
+                    requestedPresentationCtx->abstractSyntax,
+                    sizeof(userPresentationCtx->abstractSyntax));
                 userPresentationCtx->proposedSCRole =
                     requestedPresentationCtx->proposedSCRole;
             }
@@ -949,6 +977,7 @@ AE_3_AssociateConfirmationAccept(PRIVATE_NETWORKKEY ** /*network*/,
             {
               char buf1[256];
               sprintf(buf1, "DUL Peer supplied illegal number of transfer syntaxes (%d)", 0);
+              free(userPresentationCtx);
               return makeDcmnetCondition(DULC_PEERILLEGALXFERSYNTAXCOUNT, OF_error, buf1);
             }
 
@@ -956,14 +985,14 @@ AE_3_AssociateConfirmationAccept(PRIVATE_NETWORKKEY ** /*network*/,
             {
               char buf2[256];
               sprintf(buf2, "DUL Peer supplied illegal number of transfer syntaxes (%ld)", LST_Count(&prvCtx->transferSyntaxList));
+              free(userPresentationCtx);
               return makeDcmnetCondition(DULC_PEERILLEGALXFERSYNTAXCOUNT, OF_error, buf2);
             }
             subItem = (DUL_SUBITEM*)LST_Head(&prvCtx->transferSyntaxList);
             if (subItem != NULL)
-                (void) strcpy(userPresentationCtx->acceptedTransferSyntax,
-                              subItem->data);
-            cond = LST_Enqueue(&service->acceptedPresentationContext, (LST_NODE*)userPresentationCtx);
-            if (cond.bad()) return cond;
+                OFStandard::strlcpy(userPresentationCtx->acceptedTransferSyntax,
+                              subItem->data, sizeof(userPresentationCtx->acceptedTransferSyntax));
+            LST_Enqueue(&service->acceptedPresentationContext, (LST_NODE*)userPresentationCtx);
 
             prvCtx = (PRV_PRESENTATIONCONTEXTITEM*)LST_Next(&assoc.presentationContextList);
 
@@ -984,16 +1013,16 @@ AE_3_AssociateConfirmationAccept(PRIVATE_NETWORKKEY ** /*network*/,
 
         }
 
-        destroyPresentationContextList(&assoc.presentationContextList);
+        destroyAssociatePDUPresentationContextList(&assoc.presentationContextList);
         destroyUserInformationLists(&assoc.userInfo);
         service->peerMaxPDU = assoc.userInfo.maxLength.maxLength;
         (*association)->maxPDV = assoc.userInfo.maxLength.maxLength;
         (*association)->maxPDVAcceptor =
             assoc.userInfo.maxLength.maxLength;
-        strcpy(service->calledImplementationClassUID,
-               assoc.userInfo.implementationClassUID.data);
-        strcpy(service->calledImplementationVersionName,
-               assoc.userInfo.implementationVersionName.data);
+        OFStandard::strlcpy(service->calledImplementationClassUID,
+               assoc.userInfo.implementationClassUID.data, DICOM_UI_LENGTH + 1);
+        OFStandard::strlcpy(service->calledImplementationVersionName,
+               assoc.userInfo.implementationVersionName.data, 16 + 1);
 
         (*association)->associationState = DUL_ASSOC_ESTABLISHED;
         (*association)->protocolState = nextState;
@@ -1083,7 +1112,8 @@ AE_5_TransportConnectResponse(PRIVATE_NETWORKKEY ** /*network*/,
 {
     clearPDUCache(association);
     (*association)->protocolState = nextState;
-/*  Start the timer */
+
+    /* Start the timer (?) */
 
     return EC_Normal;
 }
@@ -1164,15 +1194,14 @@ AE_6_ExamineAssociateRequest(PRIVATE_NETWORKKEY ** /*network*/,
                 (*association)->protocolState = STATE3;
             return cond;
         }
-        (void) strcpy(service->calledAPTitle, assoc.calledAPTitle);
-        (void) strcpy(service->callingAPTitle, assoc.callingAPTitle);
-        (void) strcpy(service->applicationContextName,
-                      assoc.applicationContext.data);
+        OFStandard::strlcpy(service->calledAPTitle, assoc.calledAPTitle, sizeof(service->calledAPTitle));
+        OFStandard::strlcpy(service->callingAPTitle, assoc.callingAPTitle, sizeof(service->callingAPTitle));
+        OFStandard::strlcpy(service->applicationContextName, assoc.applicationContext.data, sizeof(service->applicationContextName));
 
         if ((service->requestedPresentationContext = LST_Create()) == NULL) return EC_MemoryExhausted;
         if (translatePresentationContextList(&assoc.presentationContextList,
                                              &assoc.userInfo.SCUSCPRoleList,
-                      &service->requestedPresentationContext).bad())
+                                             &service->requestedPresentationContext).bad())
         {
             return DUL_PCTRANSLATIONFAILURE;
         }
@@ -1195,13 +1224,13 @@ AE_6_ExamineAssociateRequest(PRIVATE_NETWORKKEY ** /*network*/,
         (*association)->maxPDV = assoc.userInfo.maxLength.maxLength;
         (*association)->maxPDVRequestor =
             assoc.userInfo.maxLength.maxLength;
-        strcpy(service->callingImplementationClassUID,
-               assoc.userInfo.implementationClassUID.data);
-        strcpy(service->callingImplementationVersionName,
-               assoc.userInfo.implementationVersionName.data);
+        OFStandard::strlcpy(service->callingImplementationClassUID,
+               assoc.userInfo.implementationClassUID.data, DICOM_UI_LENGTH + 1);
+        OFStandard::strlcpy(service->callingImplementationVersionName,
+               assoc.userInfo.implementationVersionName.data, 16 + 1);
         (*association)->associationState = DUL_ASSOC_ESTABLISHED;
 
-        destroyPresentationContextList(&assoc.presentationContextList);
+        destroyAssociatePDUPresentationContextList(&assoc.presentationContextList);
         destroyUserInformationLists(&assoc.userInfo);
 
         /* If this PDU is ok with us */
@@ -1279,6 +1308,9 @@ AE_8_SendAssociateRJ(PRIVATE_NETWORKKEY ** network,
     abortItems = (DUL_ABORTITEMS *) params;
     cond = sendAssociationRJTCP(network, abortItems, association);
     (*association)->protocolState = nextState;
+
+    /* Start the timer (?) */
+
     return cond;
 }
 
@@ -1384,10 +1416,20 @@ DT_2_IndicatePData(PRIVATE_NETWORKKEY ** /*network*/,
         p += 4 + pdvLength;                 //move p so that it points to the next PDV (move p 4 bytes over the length field plus the amount of bytes which is captured in the PDV's length field (over presentation context.Id, message information header and data fragment))
         length -= 4 + pdvLength;            //update length (i.e. determine the length of the buffer which has not been evaluated yet.)
         pdvCount++;                         //increase counter by one, since we've found another PDV
+
+        // There must be at least a presentation context ID and a message
+        // control header (see below), else the calculation pdvLength - 2 below
+        // will underflow.
+        if (pdvLength < 2)
+        {
+           char buf[256];
+           sprintf(buf, "PDV with invalid length %lu encountered. This probably indicates a malformed P DATA PDU.", pdvLength);
+           return makeDcmnetCondition(DULC_ILLEGALPDULENGTH, OF_error, buf);
+        }
     }
 
     /* if after having counted the PDVs the length variable does not equal */
-    /* 0, the PDV lenghts did not add up correctly. Something is fishy. */
+    /* 0, the PDV lengths did not add up correctly. Something is fishy. */
     if (length != 0)
     {
        char buf[256];
@@ -2177,9 +2219,12 @@ requestAssociationTCP(PRIVATE_NETWORKKEY ** network,
 {
     char node[128];
     int  port;
-    struct sockaddr_in server;
-    struct hostent *hp;
+    OFSockAddr server;
+#ifdef _WIN32
+    SOCKET s;
+#else
     int s;
+#endif
     struct linger sockarg;
 
     if (sscanf(params->calledPresentationAddress, "%[^:]:%d", node, &port) != 2)
@@ -2189,58 +2234,51 @@ requestAssociationTCP(PRIVATE_NETWORKKEY ** network,
         return makeDcmnetCondition(DULC_ILLEGALSERVICEPARAMETER, OF_error, buf);
     }
 
-    s = socket(AF_INET, SOCK_STREAM, 0);
-    if (s < 0)
-    {
-      char buf[256];
-      OFString msg = "TCP Initialization Error: ";
-      msg += OFStandard::strerror(errno, buf, sizeof(buf));
-      return makeDcmnetCondition(DULC_TCPINITERROR, OF_error, msg.c_str());
-    }
-    server.sin_family = AF_INET;
-
-#ifdef NO_WINDOWS95_ADDRESS_TRANSLATION_WORKAROUND
-    hp = gethostbyname(node);
-    if (hp == NULL)
-    {
-        char buf2[4095]; // node could be a long string
-        sprintf(buf2, "Attempt to connect to unknown host: %s", node);
-        return makeDcmnetCondition(DULC_UNKNOWNHOST, OF_error, buf2);
-    }
-    (void) memcpy(&server.sin_addr, hp->h_addr, (size_t) hp->h_length);
-#else
     /*
-     * Under Win95 gethostbyname will not accept an IP address e.g.
-     * "134.106.1.1".  This appears to work without problems under WindowsNT
-     * and several Unix variants.
-     * Workaround is to explicitly handle the IP address case.
+     * At least officially, gethostbyname will not accept an IP address on many
+     * operating systems (e.g. Windows or FreeBSD), so we need to explicitly
+     * handle the IP address case.
      */
-    unsigned long addr = 0;
-    if ((int)(addr = inet_addr(node)) != -1) {
-        // it is an IP address
-        (void) memcpy(&server.sin_addr, &addr, (size_t) sizeof(addr));
-    } else {
-        // must be a host name
-        hp = gethostbyname(node);
-        if (hp == NULL)
+    unsigned long addr = inet_addr(node);
+    if (addr != INADDR_NONE)
+    {
+        // it is an IPv4 address
+        server.setFamily(AF_INET);
+        struct sockaddr_in *sa = server.getSockaddr_in();
+        sa->sin_addr.s_addr = addr;
+    }
+    else
+    {
+        // must be a host name or an IPv6 address
+        OFStandard::getAddressByHostname(node, server);
+        if (server.getFamily() == 0)
         {
           char buf2[4095]; // node could be a long string
           sprintf(buf2, "Attempt to connect to unknown host: %s", node);
           return makeDcmnetCondition(DULC_UNKNOWNHOST, OF_error, buf2);
         }
-        (void) memcpy(&server.sin_addr, hp->h_addr, (size_t) hp->h_length);
     }
-#endif
-
-    server.sin_port = (unsigned short) htons(port);
+    server.setPort(OFstatic_cast(unsigned short, htons(OFstatic_cast(unsigned short, port))));
 
     // get global connection timeout
     Sint32 connectTimeout = dcmConnectionTimeout.get();
 
-#ifdef HAVE_WINSOCK_H
-      u_long arg = TRUE;
+    s = socket(server.getFamily(), SOCK_STREAM, 0);
+#ifdef _WIN32
+    if (s == INVALID_SOCKET)
 #else
-      int flags = 0;
+    if (s < 0)
+#endif
+    {
+      OFString msg = "TCP Initialization Error: ";
+      msg += OFStandard::getLastNetworkErrorCode().message();
+      return makeDcmnetCondition(DULC_TCPINITERROR, OF_error, msg.c_str());
+    }
+
+#ifdef HAVE_WINSOCK_H
+    u_long arg = TRUE;
+#else
+    int flags = 0;
 #endif
 
     if (connectTimeout >= 0)
@@ -2255,7 +2293,10 @@ requestAssociationTCP(PRIVATE_NETWORKKEY ** network,
     }
 
     // depending on the socket mode, connect will block or return immediately
-    int rc = connect(s, (struct sockaddr *) & server, sizeof(server));
+    int rc;
+    do {
+        rc = connect(s, server.getSockaddr(), server.size());
+    } while (rc == -1 && OFStandard::getLastNetworkErrorCode().value() == DCMNET_EINTR);
 
 #ifdef HAVE_WINSOCK_H
     if (rc == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK)
@@ -2263,6 +2304,7 @@ requestAssociationTCP(PRIVATE_NETWORKKEY ** network,
     if (rc < 0 && errno == EINPROGRESS)
 #endif
     {
+#ifndef DCMTK_HAVE_POLL
         // we're in non-blocking mode. Prepare to wait for timeout.
         fd_set fdSet;
         FD_ZERO(&fdSet);
@@ -2271,13 +2313,30 @@ requestAssociationTCP(PRIVATE_NETWORKKEY ** network,
         FD_SET((unsigned int) s, &fdSet);
 #else
         FD_SET(s, &fdSet);
-#endif
+#endif /* __MINGW32__ */
+#endif /* DCMTK_HAVE_POLL */
 
         struct timeval timeout;
         timeout.tv_sec = connectTimeout;
         timeout.tv_usec = 0;
 
-        rc = select(s+1, NULL, &fdSet, NULL, &timeout);
+        do {
+#ifdef DCMTK_HAVE_POLL
+            struct pollfd pfd[] =
+            {
+                { s, POLLOUT, 0 }
+            };
+            rc = poll(pfd, 1, timeout.tv_sec*1000+(timeout.tv_usec/1000));
+#else
+            // the typecast is safe because Windows ignores the first select() parameter anyway
+            rc = select(OFstatic_cast(int, s + 1), NULL, &fdSet, NULL, &timeout);
+#endif
+        } while (rc == -1 && OFStandard::getLastNetworkErrorCode().value() == DCMNET_EINTR);
+
+        if (DCM_dcmnetLogger.isEnabledFor(OFLogger::DEBUG_LOG_LEVEL))
+        {
+            DU_logSelectResult(rc);
+        }
 
         // reset socket to blocking mode
 #ifdef HAVE_WINSOCK_H
@@ -2299,9 +2358,8 @@ requestAssociationTCP(PRIVATE_NETWORKKEY ** network,
             if ((*association)->connection) delete (*association)->connection;
             (*association)->connection = NULL;
 
-            char buf[256];
             OFString msg = "TCP Initialization Error: ";
-            msg += OFStandard::strerror(errno, buf, sizeof(buf));
+            msg += OFStandard::getLastNetworkErrorCode().message();
             msg += " (Timeout)";
             return makeDcmnetCondition(DULC_TCPINITERROR, OF_error, msg.c_str());
   }
@@ -2360,7 +2418,7 @@ requestAssociationTCP(PRIVATE_NETWORKKEY ** network,
 
     if (rc < 0)
     {
-        // an error other than timeout in non-blocking mode has occured,
+        // an error other than timeout in non-blocking mode has occurred,
         // either in connect() or in select().
 #ifdef HAVE_WINSOCK_H
         (void) shutdown(s,  1 /* SD_SEND */);
@@ -2372,9 +2430,8 @@ requestAssociationTCP(PRIVATE_NETWORKKEY ** network,
         if ((*association)->connection) delete (*association)->connection;
         (*association)->connection = NULL;
 
-        char buf[256];
         OFString msg = "TCP Initialization Error: ";
-        msg += OFStandard::strerror(errno, buf, sizeof(buf));
+        msg += OFStandard::getLastNetworkErrorCode().message();
         return makeDcmnetCondition(DULC_TCPINITERROR, OF_error, msg.c_str());
     } else {
         // success - we've opened a TCP transport connection
@@ -2398,64 +2455,70 @@ requestAssociationTCP(PRIVATE_NETWORKKEY ** network,
 #endif
           (*association)->networkState = NETWORK_DISCONNECTED;
 
-          char buf[256];
           OFString msg = "TCP Initialization Error: ";
-          msg += OFStandard::strerror(errno, buf, sizeof(buf));
+          msg += OFStandard::getLastNetworkErrorCode().message();
           return makeDcmnetCondition(DULC_TCPINITERROR, OF_error, msg.c_str());
         }
         sockarg.l_onoff = 0;
         sockarg.l_linger = 0;
 
-#ifdef HAVE_GUSI_H
-        /* GUSI always returns an error for setsockopt(...) */
-#else
         if (setsockopt(s, SOL_SOCKET, SO_LINGER, (char *) &sockarg, (int) sizeof(sockarg)) < 0)
         {
-          char buf[256];
           OFString msg = "TCP Initialization Error: ";
-          msg += OFStandard::strerror(errno, buf, sizeof(buf));
+          msg += OFStandard::getLastNetworkErrorCode().message();
           return makeDcmnetCondition(DULC_TCPINITERROR, OF_error, msg.c_str());
         }
-#endif
         setTCPBufferLength(s);
 
-#ifndef DONT_DISABLE_NAGLE_ALGORITHM
         /*
-         * Disable the Nagle algorithm.
-         * This provides a 2-4 times performance improvement (WinNT4/SP4, 100Mbit/s Ethernet).
-         * Effects on other environments are unknown.
-         * The code below allows the Nagle algorithm to be enabled by setting the TCP_NODELAY environment
-         * variable to have value 0.
+         * Disable the so-called Nagle algorithm (if requested).
+         * This might provide a better network performance on some systems/environments.
+         * By default, the algorithm is not disabled unless DISABLE_NAGLE_ALGORITHM is defined.
+         * The default behavior can be changed by setting the environment variable TCP_NODELAY.
          */
+
+#ifdef DONT_DISABLE_NAGLE_ALGORITHM
+#ifdef _MSC_VER
+#pragma message("The macro DONT_DISABLE_NAGLE_ALGORITHM is not supported anymore. See 'macros.txt' for details.")
+#else
+#warning The macro DONT_DISABLE_NAGLE_ALGORITHM is not supported anymore. See "macros.txt" for details.
+#endif
+#endif
+
+#ifdef DISABLE_NAGLE_ALGORITHM
         int tcpNoDelay = 1; // disable
+#else
+        int tcpNoDelay = 0; // don't disable
+#endif
         char* tcpNoDelayString = NULL;
+        DCMNET_TRACE("checking whether environment variable TCP_NODELAY is set");
         if ((tcpNoDelayString = getenv("TCP_NODELAY")) != NULL)
         {
-            if (sscanf(tcpNoDelayString, "%d", &tcpNoDelay) != 1)
-            {
-              DCMNET_WARN("DULFSM: cannot parse environment variable TCP_NODELAY=" << tcpNoDelayString);
-            }
-        }
+          if (sscanf(tcpNoDelayString, "%d", &tcpNoDelay) != 1)
+          {
+            DCMNET_WARN("DULFSM: cannot parse environment variable TCP_NODELAY=" << tcpNoDelayString);
+          }
+        } else
+          DCMNET_TRACE("  environment variable TCP_NODELAY not set, using the default value (" << tcpNoDelay << ")");
         if (tcpNoDelay) {
-            if (setsockopt(s, IPPROTO_TCP, TCP_NODELAY, (char*)&tcpNoDelay, sizeof(tcpNoDelay)) < 0)
-            {
-              char buf[256];
-              OFString msg = "TCP Initialization Error: ";
-              msg += OFStandard::strerror(errno, buf, sizeof(buf));
-              return makeDcmnetCondition(DULC_TCPINITERROR, OF_error, msg.c_str());
-            }
+#ifdef DISABLE_NAGLE_ALGORITHM
+          DCMNET_DEBUG("DULFSM: disabling Nagle algorithm as defined at compilation time (DISABLE_NAGLE_ALGORITHM)");
+#else
+          DCMNET_DEBUG("DULFSM: disabling Nagle algorithm as requested at runtime (TCP_NODELAY=" << tcpNoDelayString << ")");
+#endif
+          if (setsockopt(s, IPPROTO_TCP, TCP_NODELAY, (char*)&tcpNoDelay, sizeof(tcpNoDelay)) < 0)
+          {
+            OFString msg = "TCP Initialization Error: ";
+            msg += OFStandard::getLastNetworkErrorCode().message();
+            return makeDcmnetCondition(DULC_TCPINITERROR, OF_error, msg.c_str());
+          }
+#ifdef DISABLE_NAGLE_ALGORITHM
+        } else {
+          DCMNET_DEBUG("DULFSM: do not disable Nagle algorithm as requested at runtime (TCP_NODELAY=" << tcpNoDelayString << ")");
+#endif
         }
-#endif // DONT_DISABLE_NAGLE_ALGORITHM
 
-       DcmTransportLayerStatus tcsStatus;
-       if (TCS_ok != (tcsStatus = (*association)->connection->clientSideHandshake()))
-       {
-         DCMNET_ERROR("TLS client handshake failed");
-         OFString msg = "DUL secure transport layer: ";
-         msg += (*association)->connection->errorString(tcsStatus);
-         return makeDcmnetCondition(DULC_TLSERROR, OF_error, msg.c_str());
-       }
-       return EC_Normal;
+        return (*association)->connection->clientSideHandshake();
     }
 }
 
@@ -2524,19 +2587,18 @@ sendAssociationRQTCP(PRIVATE_NETWORKKEY ** /*network*/,
       }
     }
 
-    destroyPresentationContextList(&associateRequest.presentationContextList);
+    destroyAssociatePDUPresentationContextList(&associateRequest.presentationContextList);
     destroyUserInformationLists(&associateRequest.userInfo);
     if (cond.bad())
         return cond;
 
     do {
       nbytes = (*association)->connection ? (*association)->connection->write((char*)b, size_t(associateRequest.length + 6)) : 0;
-    } while (nbytes == -1 && errno == EINTR);
+    } while (nbytes == -1 && OFStandard::getLastNetworkErrorCode().value() == DCMNET_EINTR);
     if ((unsigned long) nbytes != associateRequest.length + 6)
     {
-      char buf[256];
       OFString msg = "TCP I/O Error (";
-      msg += OFStandard::strerror(errno, buf, sizeof(buf));
+      msg += OFStandard::getLastNetworkErrorCode().message();
       msg += ") occurred in routine: sendAssociationRQTCP";
       return makeDcmnetCondition(DULC_TCPIOERROR, OF_error, msg.c_str());
     }
@@ -2608,19 +2670,18 @@ sendAssociationACTCP(PRIVATE_NETWORKKEY ** /*network*/,
       }
     }
 
-    destroyPresentationContextList(&associateReply.presentationContextList);
+    destroyAssociatePDUPresentationContextList(&associateReply.presentationContextList);
     destroyUserInformationLists(&associateReply.userInfo);
 
     if (cond.bad()) return cond;
 
     do {
       nbytes = (*association)->connection ? (*association)->connection->write((char*)b, size_t(associateReply.length + 6)) : 0;
-    } while (nbytes == -1 && errno == EINTR);
+    } while (nbytes == -1 && OFStandard::getLastNetworkErrorCode().value() == DCMNET_EINTR);
     if ((unsigned long) nbytes != associateReply.length + 6)
     {
-      char buf[256];
       OFString msg = "TCP I/O Error (";
-      msg += OFStandard::strerror(errno, buf, sizeof(buf));
+      msg += OFStandard::getLastNetworkErrorCode().message();
       msg += ") occurred in routine: sendAssociationACTCP";
       return makeDcmnetCondition(DULC_TCPIOERROR, OF_error, msg.c_str());
     }
@@ -2666,8 +2727,7 @@ sendAssociationRJTCP(PRIVATE_NETWORKKEY ** /*network*/,
 
 
     OFCondition cond = constructAssociateRejectPDU((unsigned char) abortItems->result,
-     (unsigned char) abortItems->source, (unsigned char) abortItems->reason,
-                                       &pdu);
+        (unsigned char) abortItems->source, (unsigned char) abortItems->reason, &pdu);
     if (pdu.length + 6 <= sizeof(buffer))
         b = buffer;
     else {
@@ -2691,12 +2751,11 @@ sendAssociationRJTCP(PRIVATE_NETWORKKEY ** /*network*/,
     {
         do {
           nbytes = (*association)->connection ? (*association)->connection->write((char*)b, size_t(pdu.length + 6)) : 0;
-        } while (nbytes == -1 && errno == EINTR);
+        } while (nbytes == -1 && OFStandard::getLastNetworkErrorCode().value() == DCMNET_EINTR);
         if ((unsigned long) nbytes != pdu.length + 6)
         {
-          char buf[256];
           OFString msg = "TCP I/O Error (";
-          msg += OFStandard::strerror(errno, buf, sizeof(buf));
+          msg += OFStandard::getLastNetworkErrorCode().message();
           msg += ") occurred in routine: sendAssociationRJTCP";
           return makeDcmnetCondition(DULC_TCPIOERROR, OF_error, msg.c_str());
         }
@@ -2752,12 +2811,11 @@ sendAbortTCP(DUL_ABORTITEMS * abortItems,
     if (cond.good()) {
         do {
           nbytes = (*association)->connection ? (*association)->connection->write((char*)b, size_t(pdu.length + 6)) : 0;
-        } while (nbytes == -1 && errno == EINTR);
+        } while (nbytes == -1 && OFStandard::getLastNetworkErrorCode().value() == DCMNET_EINTR);
         if ((unsigned long) nbytes != pdu.length + 6)
         {
-          char buf[256];
           OFString msg = "TCP I/O Error (";
-          msg += OFStandard::strerror(errno, buf, sizeof(buf));
+          msg += OFStandard::getLastNetworkErrorCode().message();
           msg += ") occurred in routine: sendAbortTCP";
           return makeDcmnetCondition(DULC_TCPIOERROR, OF_error, msg.c_str());
         }
@@ -2813,12 +2871,11 @@ sendReleaseRQTCP(PRIVATE_ASSOCIATIONKEY ** association)
     if (cond.good()) {
         do {
           nbytes = (*association)->connection ? (*association)->connection->write((char*)b, size_t(pdu.length + 6)) : 0;
-        } while (nbytes == -1 && errno == EINTR);
+        } while (nbytes == -1 && OFStandard::getLastNetworkErrorCode().value() == DCMNET_EINTR);
         if ((unsigned long) nbytes != pdu.length + 6)
         {
-          char buf[256];
           OFString msg = "TCP I/O Error (";
-          msg += OFStandard::strerror(errno, buf, sizeof(buf));
+          msg += OFStandard::getLastNetworkErrorCode().message();
           msg += ") occurred in routine: sendReleaseRQTCP";
           return makeDcmnetCondition(DULC_TCPIOERROR, OF_error, msg.c_str());
         }
@@ -2875,12 +2932,11 @@ sendReleaseRPTCP(PRIVATE_ASSOCIATIONKEY ** association)
     if (cond.good()) {
         do {
           nbytes = (*association)->connection ? (*association)->connection->write((char*)b, size_t(pdu.length + 6)) : 0;
-        } while (nbytes == -1 && errno == EINTR);
+        } while (nbytes == -1 && OFStandard::getLastNetworkErrorCode().value() == DCMNET_EINTR);
         if ((unsigned long) nbytes != pdu.length + 6)
         {
-          char buf[256];
           OFString msg = "TCP I/O Error (";
-          msg += OFStandard::strerror(errno, buf, sizeof(buf));
+          msg += OFStandard::getLastNetworkErrorCode().message();
           msg += ") occurred in routine: sendReleaseRPTCP";
           return makeDcmnetCondition(DULC_TCPIOERROR, OF_error, msg.c_str());
         }
@@ -2950,8 +3006,9 @@ sendPDataTCP(PRIVATE_ASSOCIATIONKEY ** association,
 
     /* start a loop iterate over all PDVs in the given */
     /* list and send every PDVs data over the network */
-    while (cond.good() && count-- > 0)
+    while (cond.good() && count > 0)
     {
+        --count;
         /* determine length of PDV */
         length = pdv->fragmentLength;
         /* determine data to be set */
@@ -2959,7 +3016,7 @@ sendPDataTCP(PRIVATE_ASSOCIATIONKEY ** association,
         /* because the current PDV's length can be greater than maxLength, we need */
         /* to start another loop so that we are able to send data gradually. So, */
         /* as long as this is the first iteration or length is greater than 0 and */
-        /* at the same time no error occured, do the following */
+        /* at the same time no error occurred, do the following */
         firstTrip = OFTrue;
         while ((firstTrip || (length > 0)) && (cond.good())) {
             /* indicate that the first iteration has been executed */
@@ -3028,14 +3085,13 @@ writeDataPDU(PRIVATE_ASSOCIATIONKEY ** association,
     do
     {
       nbytes = (*association)->connection ? (*association)->connection->write((char*)head, size_t(length)) : 0;
-    } while (nbytes == -1 && errno == EINTR);
+    } while (nbytes == -1 && OFStandard::getLastNetworkErrorCode().value() == DCMNET_EINTR);
 
     /* if not all head information was sent, return an error */
     if ((unsigned long) nbytes != length)
     {
-        char buf[256];
         OFString msg = "TCP I/O Error (";
-        msg += OFStandard::strerror(errno, buf, sizeof(buf));
+        msg += OFStandard::getLastNetworkErrorCode().message();
         msg += ") occurred in routine: writeDataPDU";
         return makeDcmnetCondition(DULC_TCPIOERROR, OF_error, msg.c_str());
     }
@@ -3045,14 +3101,13 @@ writeDataPDU(PRIVATE_ASSOCIATIONKEY ** association,
     {
       nbytes = (*association)->connection ? (*association)->connection->write((char*)pdu->presentationDataValue.data,
         size_t(pdu->presentationDataValue.length - 2)) : 0;
-    } while (nbytes == -1 && errno == EINTR);
+    } while (nbytes == -1 && OFStandard::getLastNetworkErrorCode().value() == DCMNET_EINTR);
 
         /* if not all head information was sent, return an error */
     if ((unsigned long) nbytes != pdu->presentationDataValue.length - 2)
     {
-        char buf[256];
         OFString msg = "TCP I/O Error (";
-        msg += OFStandard::strerror(errno, buf, sizeof(buf));
+        msg += OFStandard::getLastNetworkErrorCode().message();
         msg += ") occurred in routine: writeDataPDU";
         return makeDcmnetCondition(DULC_TCPIOERROR, OF_error, msg.c_str());
     }
@@ -3211,6 +3266,9 @@ PRV_NextPDUType(PRIVATE_ASSOCIATIONKEY ** association, DUL_BLOCKOPTIONS block,
 **    If malloc fails, EC_MemoryExhausted is returned.
 **    Otherwise, the buffer must be released (free) by the caller!
 **
+**    This function is only used to receive incoming A-ASSOCIATE-RQ
+**    and A-ASSOCIATE-AC PDUs.
+**
 ** Algorithm:
 **      Description of the algorithm (optional) and any other notes.
 */
@@ -3234,6 +3292,13 @@ readPDU(PRIVATE_ASSOCIATIONKEY ** association, DUL_BLOCKOPTIONS block,
         if (cond.bad())
             return cond;
         (*association)->inputPDU = PDU_HEAD;
+    }
+
+    size_t limit = dcmAssociatePDUSizeLimit.get();
+    if ((limit > 0) && ((*association)->nextPDULength > limit))
+    {
+      DCMNET_ERROR("A-ASSOCIATE PDU too large: " << (*association)->nextPDULength << " bytes, refusing." );
+      return NET_EC_AssociatePDUTooLarge;
     }
 
     maxLength = ((*association)->nextPDULength)+100;
@@ -3303,8 +3368,8 @@ readPDUHead(PRIVATE_ASSOCIATIONKEY ** association,
         *PDULength = (*association)->nextPDULength;
 
         /* check if the value in the length field of the PDU shows a legal value; */
-        /* there is a maximum lenght for PDUs which shall be sent over the network. */
-        /* the lenght of this PDU must not be greater than the specified maximum length. */
+        /* there is a maximum length for PDUs which shall be sent over the network. */
+        /* the length of this PDU must not be greater than the specified maximum length. */
         /* (bugfix - thanks to B. Gorissen, Philips Medical Systems) */
         if ((*PDUType == DUL_TYPEDATA) && (*PDULength > (*association)->maxPDVInput))
         {
@@ -3399,7 +3464,7 @@ readPDUHeadTCP(PRIVATE_ASSOCIATIONKEY ** association,
 {
     unsigned long
         length;
-    static unsigned char
+    static const unsigned char
         legalPDUTypes[] = {
         DUL_TYPEASSOCIATERQ, DUL_TYPEASSOCIATEAC,
         DUL_TYPEASSOCIATERJ, DUL_TYPEDATA,
@@ -3484,7 +3549,7 @@ readPDUHeadTCP(PRIVATE_ASSOCIATIONKEY ** association,
 **      block           For blocking/non-blocking read
 **      timeout         Timeout interval for reading
 **      buffer          Buffer to hold the PDU
-**      maxLength       MAximum number of bytes to read
+**      maxLength       Maximum number of bytes to read
 **      pduType         PDU Type of the incoming PDU (returned to caller)
 **      pduReserved     Reserved field in the PDU
 **      pduLength       Actual number of bytes read
@@ -3601,7 +3666,7 @@ defragmentTCP(DcmTransportConnection *connection, DUL_BLOCKOPTIONS block, time_t
     {
         /* figure out how long we want to wait: if timerStart equals 0 we want to wait exactly */
         /* timeout seconds starting from the call to select(...) within the below called function; */
-        /* if timerStart does not equal 0 we want to substract the time which has already passed */
+        /* if timerStart does not equal 0 we want to subtract the time which has already passed */
         /* after the timer was started from timeout and wait the resulting amount of seconds */
         /* starting from the call to select(...) within the below called function. */
         if (timerStart == 0) timerStart = time(NULL);
@@ -3612,9 +3677,22 @@ defragmentTCP(DcmTransportConnection *connection, DUL_BLOCKOPTIONS block, time_t
     while (l > 0)
     {
         /* receive data from the network connection; wait until */
-        /* we actually did receive data or an error occured */
+        /* we actually did receive data or an error occurred */
         do
         {
+#if 0
+            /* the original patch submitted for DCMTK issue #1006 contains a sleep statement here
+             * that should actually not be necessary. We're leaving it in the code for now
+             * with this comment. If your code (in non-blocking mode, on Windows) works if
+             * and only if this gets enabled, please let us know: <bugs@dcmtk.org> */
+#ifdef HAVE_WINSOCK_H
+            if (OFStandard::getLastNetworkErrorCode().value() == WSAEWOULDBLOCK)
+            {
+                Sleep(1);
+            }
+#endif
+#endif
+
             /* if DUL_NOBLOCK is specified as a blocking option, we only want to wait a certain
              * time for receiving data over the network. If no data was received during that time,
              * DUL_READTIMEOUT shall be returned. Note that if DUL_BLOCK is specified the application
@@ -3633,7 +3711,11 @@ defragmentTCP(DcmTransportConnection *connection, DUL_BLOCKOPTIONS block, time_t
             /* data has become available, now call read(). */
             bytesRead = connection->read((char*)b, size_t(l));
 
-        } while (bytesRead == -1 && errno == EINTR);
+        } while ((bytesRead == -1 && OFStandard::getLastNetworkErrorCode().value() == DCMNET_EINTR)
+#ifdef HAVE_WINSOCK_H
+                 || (bytesRead == -1 && (OFStandard::getLastNetworkErrorCode().value() == WSAEWOULDBLOCK))
+#endif
+                 );
 
         /* if we actually received data, move the buffer pointer to its own end, update the variable */
         /* that determines the end of the first loop, and update the reference parameter return variable */
@@ -3643,7 +3725,7 @@ defragmentTCP(DcmTransportConnection *connection, DUL_BLOCKOPTIONS block, time_t
             if (rtnLen != NULL)
                 *rtnLen += (unsigned long) bytesRead;
         } else {
-            /* in case we did not receive any data, an error must have occured; return a corresponding result value */
+            /* in case we did not receive any data, an error must have occurred; return a corresponding result value */
             return DUL_NETWORKCLOSED;
         }
     }
@@ -3718,37 +3800,38 @@ dump_pdu(const char *type, void *buffer, unsigned long length)
 ** Algorithm:
 **      Description of the algorithm (optional) and any other notes.
 */
-static void
-setTCPBufferLength(int sock)
+
+#ifdef _WIN32
+static void setTCPBufferLength(SOCKET sock)
+#else
+static void setTCPBufferLength(int sock)
+#endif
 {
     char *TCPBufferLength;
     int bufLen;
 
     /*
-     * Use a 32K default socket buffer length.
-     * This value has provided optimal throughput during performance testing.
-     * Test environment: Windows NT 4 (SP4), 100Mbit/s Fast Ethernet.
-     * Other environments, particularly slower networks may require different values for optimal performance.
+     * check whether environment variable TCP_BUFFER_LENGTH is set.
+     * If not, the the operating system is responsible for selecting
+     * appropriate values for the TCP send and receive buffer lengths.
      */
-#ifdef HAVE_GUSI_H
-    /* GUSI always returns an error for setsockopt(...) */
-#else
-    bufLen = 32768; // a socket buffer size of 32K gives best throughput for image transmission
+    DCMNET_TRACE("checking whether environment variable TCP_BUFFER_LENGTH is set");
     if ((TCPBufferLength = getenv("TCP_BUFFER_LENGTH")) != NULL) {
-        if (sscanf(TCPBufferLength, "%d", &bufLen) != 1)
-        {
-            DCMNET_WARN("DULFSM: cannot parse environment variable TCP_BUFFER_LENGTH=" << TCPBufferLength);
-        }
-    }
+        if (sscanf(TCPBufferLength, "%d", &bufLen) == 1) {
 #if defined(SO_SNDBUF) && defined(SO_RCVBUF)
-    (void) setsockopt(sock, SOL_SOCKET, SO_SNDBUF, (char *) &bufLen, sizeof(bufLen));
-    (void) setsockopt(sock, SOL_SOCKET, SO_RCVBUF, (char *) &bufLen, sizeof(bufLen));
+            if (bufLen == 0)
+                bufLen = 65536; // a socket buffer size of 64K gives good throughput for image transmission
+            DCMNET_DEBUG("DULFSM: setting TCP buffer length to " << bufLen << " bytes");
+            (void) setsockopt(sock, SOL_SOCKET, SO_SNDBUF, (char *) &bufLen, sizeof(bufLen));
+            (void) setsockopt(sock, SOL_SOCKET, SO_RCVBUF, (char *) &bufLen, sizeof(bufLen));
 #else
-     DCMNET_WARN("DULFSM: setTCPBufferLength: "
-            "cannot set TCP buffer length socket option: "
-            "code disabled because SO_SNDBUF and SO_RCVBUF constants are unknown");
+            DCMNET_WARN("DULFSM: setTCPBufferLength: cannot set TCP buffer length socket option: "
+                << "code disabled because SO_SNDBUF and SO_RCVBUF constants are unknown");
 #endif // SO_SNDBUF and SO_RCVBUF
-#endif // HAVE_GUSI_H
+        } else
+            DCMNET_WARN("DULFSM: cannot parse environment variable TCP_BUFFER_LENGTH=" << TCPBufferLength);
+    } else
+        DCMNET_TRACE("  environment variable TCP_BUFFER_LENGTH not set, using the system defaults");
 }
 
 /* translatePresentationContextList
@@ -3761,7 +3844,7 @@ setTCPBufferLength(int sock)
 **      internalList            Input list from which the two output lists
 **                              are derived
 **      SCUSCPRoleList          Role list (returned to the caller)
-**      userContextList         User context list (returend to the caller)
+**      userContextList         User context list (returned to the caller)
 **
 ** Return Values:
 **
@@ -3796,7 +3879,7 @@ translatePresentationContextList(LST_HEAD ** internalList,
 
         userContext->acceptedTransferSyntax[0] = '\0';
         userContext->presentationContextID = context->contextID;
-        strcpy(userContext->abstractSyntax, context->abstractSyntax.data);
+        OFStandard::strlcpy(userContext->abstractSyntax, context->abstractSyntax.data, sizeof(userContext->abstractSyntax));
         userContext->proposedSCRole = DUL_SC_ROLE_DEFAULT;
         userContext->acceptedSCRole = DUL_SC_ROLE_DEFAULT;
 
@@ -3818,20 +3901,19 @@ translatePresentationContextList(LST_HEAD ** internalList,
         {
             char buf1[256];
             sprintf(buf1, "DUL Peer supplied illegal number of transfer syntaxes (%d)", 0);
+            free(userContext);
             return makeDcmnetCondition(DULC_PEERILLEGALXFERSYNTAXCOUNT, OF_error, buf1);
         }
         (void) LST_Position(&context->transferSyntaxList, (LST_NODE*)subItem);
         while (subItem != NULL) {
             transfer = (DUL_TRANSFERSYNTAX*)malloc(sizeof(DUL_TRANSFERSYNTAX));
             if (transfer == NULL) return EC_MemoryExhausted;
-            strcpy(transfer->transferSyntax, subItem->data);
+            OFStandard::strlcpy(transfer->transferSyntax, subItem->data, sizeof(transfer->transferSyntax));
 
-            cond = LST_Enqueue(&userContext->proposedTransferSyntax, (LST_NODE*)transfer);
-            if (cond.bad()) return cond;
+            LST_Enqueue(&userContext->proposedTransferSyntax, (LST_NODE*)transfer);
             subItem = (DUL_SUBITEM*)LST_Next(&context->transferSyntaxList);
         }
-        cond = LST_Enqueue(userContextList, (LST_NODE*)userContext);
-        if (cond.bad()) return cond;
+        LST_Enqueue(userContextList, (LST_NODE*)userContext);
         context = (PRV_PRESENTATIONCONTEXTITEM*)LST_Next(internalList);
     }
     return EC_Normal;
@@ -3877,7 +3959,7 @@ findPresentationCtx(
 /* findSCUSCPRole
 **
 ** Purpose:
-**      Search for a SCUSCP role list, given the abstarct syntax as the
+**      Search for a SCUSCP role list, given the abstract syntax as the
 **      key.
 **
 ** Parameter Dictionary:
@@ -3911,354 +3993,3 @@ findSCUSCPRole(LST_HEAD ** lst, char *abstractSyntax)
     }
     return NULL;
 }
-
-void
-destroyPresentationContextList(LST_HEAD ** l)
-{
-    PRV_PRESENTATIONCONTEXTITEM
-    * prvCtx;
-    DUL_SUBITEM
-        * subItem;
-
-    if (*l == NULL)
-        return;
-
-    prvCtx = (PRV_PRESENTATIONCONTEXTITEM*)LST_Dequeue(l);
-    while (prvCtx != NULL) {
-        subItem = (DUL_SUBITEM*)LST_Dequeue(&prvCtx->transferSyntaxList);
-        while (subItem != NULL) {
-            free(subItem);
-            subItem = (DUL_SUBITEM*)LST_Dequeue(&prvCtx->transferSyntaxList);
-        }
-        LST_Destroy(&prvCtx->transferSyntaxList);
-        free(prvCtx);
-        prvCtx = (PRV_PRESENTATIONCONTEXTITEM*)LST_Dequeue(l);
-    }
-    (void) LST_Destroy(l);
-}
-
-void
-destroyUserInformationLists(DUL_USERINFO * userInfo)
-{
-    PRV_SCUSCPROLE
-    * role;
-
-    role = (PRV_SCUSCPROLE*)LST_Dequeue(&userInfo->SCUSCPRoleList);
-    while (role != NULL) {
-        free(role);
-        role = (PRV_SCUSCPROLE*)LST_Dequeue(&userInfo->SCUSCPRoleList);
-    }
-    (void) LST_Destroy(&userInfo->SCUSCPRoleList);
-
-    /* extended negotiation */
-    delete userInfo->extNegList; userInfo->extNegList = NULL;
-
-    /* user identity negotiation */
-    delete userInfo->usrIdent; userInfo->usrIdent = NULL;
-}
-
-
-/*
-** CVS Log
-** $Log: dulfsm.cc,v $
-** Revision 1.74  2010-12-01 08:26:36  joergr
-** Added OFFIS copyright header (beginning with the year 1994).
-**
-** Revision 1.73  2010-10-14 13:14:29  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.72  2010-09-16 08:51:41  uli
-** Handle empty PDVs correctly again.
-**
-** Revision 1.71  2010-09-07 11:13:09  uli
-** Fixed a possible read beyond the end of the PDV buffer.
-**
-** Revision 1.70  2010-08-26 09:25:59  joergr
-** Fixed incorrect behavior of association acceptors during SCP/SCU role
-** selection negotiation.
-**
-** Revision 1.69  2010-06-14 16:02:56  joergr
-** Fixed typo in event description table.
-**
-** Revision 1.68  2010-06-02 15:18:27  joergr
-** Replaced calls to strerror() by new helper function OFStandard::strerror()
-** which results in using the thread safe version of strerror() if available.
-** Replaced use of sprintf() on a static char array by class OFString.
-**
-** Revision 1.67  2010-04-29 16:16:12  onken
-** Added debug message on client side noting failed TLS client handshake.
-**
-** Revision 1.66  2009-11-18 11:53:59  uli
-** Switched to logging mechanism provided by the "new" oflog module.
-**
-** Revision 1.65  2008-09-08 13:16:36  joergr
-** Added missing newline in debug output.
-**
-** Revision 1.64  2008-04-30 09:12:06  meichel
-** Correctly initializing SO_LINGER timeout flag for socket closing, which was
-**   in undefined state in requestAssociationTCP
-**
-** Revision 1.63  2008-04-17 15:27:35  onken
-** Reworked and extended User Identity Negotiation code.
-**
-** Revision 1.62  2007-09-07 08:49:30  onken
-** Added basic support for Extended Negotiation of User Identity.
-**
-** Revision 1.61  2007/03/12 13:27:53  joergr
-** Updated debug code to correctly compile when all standard C++ classes remain
-** in namespace std.
-**
-** Revision 1.60  2006/08/15 16:04:29  meichel
-** Updated the code in module dcmnet to correctly compile when
-**   all standard C++ classes remain in namespace std.
-**
-** Revision 1.59  2005/12/08 15:44:51  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.58  2005/11/16 16:19:16  meichel
-** Fixed bug in defragmentTCP that could cause the read function to hang
-**   in non-blocking mode (DUL_NOBLOCK) if only a partial PDU is available
-**   for read on the socket.
-**
-** Revision 1.57  2005/11/16 15:11:46  meichel
-** Fixed bug in requestAssociationTCP that could result in association request
-**   failures on systems with high CPU load if an association timout was specified
-**   in dcmConnectionTimeout, because in this case the socket was not always
-**   correctly reset to blocking mode.
-**
-** Revision 1.56  2005/11/15 16:04:54  meichel
-** Clarified description of PDU size reported by dump_pdu().
-**
-** Revision 1.55  2004/08/03 11:42:47  meichel
-** Headers libc.h and unistd.h are now included via ofstdinc.h
-**
-** Revision 1.54  2004/02/25 12:31:17  meichel
-** Added global option flag for compatibility with very old DCMTK releases in the
-**   DICOM upper layer and ACSE code. Default is automatic handling, which should
-**   work in most cases.
-**
-** Revision 1.53  2004/02/04 15:35:58  joergr
-** Removed acknowledgements with e-mail addresses from CVS log.
-** Replaced tabs by spaces.
-**
-** Revision 1.52  2004/01/21 10:01:44  meichel
-** The DUL FSM did not read the complete A-ASSOCIATE-RELEASE-RSP PDU from the
-**   socket before closing the transport connection, possibly causing an error
-**   message at the remote SCP site. Fixed.
-**
-** Revision 1.51  2003/07/03 14:21:10  meichel
-** Added special handling for FD_SET() on MinGW, which expects an
-**   unsigned first argument.
-**
-** Revision 1.50  2003/06/04 14:27:46  meichel
-** Cleaned up usage of boolean constants
-**
-** Revision 1.49  2003/06/02 16:44:11  meichel
-** Renamed local variables to avoid name clashes with STL
-**
-** Revision 1.48  2002/12/11 13:10:15  meichel
-** Now correctly handling three variants of getsockopt(), where the fifth
-**   parameter can be a pointer to int, size_t or socklen_t.
-**
-** Revision 1.47  2002/11/29 12:15:24  wilkens
-** Modified call to getsockopt() in order to avoid compiler warning.
-** Modified variable initialization in order to avoid compiler warning.
-** Corrected dumping of hex values.
-**
-** Revision 1.46  2002/11/28 16:57:41  meichel
-** Added global flag dcmConnectionTimeout that defines a timeout for
-**   outgoing association requests in the DICOM upper layer.
-**
-** Revision 1.45  2002/11/27 13:04:45  meichel
-** Adapted module dcmnet to use of new header file ofstdinc.h
-**
-** Revision 1.44  2002/09/10 16:00:58  meichel
-** Fixed a few incorrect debug messages
-**
-** Revision 1.43  2002/04/16 13:57:32  joergr
-** Added configurable support for C++ ANSI standard includes (e.g. streams).
-**
-** Revision 1.42  2001/11/09 15:58:53  joergr
-** Added '#include <iostream.h>' to avoid compiler errors reported by Sun CC
-** 2.0.1 (required before <iomanip.h> is included).
-**
-** Revision 1.41  2001/11/01 13:46:35  wilkens
-** Added lots of comments.
-** Fixed a bug in DT_2_IndicatePData(...): return error if a received PDU does
-** not contain any PDVs.
-**
-** Revision 1.40  2001/10/12 10:18:38  meichel
-** Replaced the CONDITION types, constants and functions in the dcmnet module
-**   by an OFCondition based implementation which eliminates the global condition
-**   stack.  This is a major change, caveat emptor!
-**
-** Revision 1.39  2001/09/28 13:28:55  joergr
-** Added "#include <iomanip.h>" to keep gcc 3.0 quiet.
-**
-** Revision 1.38  2001/09/26 12:29:03  meichel
-** Implemented changes in dcmnet required by the adaptation of dcmdata
-**   to class OFCondition.  Removed some unused code.
-**
-** Revision 1.37  2001/03/28 15:45:03  meichel
-** Fixed memory leak: for each accepted connection, an A-ASSOCIATE PDU
-**   could remain in memory under certain circumstances.
-**
-** Revision 1.36  2000/09/08 14:27:51  meichel
-** Removed use of u_short and u_long types which are not defined in POSIX.
-**   Required when compiling on Solaris with Posix threads.
-**
-** Revision 1.35  2000/08/10 14:50:58  meichel
-** Added initial OpenSSL support.
-**
-** Revision 1.34  2000/06/07 08:57:26  meichel
-** dcmnet ACSE routines now allow to retrieve a binary copy of the A-ASSOCIATE
-**   RQ/AC/RJ PDUs, e.g. for logging purposes.
-**
-** Revision 1.33  2000/03/08 16:32:04  meichel
-** Now including netinet/in_systm.h and netinet/in.h wherever netinet/tcp.h
-**   is used. Required for NeXTStep 3.3.
-**
-** Revision 1.32  2000/03/03 14:11:24  meichel
-** Implemented library support for redirecting error messages into memory
-**   instead of printing them to stdout/stderr for GUI applications.
-**
-** Revision 1.31  2000/02/29 12:21:27  meichel
-** Dcmtk now supports transmission with very small max PDU size
-**   (less than 24 bytes). In this case dcmdata uses a larger block size
-**   than dcmnet because it requires at least 12 bytes of buffer space.
-**
-** Revision 1.30  2000/02/23 15:12:48  meichel
-** Corrected macro for Borland C++ Builder 4 workaround.
-**
-** Revision 1.29  2000/02/07 13:27:04  meichel
-** Significant speed improvement for network transmission.
-**   Now using a default socket buffer length of 32K and disabling the Nagle
-**   algorithm by default (TCP_NODELAY). Disabling of the Nagle algorithm
-**   can be switched off by compiling the toolkit with the symbol
-**   DONT_DISABLE_NAGLE_ALGORITHM defined, or by setting the environment
-**   variable TCP_NODELAY to the value "0".
-**
-** Revision 1.28  2000/02/01 10:24:13  meichel
-** Avoiding to include <stdlib.h> as extern "C" on Borland C++ Builder 4,
-**   workaround for bug in compiler header files.
-**
-** Revision 1.27  1999/04/22 11:39:58  meichel
-** Corrected bug (buffer overflow) in DICOM upper layer module causing
-**   application crash when large A-ASSOCIATE-RSP PDUs were assembled.
-**
-** Revision 1.26  1999/04/21 15:49:49  meichel
-** Fixed use of OFBitmanipTemplate<>::zeroMem in sendAssociationRQTCP().
-**
-** Revision 1.25  1999/04/19 08:38:59  meichel
-** Added experimental support for extended SOP class negotiation.
-**
-** Revision 1.24  1999/03/29 11:20:05  meichel
-** Cleaned up dcmnet code for char* to const char* assignments.
-**
-** Revision 1.23  1999/02/05 14:35:10  meichel
-** Added a call to shutdown() immediately before closesocket() on Win32.
-**   This causes any pending data to be sent before the socket is destroyed.
-**   Fixes a problem causing A-RELEASE-RSP messages to get lost under certain
-**   circumstances when the SCP runs on Win32.
-**
-** Revision 1.22  1999/01/07 14:25:04  meichel
-** Changed sequence of include files in some dcmnet modules
-**   to keep the Unixware compiler happy.
-**
-** Revision 1.21  1998/10/20 08:20:24  meichel
-** Closed some memory leaks in dcmdata and dcmnet libraries.
-**
-** Revision 1.20  1998/06/29 12:14:35  meichel
-** Removed some name clashes (e.g. local variable with same
-**   name as class member) to improve maintainability.
-**   Applied some code purifications proposed by the gcc 2.8.1 -Weffc++ option.
-**
-** Revision 1.19  1998/02/05 11:37:24  hewett
-** Added code to explicitly handle IP addresses in the DUL code.
-** It seems that under Windows95 (but not WindowsNT) the
-** gethostbyname() function will not accept a string representation
-** of an IP address.
-**
-** Revision 1.18  1997/09/18 08:11:00  meichel
-** Many minor type conflicts (e.g. long passed as int) solved.
-**
-** Revision 1.17  1997/09/11 15:58:47  hewett
-** DUL code now only tries to set the send/receive TCP buffer length
-** socket options if the SO_SNDBUF and SO_RCVBUF preprocessor macros
-** are defined.  Attempts to set these socket options will generate an
-** error message on stderr if unavailable.  This modification was
-** needed to compiled the dcmnet code under the Signus GnuWin32
-** environment.
-**
-** Revision 1.16  1997/08/06 12:20:14  andreas
-** - Using Windows NT with Visual C++ 4.x the standard open mode for files
-**   is TEXT with conversions. For binary files (image files, imagectn database
-**   index) this must be changed (e.g. fopen(filename, "...b"); or
-**   open(filename, ..... |O_BINARY);)
-**
-** Revision 1.15  1997/08/05 07:38:58  andreas
-** - Corrected error in DUL: The A-Associate-RQ PDU was not read
-**   completely. The bytes 7-10 were left on the socket. This created no
-**   problems since it was the last read operation on the socket but no
-**   error checking was possible for this messages.
-**
-** Revision 1.14  1997/07/24 13:10:59  andreas
-** - Removed Warnings from SUN CC 2.0.1
-**
-** Revision 1.13  1997/07/21 08:47:23  andreas
-** - Replace all boolean types (BOOLEAN, CTNBOOLEAN, DICOM_BOOL, BOOL)
-**   with one unique boolean type OFBool.
-**
-** Revision 1.12  1997/07/04 11:44:35  meichel
-** Configure now also tests <sys/select.h> if available
-**   when searching for a select() prototype.
-**   Updated files using select() to include <sys/select.h> and
-**   <sys/types.h> if available (needed for AIX).
-**
-** Revision 1.11  1997/07/04 09:24:55  meichel
-** Simplified some sizeof() constructs to avoid compiler warnings
-**   on the IBM xlC compiler (AIX 3.x).
-**
-** Revision 1.10  1997/07/01 15:26:10  meichel
-** Fixed bug in DICOM Upper Layer module - software interrupts
-** (e.g. SIGUSR1) caused the upper layer to return error codes
-** when a blocked read() or write() operation to a socket was interrupted.
-**
-** Revision 1.9  1997/05/05 10:30:16  meichel
-** Fixed bugs related to association negotiation in the DICOM upper layer module.
-** Added application tests/assctest.cc to examine handling of large A-ASSOCIATE
-** PDUs. See CHANGES file for details.
-**
-** Revision 1.8  1996/12/03 15:29:49  meichel
-** Added support for HP-UX 9.05 systems using GCC 2.7.2.1
-**
-** Revision 1.7  1996/09/27 08:38:41  hewett
-** Support for WINSOCK socket library.  Use send instead of write, recv
-** instead of read, closesocket instead of close.
-**
-** Revision 1.6  1996/09/24 16:22:46  hewett
-** Added preliminary support for the Macintosh environment (GUSI library).
-**
-** Revision 1.5  1996/06/20 07:35:51  hewett
-** Removed inclusion of system header already included by dcompat.h
-** and made sure that dcompat.h is always included (via dicom.h).
-**
-** Revision 1.4  1996/05/03 10:31:55  hewett
-** Move some common system include files out to include/dcompat.h which were
-** causing problems due to multiple inclusion on some machines.
-**
-** Revision 1.3  1996/04/27 12:57:59  hewett
-** Corrected cause of warnings when compiling under "c++ -O -g -Wall"
-** under Solaris 2.4.  Mostly due to unintialized variables.
-**
-** Revision 1.2  1996/04/25 16:11:20  hewett
-** Added parameter casts to char* for bzero calls.  Replaced some declarations
-** of DIC_UL with unsigned long (reduces mismatch problems with 32 & 64 bit
-** architectures).  Added some protection to inclusion of sys/socket.h (due
-** to MIPS/Ultrix).
-**
-** Revision 1.1.1.1  1996/03/26 18:38:46  hewett
-** Initial Release.
-**
-**
-*/

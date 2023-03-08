@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were partly developed by
@@ -71,7 +71,7 @@
 **      This file contains the routines which provide association management
 **      for DICOM applications.  It maintains structures which describe
 **      active associations and provides access to association specific
-**      informtion.  Also provided are routines for aiding association
+**      information.  Also provided are routines for aiding association
 **      negotiation (presentation contexts, abstract syntaxes, transfer
 **      syntaxes, maximum PDU length, and other extended negotiation).
 **
@@ -83,12 +83,6 @@
 **
 ** Module Prefix: ASC_
 **
-** Last Update:         $Author: joergr $
-** Update Date:         $Date: 2010-12-01 08:26:10 $
-** CVS/RCS Revision:    $Revision: 1.33 $
-** Status:              $State: Exp $
-**
-** CVS/RCS Log at end of file
 */
 
 
@@ -128,12 +122,12 @@
 
 enum T_ASC_NetworkRole
 {
-    NET_ACCEPTOR,   /* Provider Only */
-    NET_REQUESTOR,    /* User Only */
-    NET_ACCEPTORREQUESTOR /* User and Provider */
+    NET_ACCEPTOR,           /* Provider Only */
+    NET_REQUESTOR,          /* User Only */
+    NET_ACCEPTORREQUESTOR   /* User and Provider */
 };
 
-struct T_ASC_Network
+struct DCMTK_DCMNET_EXPORT T_ASC_Network
 {
     T_ASC_NetworkRole   role;
     int               acceptorPort;
@@ -175,7 +169,7 @@ enum T_ASC_SC_ROLE
     ASC_SC_ROLE_SCUSCP
 };
 
-struct T_ASC_PresentationContext
+struct DCMTK_DCMNET_EXPORT T_ASC_PresentationContext
 {
     T_ASC_PresentationContextID presentationContextID;
     DIC_UI      abstractSyntax;
@@ -215,7 +209,7 @@ enum T_ASC_RejectParametersReason
     ASC_REASON_SP_PRES_LOCALLIMITEXCEEDED           = 0x0302
 };
 
-struct T_ASC_RejectParameters
+struct DCMTK_DCMNET_EXPORT T_ASC_RejectParameters
 {
     T_ASC_RejectParametersResult result;
     T_ASC_RejectParametersSource source;
@@ -223,7 +217,7 @@ struct T_ASC_RejectParameters
 };
 
 
-struct T_ASC_Parameters
+struct DCMTK_DCMNET_EXPORT T_ASC_Parameters
 {
     DIC_UI ourImplementationClassUID;
     DIC_SH ourImplementationVersionName;
@@ -246,12 +240,12 @@ struct T_ASC_Parameters
 ** Association structure containing all association specific
 ** information.
 */
-struct T_ASC_Association
+struct DCMTK_DCMNET_EXPORT T_ASC_Association
 {
     DUL_ASSOCIATIONKEY *DULassociation;
     T_ASC_Parameters *params;
 
-    unsigned short nextMsgID;         /* should be incremented by user */
+    unsigned short nextMsgID;     /* should be incremented by user */
     unsigned long sendPDVLength;  /* max length of PDV to send out */
     unsigned char *sendPDVBuffer; /* buffer of size sendPDVLength */
 };
@@ -259,6 +253,12 @@ struct T_ASC_Association
 /*
 ** Public Function Prototypes
 */
+
+/*
+ * Network creation/destroy wrappers.
+ * The T_ASC_Network structure will be allocated/freed by
+ * these routines.
+ */
 
 /** network instance creation function (constructor)
  *  @param role association acceptor, requestor or both
@@ -270,7 +270,7 @@ struct T_ASC_Association
  *    as a possible option.
  *  @return EC_Normal if successful, an error code otherwise
  */
-OFCondition ASC_initializeNetwork(
+DCMTK_DCMNET_EXPORT OFCondition ASC_initializeNetwork(
     T_ASC_NetworkRole role,
     int acceptorPort,
     int timeout,
@@ -281,69 +281,111 @@ OFCondition ASC_initializeNetwork(
  *  @param network T_ASC_Network will be freed by this routine
  *  @return EC_Normal if successful, an error code otherwise
  */
-OFCondition ASC_dropNetwork(T_ASC_Network ** network);
+DCMTK_DCMNET_EXPORT OFCondition ASC_dropNetwork(T_ASC_Network ** network);
 
 /*
  * Building Association parameters
  */
 
-OFCondition
+/* create association parameters and initialize with default values */
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_createAssociationParameters(
     T_ASC_Parameters ** params,
     long maxReceivePDUSize);
 
-OFCondition
+ /*
+  * Free an association parameters structure and embedded information.
+  * You do not usually need to do this since the parameters structure will
+  * be noted in the association structure and automatically freed when an
+  * association terminates.
+  */
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_destroyAssociationParameters(
     T_ASC_Parameters ** params);
 
 /* set transport layer type in association parameters */
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_setTransportLayerType(
     T_ASC_Parameters * params,
     OFBool useSecureLayer);
 
-OFCondition
+ /*
+  * Copies the provided Application Titles in the association parameters.
+  */
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_setAPTitles(
     T_ASC_Parameters * params,
     const char* callingAPTitle,
     const char* calledAPTitle,
     const char* respondingAPTitle);
 
-OFCondition
+ /*
+  * Copies the Application Titles stored in the association parameters
+  * into the supplied string variables.  You must provide storage to copy
+  * into.
+  */
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_getAPTitles(
     T_ASC_Parameters * params,
     char* callingAPTitle,
+    size_t callingAPTitleSize,
     char* calledAPTitle,
-    char* respondingAPTitle);
+    size_t calledAPTitleSize,
+    char* respondingAPTitle,
+    size_t respondingAPTitleSize);
 
-OFCondition
+ /*
+  * Copies the Application Context Name stored in the association parameters
+  * into the supplied string variable.  You must provide storage to copy
+  * into.
+  */
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_getApplicationContextName(
     T_ASC_Parameters * params,
-    char* applicationContextName);
+    char* applicationContextName,
+    size_t applicationContextNameSize);
 
-OFCondition
+ /*
+  * Copies the provided Presentation Addresses into the association
+  * parameters.
+  */
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_setPresentationAddresses(
     T_ASC_Parameters * params,
     const char* callingPresentationAddress,
     const char* calledPresentationAddress);
 
-OFCondition
+/*
+  * Copies the Presentation Addresses stored in the association parameters
+  * into the supplied string variables.  You must provide storage to copy
+  * into.
+  */
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_getPresentationAddresses(
     T_ASC_Parameters * params,
     char* callingPresentationAddress,
-    char* calledPresentationAddress);
+    size_t callingPresentationAddressSize,
+    char* calledPresentationAddress,
+    size_t calledPresentationAddressSize);
 
-OFCondition
+ /*
+  * Copies the Rejection Parameters stored in the association parameters into
+  * the supplied structure.  You must provide storage to copy into.
+  */
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_getRejectParameters(
     T_ASC_Parameters * params,
     T_ASC_RejectParameters * rejectParameters);
 
-OFString&
+DCMTK_DCMNET_EXPORT OFString&
 ASC_printRejectParameters(
     OFString& str,
-    T_ASC_RejectParameters *rej);
+    const T_ASC_RejectParameters *rej);
 
-OFCondition
+ /*
+  * Adds a presentation context entry to the presentation context list.
+  */
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_addPresentationContext(
     T_ASC_Parameters * params,
     T_ASC_PresentationContextID presentationContextID,
@@ -352,69 +394,113 @@ ASC_addPresentationContext(
     int transferSyntaxListCount,
     T_ASC_SC_ROLE proposedRole = ASC_SC_ROLE_DEFAULT);
 
-int
+ /*
+  * Returns the number of presentation contexts contained in the presentation
+  * context list.
+  */
+DCMTK_DCMNET_EXPORT int
 ASC_countPresentationContexts(
     T_ASC_Parameters * params);
 
-int
+DCMTK_DCMNET_EXPORT int
 ASC_countAcceptedPresentationContexts(
     T_ASC_Parameters * params);
 
-OFCondition
+ /*
+  * You must supply the memory for presentationContext, the values stored in
+  * the presentation context list position indicated will be copied into the
+  * memory structure.
+  */
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_getPresentationContext(
     T_ASC_Parameters * params,
     int listPosition,
     T_ASC_PresentationContext * presentationContext);
 
-OFCondition
+ /*
+  * The presentation context will be marked as accepted and the provided
+  * transfer syntax name chosen.
+  */
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_acceptPresentationContext(
     T_ASC_Parameters * params,
     T_ASC_PresentationContextID presentationContextID,
     const char* transferSyntax,
-    T_ASC_SC_ROLE acceptedRole = ASC_SC_ROLE_DEFAULT);
+    T_ASC_SC_ROLE acceptedRole = ASC_SC_ROLE_DEFAULT,
+    const OFBool alwaysAcceptDefaultRole = OFFalse);
 
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_acceptContextsWithPreferredTransferSyntaxes(
     T_ASC_Parameters * params,
     const char* abstractSyntaxes[], int abstractSyntaxCount,
     const char* transferSyntaxes[], int transferSyntaxCount,
     T_ASC_SC_ROLE acceptedRole = ASC_SC_ROLE_DEFAULT);
 
-OFCondition
+/*
+  * Any proposed presentation contexts which are found abstractSyntaxes[]
+  * which also have proposed a transfer syntax of transferSyntax, will be
+  * accepted.  Any presentation contexts already marked as accepted will be
+  * left alone but any remaining presentation contexts will be refused.
+  */
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_acceptContextsWithTransferSyntax(
     T_ASC_Parameters * params,
     const char* transferSyntax, int abstractSyntaxCount,
     const char* abstractSyntaxes[],
     T_ASC_SC_ROLE acceptedRole = ASC_SC_ROLE_DEFAULT);
 
-OFCondition
+ /*
+  * The presentation context will be marked as refused.
+  */
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_refusePresentationContext(
     T_ASC_Parameters * params,
     T_ASC_PresentationContextID presentationContextID,
     T_ASC_P_ResultReason resultReason);
 
-OFCondition
+ /*
+  * ASC_findAcceptedPresentationContext: You must supply the memory for
+  * presentationContext, the values stored in the accepted presentation
+  * context list with given ID will be copied into the memory structure.
+  * Returns EC_Normal if found, or ASC_BADPRESENTATIONCONTEXTID if not
+  * found.
+  */
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_findAcceptedPresentationContext(
     T_ASC_Parameters * params,
     T_ASC_PresentationContextID presentationContextID,
     T_ASC_PresentationContext * presentationContext);
 
-T_ASC_PresentationContextID
+/* ASC_findAcceptedPresentationContextID:
+ * Searches in the accepted presentation context list for the given
+ * abstract syntax.  If found returns its PresentationContextID, otherwise
+ * returns 0 (which is not a valid ID).
+ */
+DCMTK_DCMNET_EXPORT T_ASC_PresentationContextID
 ASC_findAcceptedPresentationContextID(
     T_ASC_Association *assoc,
     const char* abstractSyntax);
 
-T_ASC_PresentationContextID
+/* transfer syntax aware version of T_ASC_PresentationContextID.
+ * Tries to find a presentation context that matches the characteristics
+ * of the given DICOM dataset best
+ * - if possible finds a presentation context with matching TS
+ * - then tries to find an explicit VR uncompressed TS presentation ctx
+ * - then tries to find an implicit VR uncompressed TS presentation ctx
+ * - finally accepts each matching presentation ctx independent of TS.
+ * Returns 0 if no appropriate presentation context could be found at all.
+ */
+DCMTK_DCMNET_EXPORT T_ASC_PresentationContextID
 ASC_findAcceptedPresentationContextID(
     T_ASC_Association *assoc,
     const char* abstractSyntax,
     const char * transferSyntax);
 
 /* extended negotiation */
-void ASC_getRequestedExtNegList(T_ASC_Parameters* params, SOPClassExtendedNegotiationSubItemList** extNegList);
-void ASC_getAcceptedExtNegList(T_ASC_Parameters* params, SOPClassExtendedNegotiationSubItemList** extNegList);
-void ASC_setRequestedExtNegList(T_ASC_Parameters* params, SOPClassExtendedNegotiationSubItemList* extNegList);
-void ASC_setAcceptedExtNegList(T_ASC_Parameters* params, SOPClassExtendedNegotiationSubItemList* extNegList);
+DCMTK_DCMNET_EXPORT void ASC_getRequestedExtNegList(T_ASC_Parameters* params, SOPClassExtendedNegotiationSubItemList** extNegList);
+DCMTK_DCMNET_EXPORT void ASC_getAcceptedExtNegList(T_ASC_Parameters* params, SOPClassExtendedNegotiationSubItemList** extNegList);
+DCMTK_DCMNET_EXPORT void ASC_setRequestedExtNegList(T_ASC_Parameters* params, SOPClassExtendedNegotiationSubItemList* extNegList);
+DCMTK_DCMNET_EXPORT void ASC_setAcceptedExtNegList(T_ASC_Parameters* params, SOPClassExtendedNegotiationSubItemList* extNegList);
 
 /* user identity negotiation */
 
@@ -423,7 +509,7 @@ void ASC_setAcceptedExtNegList(T_ASC_Parameters* params, SOPClassExtendedNegotia
  * @param params - [in] The parameters to read from
  * @param usrIdentAC - [out] The result pointer to user identity request
  */
-void ASC_getUserIdentRQ(T_ASC_Parameters* params, UserIdentityNegotiationSubItemRQ** usrIdentRQ);
+DCMTK_DCMNET_EXPORT void ASC_getUserIdentRQ(T_ASC_Parameters* params, UserIdentityNegotiationSubItemRQ** usrIdentRQ);
 
 /* function that returns user identity response structure from association
  * parameters. Note: For accessing the User Identity response value,
@@ -432,7 +518,7 @@ void ASC_getUserIdentRQ(T_ASC_Parameters* params, UserIdentityNegotiationSubItem
  * @param usrIdentAC - [out] The result pointer to user identity response
  * @return none
  */
-void ASC_getUserIdentAC(T_ASC_Parameters* params, UserIdentityNegotiationSubItemAC** usrIdentAC);
+DCMTK_DCMNET_EXPORT void ASC_getUserIdentAC(T_ASC_Parameters* params, UserIdentityNegotiationSubItemAC** usrIdentAC);
 
 /** Sets User/Password authentication for User Identity Negotiation
  *  request.
@@ -441,12 +527,12 @@ void ASC_getUserIdentAC(T_ASC_Parameters* params, UserIdentityNegotiationSubItem
  *  @password - [in] Password in UTF-8
  *  @return EC_Normal if user identity could be set, error otherwise
  */
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_setIdentRQUserPassword(
     T_ASC_Parameters * params,
     const OFString& userName,
     const OFString& password,
-    const OFBool& requestRsp = OFTrue);
+    const OFBool requestRsp = OFTrue);
 
 /** Sets User authentication (no password) for User Identity Negotiation
  *  request.
@@ -454,11 +540,11 @@ ASC_setIdentRQUserPassword(
  *  @param userName - [in]  The username to send (in UTF-8)
  *  @return EC_Normal if user identity could be set, error otherwise
  */
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_setIdentRQUserOnly(
     T_ASC_Parameters * params,
     const OFString& userName,
-    const OFBool& requestRsp = OFTrue);
+    const OFBool requestRsp = OFTrue);
 
 /** Sets Kerberos authentication for User Identity Negotiation request.
  *  @param params     - [in/out] The association parameters to be filled
@@ -466,12 +552,12 @@ ASC_setIdentRQUserOnly(
  *  @param length     - [in] Length of kerberos ticket
  *  @return EC_Normal if kerberos ticket could be set, error otherwise
  */
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_setIdentRQKerberos(
     T_ASC_Parameters * params,
     const char* kerbTicket,
-    const Uint16& length,
-    const OFBool& requestRsp = OFTrue);
+    const Uint16 length,
+    const OFBool requestRsp = OFTrue);
 
 /** Sets SAML authentication for User Identity Negotiation request.
  *  @param params - [in/out] The association parameters to be filled
@@ -479,13 +565,26 @@ ASC_setIdentRQKerberos(
  *  @param length - [in] Length of SAML information
  *  @return EC_Normal if SAML info could be set, error otherwise
  */
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_setIdentRQSaml(
     T_ASC_Parameters * params,
     const char* saml,
-    const Uint16& length,
-    const OFBool& requestRsp = OFTrue);
+    const Uint16 length,
+    const OFBool requestRsp = OFTrue);
 
+/** Sets JSON Web Token (JWT) authentication for User Identity Negotiation
+ *  request.
+ *  @param params - [in/out] The association parameters to be filled
+ *  @param jwt    - [in]  The JWT information to send (will be copied)
+ *  @param length - [in] Length of JWT information
+ *  @return EC_Normal if JWT info could be set, error otherwise
+ */
+DCMTK_DCMNET_EXPORT OFCondition
+ASC_setIdentRQJwt(
+    T_ASC_Parameters * params,
+    const char* jwt,
+    const Uint16 length,
+    const OFBool requestRsp = OFTrue);
 
 /** Acknowledges a User Identity Negotiation request.
  *  @param params - [in/out] The association parameters to be filled
@@ -493,13 +592,13 @@ ASC_setIdentRQSaml(
  *  @param length - [in] Length of response
  *  @return EC_Normal if response could be set, error otherwise
  */
-OFCondition ASC_setIdentAC(
+DCMTK_DCMNET_EXPORT OFCondition ASC_setIdentAC(
     T_ASC_Parameters * params,
     const char* response,
-    const Uint16& length );
+    const Uint16 length);
 
 /** Returns a copy of the User Identity Negotiation response value.
- *  CAUTION: The returned buffer (copy of orginal data) must be freed by the
+ *  CAUTION: The returned buffer (copy of original data) must be freed by the
  *  caller!
  *  @param params - [in]  The association parameters to get response from
  *  @param buffer - [out] The buffer to write to. Memory is allocated inside
@@ -510,19 +609,19 @@ OFCondition ASC_setIdentAC(
  *                        response at all, this is set to 0.
  *  @return none
  */
-void
+DCMTK_DCMNET_EXPORT void
 ASC_getCopyOfIdentResponse(T_ASC_Parameters * params,
-                           void*& buffer,
+                           char*& buffer,
                            unsigned short& bufferLen);
 
 /* TLS/SSL */
 
 /* get peer certificate from open association */
-unsigned long ASC_getPeerCertificateLength(T_ASC_Association *assoc);
-unsigned long ASC_getPeerCertificate(T_ASC_Association *assoc, void *buf, unsigned long bufLen);
+DCMTK_DCMNET_EXPORT unsigned long ASC_getPeerCertificateLength(T_ASC_Association *assoc);
+DCMTK_DCMNET_EXPORT unsigned long ASC_getPeerCertificate(T_ASC_Association *assoc, void *buf, unsigned long bufLen);
 
 /* set new transport layer object */
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_setTransportLayer(T_ASC_Network *network, DcmTransportLayer *newLayer, int takeoverOwnership);
 
 enum ASC_associateType
@@ -532,25 +631,25 @@ enum ASC_associateType
     ASC_ASSOC_RJ
 };
 
-OFString&
+DCMTK_DCMNET_EXPORT OFString&
 ASC_dumpParameters(OFString& str, T_ASC_Parameters * param, ASC_associateType dir);
 
-OFString&
+DCMTK_DCMNET_EXPORT OFString&
 ASC_dumpConnectionParameters(OFString& str, T_ASC_Association *association);
 
-void ASC_activateCallback(T_ASC_Parameters *params, DUL_ModeCallback *cb);
+DCMTK_DCMNET_EXPORT void ASC_activateCallback(T_ASC_Parameters *params, DUL_ModeCallback *cb);
 
 /*
  * Association Inquiries
  */
 
-OFBool
+DCMTK_DCMNET_EXPORT OFBool
 ASC_associationWaiting(T_ASC_Network * network, int timeout);
 
-OFBool
+DCMTK_DCMNET_EXPORT OFBool
 ASC_dataWaiting(T_ASC_Association * association, int timeout);
 
-OFBool
+DCMTK_DCMNET_EXPORT OFBool
 ASC_selectReadableAssociation(
     T_ASC_Association* assocs[],
     int assocCount, int timeout);
@@ -559,17 +658,17 @@ ASC_selectReadableAssociation(
  * Association Messages
  */
 
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_requestAssociation(
     T_ASC_Network * network,
-    T_ASC_Parameters * params,  /* params will be saved
-         * in the association
-         * structure */
+    T_ASC_Parameters * params,  /* params will be saved in the association structure */
     T_ASC_Association ** association,
     void **associatePDU=NULL,
-    unsigned long *associatePDUlength=NULL);
+    unsigned long *associatePDUlength=NULL,
+    DUL_BLOCKOPTIONS block=DUL_BLOCK,
+    int timeout=0);
 
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_receiveAssociation(
     T_ASC_Network * network,
     T_ASC_Association ** association,
@@ -580,196 +679,91 @@ ASC_receiveAssociation(
     DUL_BLOCKOPTIONS block=DUL_BLOCK,
     int timeout=0);
 
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_acknowledgeAssociation(
     T_ASC_Association * assoc,
     void **associatePDU=NULL,
     unsigned long *associatePDUlength=NULL);
 
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_rejectAssociation(
     T_ASC_Association * association,
-    T_ASC_RejectParameters * rejectParameters,
+    const T_ASC_RejectParameters * rejectParameters,
     void **associatePDU=NULL,
     unsigned long *associatePDUlength=NULL);
 
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_releaseAssociation(T_ASC_Association * association);
 
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_acknowledgeRelease(T_ASC_Association * association);
 
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_abortAssociation(T_ASC_Association * association);
 
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_dropSCPAssociation(T_ASC_Association * association, int timeout = DUL_TIMEOUT);
 
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_dropAssociation(T_ASC_Association * association);
 
-OFCondition
+DCMTK_DCMNET_EXPORT OFCondition
+ASC_closeTransportConnection(T_ASC_Association * association);
+
+DCMTK_DCMNET_EXPORT OFCondition
 ASC_destroyAssociation(T_ASC_Association ** association);
 
 /// @deprecated Please use OFString& ASC_printRejectParameters(OFString&, T_ASC_RejectParameters*) instead.
-void
+DCMTK_DCMNET_EXPORT void
 ASC_printRejectParameters(
     FILE *f,
-    T_ASC_RejectParameters *rej);
+    const T_ASC_RejectParameters *rej);
 
 /// @deprecated Please use OFString& ASC_printRejectParameters(OFString&, T_ASC_RejectParameters*) instead.
-void
+DCMTK_DCMNET_EXPORT void
 ASC_printRejectParameters(
     STD_NAMESPACE ostream& out,
-    T_ASC_RejectParameters *rej);
+    const T_ASC_RejectParameters *rej);
 
+ /*
+  * Write parameters in textual form to stdout (debugging aid)
+  */
 /**
  * @deprecated Please use OFString& ASC_dumpParameters(OFString&, T_ASC_Parameters *,
  *             ASC_associateType) instead.
  */
-void
+DCMTK_DCMNET_EXPORT void
 ASC_dumpParameters(T_ASC_Parameters * params, STD_NAMESPACE ostream& outstream);
 
+ /*
+  * Write presentation context structure in textual form to stdout.
+  * (debugging aid)
+  */
 /// @deprecated You should dump the complete T_ASC_Parameters with ASC_dumpParameters() instead.
-void
+DCMTK_DCMNET_EXPORT void
 ASC_dumpPresentationContext(T_ASC_PresentationContext * presentationContext, STD_NAMESPACE ostream& outstream);
 
 /**
  * @deprecated Please use OFString& ASC_dumpParameters(OFString&, T_ASC_Parameters*,
  *             ASC_associateType) instead.
  */
-void
+DCMTK_DCMNET_EXPORT void
 ASC_dumpConnectionParameters(T_ASC_Association *association, STD_NAMESPACE ostream& outstream);
 
+/** Converts given ASC role to string (e.g. for printing)
+ *  @param  role The role to convert
+    @return The role as a string
+ */
+DCMTK_DCMNET_EXPORT const char*
+ASC_role2String(const T_ASC_SC_ROLE role);
 
+/** Converts given ASC role to DUL role
+ *  @param  role The role to convert
+    @return The role as DUL role
+ */
+DCMTK_DCMNET_EXPORT DUL_SC_ROLE
+ascRole2dulRole(const T_ASC_SC_ROLE role);
+
+DCMTK_DCMNET_EXPORT void
+destroyDULParamPresentationContextList(LST_HEAD ** lst);
 #endif
-
-/*
-** CVS Log
-** $Log: assoc.h,v $
-** Revision 1.33  2010-12-01 08:26:10  joergr
-** Added OFFIS copyright header (beginning with the year 1994).
-**
-** Revision 1.32  2010-10-14 13:17:21  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.31  2010-10-01 12:25:29  uli
-** Fixed most compiler warnings in remaining modules.
-**
-** Revision 1.30  2010-08-26 09:26:41  joergr
-** Fixed incorrect behavior of association acceptors during SCP/SCU role
-** selection negotiation.
-**
-** Revision 1.29  2009-11-18 11:53:58  uli
-** Switched to logging mechanism provided by the "new" oflog module.
-**
-** Revision 1.28  2008-10-07 09:07:47  onken
-** Added code for accessing user identity from the server's side.
-**
-** Revision 1.27  2008-04-17 15:28:33  onken
-** Reworked and extended User Identity Negotiation code.
-**
-** Revision 1.26  2007-09-07 08:49:12  onken
-** Added basic support for Extended Negotiation of User Identity.
-**
-** Revision 1.25  2006/08/15 16:04:29  meichel
-** Updated the code in module dcmnet to correctly compile when
-**   all standard C++ classes remain in namespace std.
-**
-** Revision 1.24  2005/12/08 16:02:06  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.23  2004/07/15 08:10:45  meichel
-** Added optional timeout parameter to ASC_dropSCPAssociation().
-**
-** Revision 1.22  2004/04/07 10:22:09  meichel
-** Added optional parameter to ASC_initializeNetwork that allows to pass
-**   the DUL_FULLDOMAINNAME option to the DUL layer
-**
-** Revision 1.21  2004/02/25 12:31:15  meichel
-** Added global option flag for compatibility with very old DCMTK releases in the
-**   DICOM upper layer and ACSE code. Default is automatic handling, which should
-**   work in most cases.
-**
-** Revision 1.20  2003/06/10 13:42:07  meichel
-** Replaced unnamed C style structs by C++ declarations
-**
-** Revision 1.19  2002/07/10 11:43:55  meichel
-** Replaced dcmnet specific definitions for implementation class UID and
-**   version name by the constants defined in dcmdata.
-**
-** Revision 1.18  2001/11/27 09:54:33  wilkens
-** Updated storescp. 6 new options (--output-directory, --sort-conc-studies,
-** --exec-on-reception, --exec-on-eostudy, --rename-on-eostudy, and
-** --eostudy-timeout) implemented (requirements from GO-Kard).
-**
-** Revision 1.17  2001/10/12 10:18:25  meichel
-** Replaced the CONDITION types, constants and functions in the dcmnet module
-**   by an OFCondition based implementation which eliminates the global condition
-**   stack.  This is a major change, caveat emptor!
-**
-** Revision 1.16  2001/09/28 13:23:46  joergr
-** Added forward declaration of "ostream" to keep gcc 3.0 quiet.
-**
-** Revision 1.15  2000/10/10 12:06:05  meichel
-** Added version of function ASC_printRejectParameters that takes
-**   an STD_NAMESPACE ostream& instead of a FILE*
-**
-** Revision 1.14  2000/08/10 14:50:52  meichel
-** Added initial OpenSSL support.
-**
-** Revision 1.13  2000/06/07 13:56:20  meichel
-** Output stream now passed as mandatory parameter to ASC_dumpParameters.
-**
-** Revision 1.12  2000/06/07 08:57:21  meichel
-** dcmnet ACSE routines now allow to retrieve a binary copy of the A-ASSOCIATE
-**   RQ/AC/RJ PDUs, e.g. for logging purposes.
-**
-** Revision 1.11  2000/05/30 13:07:41  joergr
-** Added a condition value to report the external request for a shutdown of
-** the application (used for imagectn).
-**
-** Revision 1.10  1999/09/06 13:28:31  meichel
-** Enhanced max receive PDU range to 4-128K.
-**
-** Revision 1.9  1999/04/26 17:20:55  meichel
-** Added new "transfer syntax aware" variant of the dcmnet function
-**   ASC_findAcceptedPresentationContextID. This variant tries to find an
-**   accepted presentation context that matches both abstract and transfer syntax.
-**
-** Revision 1.8  1999/04/21 13:01:23  meichel
-** Increased max. number of transfer syntaxes that
-**   can be managed in an A-ASSOCIATE packet from 25 to 50.
-**
-** Revision 1.7  1999/04/19 08:39:27  meichel
-** Added experimental support for extended SOP class negotiation.
-**
-** Revision 1.6  1997/08/05 07:38:08  andreas
-** Corrected error in DUL finite state machine
-** SCPs shall close sockets after the SCU have closed the socket in
-** a normal association release. Therfore, an ARTIM timer is described
-** in DICOM part 8 that is not implemented correctly in the
-** DUL. Since the whole DUL finite state machine is affected, we
-** decided to solve the proble outside the fsm. Now it is necessary to call the
-** ASC_DropSCPAssociation() after the calling ASC_acknowledgeRelease().
-**
-** Revision 1.5  1997/07/21 08:40:08  andreas
-** - Replace all boolean types (BOOLEAN, CTNBOOLEAN, DICOM_BOOL, BOOL)
-**   with one unique boolean type OFBool.
-**
-** Revision 1.4  1997/05/05 13:05:53  meichel
-** Removed unused constant DICOM_MAXPRESENTATIONCONTEXTS.
-**
-** Revision 1.3  1997/05/05 10:30:08  meichel
-** Fixed bugs related to association negotiation in the DICOM upper layer module.
-** Added application tests/assctest.cc to examine handling of large A-ASSOCIATE
-** PDUs. See CHANGES file for details.
-**
-** Revision 1.2  1996/04/25 16:06:27  hewett
-** Replaced declarations of DIC_UL with unsigned long.
-**
-** Revision 1.1.1.1  1996/03/26 18:38:44  hewett
-** Initial Release.
-**
-**
-*/

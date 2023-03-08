@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2000-2010, OFFIS e.V.
+ *  Copyright (C) 2000-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -11,19 +11,12 @@
  *    D-26121 Oldenburg, Germany
  *
  *
- *  Module:  dcmsr
+ *  Module: dcmsr
  *
- *  Author:  Joerg Riesmeier
+ *  Author: Joerg Riesmeier
  *
  *  Purpose:
  *    classes: DSRSpatialCoordinatesValue
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:41 $
- *  CVS/RCS Revision: $Revision: 1.22 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -33,24 +26,30 @@
 #include "dcmtk/dcmsr/dsrscovl.h"
 #include "dcmtk/dcmsr/dsrxmld.h"
 
+#include "dcmtk/dcmdata/dcdeftag.h"
+#include "dcmtk/dcmdata/dcvrui.h"
+
 
 DSRSpatialCoordinatesValue::DSRSpatialCoordinatesValue()
   : GraphicType(DSRTypes::GT_invalid),
-    GraphicDataList()
+    GraphicDataList(),
+    FiducialUID()
 {
 }
 
 
 DSRSpatialCoordinatesValue::DSRSpatialCoordinatesValue(const DSRTypes::E_GraphicType graphicType)
   : GraphicType(graphicType),
-    GraphicDataList()
+    GraphicDataList(),
+    FiducialUID()
 {
 }
 
 
 DSRSpatialCoordinatesValue::DSRSpatialCoordinatesValue(const DSRSpatialCoordinatesValue &coordinatesValue)
   : GraphicType(coordinatesValue.GraphicType),
-    GraphicDataList(coordinatesValue.GraphicDataList)
+    GraphicDataList(coordinatesValue.GraphicDataList),
+    FiducialUID(coordinatesValue.FiducialUID)
 {
 }
 
@@ -64,7 +63,24 @@ DSRSpatialCoordinatesValue &DSRSpatialCoordinatesValue::operator=(const DSRSpati
 {
     GraphicType = coordinatesValue.GraphicType;
     GraphicDataList = coordinatesValue.GraphicDataList;
+    FiducialUID = coordinatesValue.FiducialUID;
     return *this;
+}
+
+
+OFBool DSRSpatialCoordinatesValue::operator==(const DSRSpatialCoordinatesValue &coordinatesValue) const
+{
+    return (GraphicType == coordinatesValue.GraphicType) &&
+           (GraphicDataList == coordinatesValue.GraphicDataList) &&
+           (FiducialUID == coordinatesValue.FiducialUID);
+}
+
+
+OFBool DSRSpatialCoordinatesValue::operator!=(const DSRSpatialCoordinatesValue &coordinatesValue) const
+{
+    return (GraphicType != coordinatesValue.GraphicType) ||
+           (GraphicDataList != coordinatesValue.GraphicDataList) ||
+           (FiducialUID != coordinatesValue.FiducialUID);
 }
 
 
@@ -72,12 +88,13 @@ void DSRSpatialCoordinatesValue::clear()
 {
     GraphicType = DSRTypes::GT_invalid;
     GraphicDataList.clear();
+    FiducialUID.clear();
 }
 
 
 OFBool DSRSpatialCoordinatesValue::isValid() const
 {
-    return checkData(GraphicType, GraphicDataList);
+    return checkGraphicData(GraphicType, GraphicDataList).good();
 }
 
 
@@ -104,19 +121,25 @@ OFCondition DSRSpatialCoordinatesValue::print(STD_NAMESPACE ostream &stream,
 
 
 OFCondition DSRSpatialCoordinatesValue::readXML(const DSRXMLDocument &doc,
-                                                DSRXMLCursor cursor)
+                                                DSRXMLCursor cursor,
+                                                const size_t /*flags*/)
 {
     OFCondition result = SR_EC_CorruptedXMLStructure;
     if (cursor.valid())
     {
-        /* graphic data (required) */
-        cursor = doc.getNamedNode(cursor.getChild(), "data");
-        if (cursor.valid())
+        cursor.gotoChild();
+        /* GraphicData (required) */
+        const DSRXMLCursor dataNode = doc.getNamedNode(cursor, "data");
+        if (dataNode.valid())
         {
             OFString tmpString;
             /* put value to the graphic data list */
-            result = GraphicDataList.putString(doc.getStringFromNodeContent(cursor, tmpString).c_str());
+            result = GraphicDataList.putString(doc.getStringFromNodeContent(dataNode, tmpString).c_str());
         }
+        /* FiducialUID (optional) */
+        const DSRXMLCursor fiducialNode = doc.getNamedNode(cursor, "fiducial", OFFalse /*required*/);
+        if (fiducialNode.valid())
+            doc.getStringFromAttribute(fiducialNode, FiducialUID, "uid");
     }
     return result;
 }
@@ -132,11 +155,14 @@ OFCondition DSRSpatialCoordinatesValue::writeXML(STD_NAMESPACE ostream &stream,
         GraphicDataList.print(stream);
         stream << "</data>" << OFendl;
     }
+    if ((flags & DSRTypes::XF_writeEmptyTags) || !FiducialUID.empty())
+        stream << "<fiducial uid=\"" << FiducialUID << "\"/>" << OFendl;
     return EC_Normal;
 }
 
 
-OFCondition DSRSpatialCoordinatesValue::read(DcmItem &dataset)
+OFCondition DSRSpatialCoordinatesValue::read(DcmItem &dataset,
+                                             const size_t flags)
 {
     /* read GraphicType */
     OFString tmpString;
@@ -148,9 +174,12 @@ OFCondition DSRSpatialCoordinatesValue::read(DcmItem &dataset)
         if (GraphicType == DSRTypes::GT_invalid)
             DSRTypes::printUnknownValueWarningMessage("GraphicType", tmpString.c_str());
         /* read GraphicData */
-        result = GraphicDataList.read(dataset);
+        result = GraphicDataList.read(dataset, flags);
+        /* read optional attributes */
+        if (result.good())
+            DSRTypes::getAndCheckStringValueFromDataset(dataset, DCM_FiducialUID, FiducialUID, "1", "3", "SCOORD content item");
         /* check GraphicData and report warnings if any */
-        checkData(GraphicType, GraphicDataList);
+        checkGraphicData(GraphicType, GraphicDataList, OFTrue /*reportWarnings*/);
     }
     return result;
 }
@@ -166,8 +195,11 @@ OFCondition DSRSpatialCoordinatesValue::write(DcmItem &dataset) const
         if (!GraphicDataList.isEmpty())
             result = GraphicDataList.write(dataset);
     }
+    /* write optional attributes */
+    if (result.good())
+        DSRTypes::putStringValueToDataset(dataset, DCM_FiducialUID, FiducialUID, OFFalse /*allowEmpty*/);
     /* check GraphicData and report warnings if any */
-    checkData(GraphicType, GraphicDataList);
+    checkGraphicData(GraphicType, GraphicDataList, OFTrue /*reportWarnings*/);
     return result;
 }
 
@@ -204,9 +236,46 @@ OFCondition DSRSpatialCoordinatesValue::renderHTML(STD_NAMESPACE ostream &docStr
 }
 
 
-OFCondition DSRSpatialCoordinatesValue::setGraphicType(const DSRTypes::E_GraphicType graphicType)
+OFCondition DSRSpatialCoordinatesValue::getValue(DSRSpatialCoordinatesValue &coordinatesValue) const
+{
+    coordinatesValue = *this;
+    return EC_Normal;
+}
+
+
+OFCondition DSRSpatialCoordinatesValue::setValue(const DSRSpatialCoordinatesValue &coordinatesValue,
+                                                 const OFBool check)
+{
+    OFCondition result = EC_Normal;
+    if (check)
+    {
+        /* check whether the passed value is valid */
+        result = checkGraphicData(coordinatesValue.GraphicType, coordinatesValue.GraphicDataList);
+        if (result.good())
+            result = checkFiducialUID(coordinatesValue.FiducialUID);
+    } else {
+        /* make sure that the mandatory values are non-empty/invalid */
+        if ((coordinatesValue.GraphicType == DSRTypes::GT_invalid) ||
+            coordinatesValue.GraphicDataList.isEmpty())
+        {
+            result = EC_IllegalParameter;
+        }
+    }
+    if (result.good())
+    {
+        GraphicType = coordinatesValue.GraphicType;
+        GraphicDataList = coordinatesValue.GraphicDataList;
+        FiducialUID = coordinatesValue.FiducialUID;
+    }
+    return result;
+}
+
+
+OFCondition DSRSpatialCoordinatesValue::setGraphicType(const DSRTypes::E_GraphicType graphicType,
+                                                       const OFBool /*check*/)
 {
     OFCondition result = EC_IllegalParameter;
+    /* check whether the passed value is valid */
     if (graphicType != DSRTypes::GT_invalid)
     {
         GraphicType = graphicType;
@@ -216,34 +285,32 @@ OFCondition DSRSpatialCoordinatesValue::setGraphicType(const DSRTypes::E_Graphic
 }
 
 
-OFCondition DSRSpatialCoordinatesValue::getValue(DSRSpatialCoordinatesValue &coordinatesValue) const
+OFCondition DSRSpatialCoordinatesValue::setFiducialUID(const OFString &fiducialUID,
+                                                         const OFBool check)
 {
-    coordinatesValue = *this;
-    return EC_Normal;
-}
-
-
-OFCondition DSRSpatialCoordinatesValue::setValue(const DSRSpatialCoordinatesValue &coordinatesValue)
-{
-    OFCondition result = EC_IllegalParameter;
-    if (checkData(coordinatesValue.GraphicType, coordinatesValue.GraphicDataList))
-    {
-        GraphicType = coordinatesValue.GraphicType;
-        GraphicDataList = coordinatesValue.GraphicDataList;
-        result = EC_Normal;
-    }
+    OFCondition result = EC_Normal;
+    /* check whether the passed value is valid */
+    if (check)
+        result = checkFiducialUID(fiducialUID);
+    if (result.good())
+        FiducialUID = fiducialUID;
     return result;
 }
 
 
-OFBool DSRSpatialCoordinatesValue::checkData(const DSRTypes::E_GraphicType graphicType,
-                                             const DSRGraphicDataList &graphicDataList) const
+// helper macro to avoid annoying check of boolean flag
+#define REPORT_WARNING(msg) { if (reportWarnings) DCMSR_WARN(msg); }
+
+OFCondition DSRSpatialCoordinatesValue::checkGraphicData(const DSRTypes::E_GraphicType graphicType,
+                                                         const DSRGraphicDataList &graphicDataList,
+                                                         const OFBool reportWarnings) const
 {
-    OFBool result = OFFalse;
+    OFCondition result = SR_EC_InvalidValue;
+    // check graphic type and data
     if (graphicType == DSRTypes::GT_invalid)
-        DCMSR_WARN("Invalid GraphicType for SCOORD content item");
+        REPORT_WARNING("Invalid Graphic Type for SCOORD content item")
     else if (graphicDataList.isEmpty())
-        DCMSR_WARN("No GraphicData for SCOORD content item");
+        REPORT_WARNING("No Graphic Data for SCOORD content item")
     else
     {
         const size_t count = graphicDataList.getNumberOfItems();
@@ -251,39 +318,40 @@ OFBool DSRSpatialCoordinatesValue::checkData(const DSRTypes::E_GraphicType graph
         {
             case DSRTypes::GT_Point:
                 if (count > 1)
-                    DCMSR_WARN("GraphicData has too many entries, only a single entry expected");
-                result = OFTrue;
+                    REPORT_WARNING("Graphic Data has too many entries, only a single entry expected")
+                result = EC_Normal;
                 break;
             case DSRTypes::GT_Multipoint:
                 if (count < 1)
-                    DCMSR_WARN("GraphicData has too few entries, at least one entry expected");
-                result = OFTrue;
+                    REPORT_WARNING("Graphic Data has too few entries, at least one entry expected")
+                result = EC_Normal;
                 break;
             case DSRTypes::GT_Polyline:
-/*              // not required any more according to CP-233
+/*
+                // not required any more according to CP-233
                 if (graphicDataList.getItem(1) != graphicDataList.getItem(count))
-                    DCMSR_WARN("First and last entry in GraphicData are not equal (POLYLINE)");
+                    REPORT_WARNING("First and last entry in Graphic Data are not equal (POLYLINE)")
 */
-                result = OFTrue;
+                result = EC_Normal;
                 break;
             case DSRTypes::GT_Circle:
                 if (count < 2)
-                    DCMSR_WARN("GraphicData has too few entries, exactly two entries expected");
+                    REPORT_WARNING("Graphic Data has too few entries, exactly two entries expected")
                 else
                 {
                     if (count > 2)
-                        DCMSR_WARN("GraphicData has too many entries, exactly two entries expected");
-                    result = OFTrue;
+                        REPORT_WARNING("Graphic Data has too many entries, exactly two entries expected")
+                    result = EC_Normal;
                 }
                 break;
             case DSRTypes::GT_Ellipse:
                 if (count < 4)
-                    DCMSR_WARN("GraphicData has too few entries, exactly four entries expected");
+                    REPORT_WARNING("Graphic Data has too few entries, exactly four entries expected")
                 else
                 {
                     if (count > 4)
-                        DCMSR_WARN("GraphicData has too many entries, exactly four entries expected");
-                    result = OFTrue;
+                        REPORT_WARNING("Graphic Data has too many entries, exactly four entries expected")
+                    result = EC_Normal;
                 }
                 break;
             default:
@@ -295,84 +363,9 @@ OFBool DSRSpatialCoordinatesValue::checkData(const DSRTypes::E_GraphicType graph
 }
 
 
-/*
- *  CVS/RCS Log:
- *  $Log: dsrscovl.cc,v $
- *  Revision 1.22  2010-10-14 13:14:41  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.21  2010-09-28 14:03:41  joergr
- *  Updated comment on the requirements for POLYLINE according to CP-233.
- *
- *  Revision 1.20  2009-10-13 14:57:51  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.19  2007-11-15 16:45:42  joergr
- *  Added support for output in XHTML 1.1 format.
- *
- *  Revision 1.18  2006/08/15 16:40:03  meichel
- *  Updated the code in module dcmsr to correctly compile when
- *    all standard C++ classes remain in namespace std.
- *
- *  Revision 1.17  2006/07/25 13:37:48  joergr
- *  Added new optional flags for the HTML rendering of SR documents:
- *  HF_alwaysExpandChildrenInline, HF_useCodeDetailsTooltip and
- *  HF_renderSectionTitlesInline.
- *
- *  Revision 1.16  2005/12/08 15:48:06  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.15  2003/10/17 16:10:43  joergr
- *  Fixed wrong wording in a warning message ("too less" -> "too few").
- *
- *  Revision 1.14  2003/08/07 15:21:53  joergr
- *  Added brackets around "bitwise and" operator/operands to avoid warnings
- *  reported by MSVC5.
- *
- *  Revision 1.13  2003/08/07 13:46:04  joergr
- *  Added readXML functionality.
- *  Distinguish more strictly between OFBool and int (required when HAVE_CXX_BOOL
- *  is defined).
- *
- *  Revision 1.12  2002/12/05 13:53:30  joergr
- *  Added further checks when reading SR documents (e.g. value of VerificationFlag,
- *  CompletionsFlag, ContinuityOfContent and SpecificCharacterSet).
- *
- *  Revision 1.11  2001/10/10 15:30:01  joergr
- *  Additonal adjustments for new OFCondition class.
- *
- *  Revision 1.10  2001/09/26 13:04:24  meichel
- *  Adapted dcmsr to class OFCondition
- *
- *  Revision 1.9  2001/05/07 16:14:25  joergr
- *  Updated CVS header.
- *
- *  Revision 1.8  2001/02/13 16:35:28  joergr
- *  Minor corrections in XML output (newlines, etc.).
- *
- *  Revision 1.7  2000/11/06 11:33:45  joergr
- *  Removed additional check (according to CP).
- *
- *  Revision 1.6  2000/11/01 16:37:03  joergr
- *  Added support for conversion to XML. Optimized HTML rendering.
- *
- *  Revision 1.5  2000/10/26 14:34:39  joergr
- *  Use method isShort() to decide whether a content item can be rendered
- *  "inline" or not.
- *
- *  Revision 1.4  2000/10/19 16:06:42  joergr
- *  Added optional module name to read method to provide more detailed warning
- *  messages.
- *
- *  Revision 1.3  2000/10/18 17:22:09  joergr
- *  Added check for read methods (VM and type).
- *
- *  Revision 1.2  2000/10/16 12:08:29  joergr
- *  Reformatted print output.
- *
- *  Revision 1.1  2000/10/13 07:52:25  joergr
- *  Added new module 'dcmsr' providing access to DICOM structured reporting
- *  documents (supplement 23).  Doc++ documentation not yet completed.
- *
- *
- */
+OFCondition DSRSpatialCoordinatesValue::checkFiducialUID(const OFString &fiducialUID) const
+{
+    /* fiducial UID might be empty */
+    return fiducialUID.empty() ? EC_Normal
+                               : DcmUniqueIdentifier::checkStringValue(fiducialUID, "1");
+}

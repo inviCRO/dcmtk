@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,17 +18,12 @@
  *  Purpose:
  *    classes: DVPSPrintMessageHandler
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:32 $
- *  CVS/RCS Revision: $Revision: 1.23 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
+
 #include "dcmtk/ofstd/ofstring.h"
+#include "dcmtk/ofstd/ofstd.h"
 #include "dcmtk/dcmpstat/dvpsdef.h"
 #include "dcmtk/dcmpstat/dvpspr.h"
 
@@ -242,10 +237,10 @@ OFCondition DVPSPrintMessageHandler::createRQ(
   // construct N-CREATE-RQ
   request.CommandField = DIMSE_N_CREATE_RQ;
   request.msg.NCreateRQ.MessageID = assoc->nextMsgID++;
-  strcpy(request.msg.NCreateRQ.AffectedSOPClassUID, sopclassUID);
+  OFStandard::strlcpy(request.msg.NCreateRQ.AffectedSOPClassUID, sopclassUID, sizeof(request.msg.NCreateRQ.AffectedSOPClassUID));
   if (sopinstanceUID.size() > 0)
   {
-    strcpy(request.msg.NCreateRQ.AffectedSOPInstanceUID, sopinstanceUID.c_str());
+    OFStandard::strlcpy(request.msg.NCreateRQ.AffectedSOPInstanceUID, sopinstanceUID.c_str(), sizeof(request.msg.NCreateRQ.AffectedSOPInstanceUID));
     request.msg.NCreateRQ.opts = O_NCREATE_AFFECTEDSOPINSTANCEUID;
   } else {
     request.msg.NCreateRQ.AffectedSOPInstanceUID[0] = 0;
@@ -295,8 +290,8 @@ OFCondition DVPSPrintMessageHandler::setRQ(
   // construct N-SET-RQ
   request.CommandField = DIMSE_N_SET_RQ;
   request.msg.NSetRQ.MessageID = assoc->nextMsgID++;
-  strcpy(request.msg.NSetRQ.RequestedSOPClassUID, sopclassUID);
-  strcpy(request.msg.NSetRQ.RequestedSOPInstanceUID, sopinstanceUID);
+  OFStandard::strlcpy(request.msg.NSetRQ.RequestedSOPClassUID, sopclassUID, sizeof(request.msg.NSetRQ.RequestedSOPClassUID));
+  OFStandard::strlcpy(request.msg.NSetRQ.RequestedSOPInstanceUID, sopinstanceUID, sizeof(request.msg.NSetRQ.RequestedSOPInstanceUID));
    
   OFCondition cond = sendNRequest(presCtx, request, modificationList, response, statusDetail, attributeListOut);
   if (cond.good()) status = response.msg.NSetRSP.DimseStatus;
@@ -334,8 +329,8 @@ OFCondition DVPSPrintMessageHandler::getRQ(
   // construct N-GET-RQ
   request.CommandField = DIMSE_N_GET_RQ;
   request.msg.NGetRQ.MessageID = assoc->nextMsgID++;
-  strcpy(request.msg.NGetRQ.RequestedSOPClassUID, sopclassUID);
-  strcpy(request.msg.NGetRQ.RequestedSOPInstanceUID, sopinstanceUID);
+  OFStandard::strlcpy(request.msg.NGetRQ.RequestedSOPClassUID, sopclassUID, sizeof(request.msg.NGetRQ.RequestedSOPClassUID));
+  OFStandard::strlcpy(request.msg.NGetRQ.RequestedSOPInstanceUID, sopinstanceUID, sizeof(request.msg.NGetRQ.RequestedSOPInstanceUID));
   request.msg.NGetRQ.ListCount = 0;
   if (attributeIdentifierList) request.msg.NGetRQ.ListCount = (int)numShorts;
   request.msg.NGetRQ.AttributeIdentifierList = (DIC_US *)attributeIdentifierList;
@@ -377,8 +372,8 @@ OFCondition DVPSPrintMessageHandler::actionRQ(
   // construct N-ACTION-RQ
   request.CommandField = DIMSE_N_ACTION_RQ;
   request.msg.NActionRQ.MessageID = assoc->nextMsgID++;
-  strcpy(request.msg.NActionRQ.RequestedSOPClassUID, sopclassUID);
-  strcpy(request.msg.NActionRQ.RequestedSOPInstanceUID, sopinstanceUID);
+  OFStandard::strlcpy(request.msg.NActionRQ.RequestedSOPClassUID, sopclassUID, sizeof(request.msg.NActionRQ.RequestedSOPClassUID));
+  OFStandard::strlcpy(request.msg.NActionRQ.RequestedSOPInstanceUID, sopinstanceUID, sizeof(request.msg.NActionRQ.RequestedSOPInstanceUID));
   request.msg.NActionRQ.ActionTypeID = (DIC_US)actionTypeID;
    
   OFCondition cond = sendNRequest(presCtx, request, actionInformation, response, statusDetail, actionReply);
@@ -415,8 +410,8 @@ OFCondition DVPSPrintMessageHandler::deleteRQ(
   // construct N-DELETE-RQ
   request.CommandField = DIMSE_N_DELETE_RQ;
   request.msg.NDeleteRQ.MessageID = assoc->nextMsgID++;
-  strcpy(request.msg.NDeleteRQ.RequestedSOPClassUID, sopclassUID);
-  strcpy(request.msg.NDeleteRQ.RequestedSOPInstanceUID, sopinstanceUID);
+  OFStandard::strlcpy(request.msg.NDeleteRQ.RequestedSOPClassUID, sopclassUID, sizeof(request.msg.NDeleteRQ.RequestedSOPClassUID));
+  OFStandard::strlcpy(request.msg.NDeleteRQ.RequestedSOPInstanceUID, sopinstanceUID, sizeof(request.msg.NDeleteRQ.RequestedSOPInstanceUID));
    
   OFCondition cond = sendNRequest(presCtx, request, NULL, response, statusDetail, attributeListOut);
   if (cond.good()) status = response.msg.NDeleteRSP.DimseStatus;
@@ -489,7 +484,6 @@ OFCondition DVPSPrintMessageHandler::negotiateAssociation(
   }
   
   T_ASC_Parameters *params=NULL;
-  DIC_NODENAME dnlocalHost;
   DIC_NODENAME dnpeerHost;
 
   OFCondition cond = ASC_initializeNetwork(NET_REQUESTOR, 0, 30, &net);
@@ -504,9 +498,8 @@ OFCondition DVPSPrintMessageHandler::negotiateAssociation(
   if (cond.bad()) return cond;
 
   ASC_setAPTitles(params, myAEtitle, peerAEtitle, NULL);
-  gethostname(dnlocalHost, sizeof(dnlocalHost) - 1);
   sprintf(dnpeerHost, "%s:%d", peerHost, peerPort);
-  ASC_setPresentationAddresses(params, dnlocalHost, dnpeerHost);
+  ASC_setPresentationAddresses(params, OFStandard::getHostName().c_str(), dnpeerHost);
 
   /* presentation contexts */
   const char* transferSyntaxes[3];
@@ -555,7 +548,7 @@ OFCondition DVPSPrintMessageHandler::negotiateAssociation(
       OFString temp_str;
       T_ASC_RejectParameters rej;
       ASC_getRejectParameters(params, &rej);
-      DCMPSTAT_INFO("Association Rejected" << OFendl << ASC_printRejectParameters(temp_str, &rej));
+      DCMPSTAT_WARN("Association Rejected" << OFendl << ASC_printRejectParameters(temp_str, &rej));
     } else {
       if (cond.bad()) 
       {
@@ -574,7 +567,7 @@ OFCondition DVPSPrintMessageHandler::negotiateAssociation(
                         
   if ((cond.good()) && (0 == ASC_findAcceptedPresentationContextID(assoc, UID_BasicGrayscalePrintManagementMetaSOPClass)))
   {                     
-    DCMPSTAT_INFO("Peer does not support Basic Grayscale Print Management, aborting association.");
+    DCMPSTAT_WARN("Peer does not support Basic Grayscale Print Management, aborting association.");
     abortAssociation();
     cond = DIMSE_NOVALIDPRESENTATIONCONTEXTID;
   }
@@ -604,86 +597,3 @@ OFBool DVPSPrintMessageHandler::printerSupportsAnnotationBox()
   if ((assoc)&&(0 != ASC_findAcceptedPresentationContextID(assoc, UID_BasicAnnotationBoxSOPClass))) return OFTrue;
   return OFFalse;
 }
-
-/*
- *  $Log: dvpspr.cc,v $
- *  Revision 1.23  2010-10-14 13:14:32  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.22  2009-11-24 14:12:59  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.21  2006-08-15 16:57:02  meichel
- *  Updated the code in module dcmpstat to correctly compile when
- *    all standard C++ classes remain in namespace std.
- *
- *  Revision 1.20  2005/12/08 15:46:41  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.19  2005/11/16 14:58:24  meichel
- *  Set association timeout in ASC_initializeNetwork to 30 seconds. This improves
- *    the responsiveness of the tools if the peer blocks during assoc negotiation.
- *
- *  Revision 1.18  2003/09/05 14:31:33  meichel
- *  Print SCU now supports TLS connections.
- *
- *  Revision 1.17  2002/09/17 12:53:54  meichel
- *  Fixed memory leak
- *
- *  Revision 1.16  2001/11/09 16:03:21  joergr
- *  Fixed small bug introduced during changeover to new OFCondition mechanism.
- *
- *  Revision 1.15  2001/10/12 13:46:55  meichel
- *  Adapted dcmpstat to OFCondition based dcmnet module (supports strict mode).
- *
- *  Revision 1.14  2001/08/22 08:28:15  meichel
- *  Fixed double deletion of association parameters in dcmpstat
- *    class DVPSPrintMessageHandler.
- *
- *  Revision 1.13  2001/06/01 15:50:35  meichel
- *  Updated copyright header
- *
- *  Revision 1.12  2000/06/07 13:17:08  meichel
- *  now using DIMSE status constants and log facilities defined in dcmnet
- *
- *  Revision 1.11  2000/06/02 16:01:04  meichel
- *  Adapted all dcmpstat classes to use OFConsole for log and error output
- *
- *  Revision 1.10  2000/03/08 16:29:08  meichel
- *  Updated copyright header.
- *
- *  Revision 1.9  2000/03/07 16:24:56  joergr
- *  Added brackets to case block within a switch statement (reported an error
- *  by Sun CC 2.0.1).
- *
- *  Revision 1.8  2000/03/03 14:14:03  meichel
- *  Implemented library support for redirecting error messages into memory
- *    instead of printing them to stdout/stderr for GUI applications.
- *
- *  Revision 1.7  1999/10/28 08:18:57  meichel
- *  Print client does not attempt any more to negotiate Presentation LUT or
- *    Annotation Box if config file says that the printer does not support them.
- *
- *  Revision 1.6  1999/10/19 14:48:24  meichel
- *  added support for the Basic Annotation Box SOP Class
- *    as well as access methods for Max Density and Min Density.
- *
- *  Revision 1.5  1999/10/13 14:10:49  meichel
- *  Now negotiation Basic Annotation Box SOP Class
- *
- *  Revision 1.4  1999/09/24 15:24:08  meichel
- *  Print spooler (dcmprtsv) now logs diagnostic messages in log files
- *    when operating in spool mode.
- *
- *  Revision 1.3  1999/09/17 14:33:53  meichel
- *  Completed print spool functionality including Supplement 22 support
- *
- *  Revision 1.2  1999/08/26 09:29:49  thiel
- *  Extensions for the usage of the StoredPrint
- *
- *  Revision 1.1  1999/07/30 13:34:58  meichel
- *  Added new classes managing Stored Print objects
- *
- *
- */
-

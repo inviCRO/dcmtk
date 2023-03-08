@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: Implementation of class DcmOtherByteOtherWord
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-29 10:57:21 $
- *  CVS/RCS Revision: $Revision: 1.64 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -31,19 +24,23 @@
 
 #include "dcmtk/ofstd/ofstd.h"
 #include "dcmtk/ofstd/ofstream.h"
+#include "dcmtk/ofstd/ofuuid.h"
+#include "dcmtk/ofstd/offile.h"
 
+#include "dcmtk/dcmdata/dcjson.h"
 #include "dcmtk/dcmdata/dcvrobow.h"
 #include "dcmtk/dcmdata/dcdeftag.h"
 #include "dcmtk/dcmdata/dcswap.h"
-#include "dcmtk/dcmdata/dcvm.h"
-
-#define INCLUDE_CSTDIO
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CSTRING
-#include "dcmtk/ofstd/ofstdinc.h"
-
+#include "dcmtk/dcmdata/dcuid.h"      /* for UID generation */
 
 // ********************************
+
+
+DcmOtherByteOtherWord::DcmOtherByteOtherWord(const DcmTag &tag)
+: DcmElement(tag, 0)
+, compactAfterTransfer(OFFalse)
+{
+}
 
 
 DcmOtherByteOtherWord::DcmOtherByteOtherWord(const DcmTag &tag,
@@ -74,14 +71,47 @@ DcmOtherByteOtherWord &DcmOtherByteOtherWord::operator=(const DcmOtherByteOtherW
 }
 
 
+int DcmOtherByteOtherWord::compare(const DcmElement& rhs) const
+{
+    int result = DcmElement::compare(rhs);
+    if (result != 0)
+    {
+        return result;
+    }
+
+    /* cast away constness (dcmdata is not const correct...) */
+    DcmOtherByteOtherWord* myThis = NULL;
+    DcmOtherByteOtherWord* myRhs = NULL;
+    myThis = OFconst_cast(DcmOtherByteOtherWord*, this);
+    myRhs =  OFstatic_cast(DcmOtherByteOtherWord*, OFconst_cast(DcmElement*, &rhs));
+
+    /* compare length */
+    unsigned long thisLength = myThis->getLength();
+    unsigned long rhsLength= myRhs->getLength();
+    if (thisLength < rhsLength)
+    {
+      return -1;
+    }
+    else if (thisLength > rhsLength)
+    {
+      return 1;
+    }
+    /* finally, check equality of values. getValue() makes sure byte
+     * swapping is applied as necessary. */
+    void* thisData = myThis->getValue();
+    void* rhsData = myRhs->getValue();
+    return memcmp(thisData, rhsData, thisLength);
+}
+
+
 OFCondition DcmOtherByteOtherWord::copyFrom(const DcmObject& rhs)
 {
-  if (this != &rhs)
-  {
-    if (rhs.ident() != ident()) return EC_IllegalCall;
-    *this = OFstatic_cast(const DcmOtherByteOtherWord &, rhs);
-  }
-  return EC_Normal;
+    if (this != &rhs)
+    {
+        if (rhs.ident() != ident()) return EC_IllegalCall;
+        *this = OFstatic_cast(const DcmOtherByteOtherWord &, rhs);
+    }
+    return EC_Normal;
 }
 
 
@@ -109,6 +139,17 @@ unsigned long DcmOtherByteOtherWord::getVM()
 }
 
 
+unsigned long DcmOtherByteOtherWord::getNumberOfValues()
+{
+    const DcmEVR evr = getTag().getEVR();
+    unsigned long result = OFstatic_cast(unsigned long, getLengthField());
+    /* check whether values are stored as 16 bit */
+    if ((evr == EVR_OW) || (evr == EVR_lt))
+        result /= 2;
+    return result;
+}
+
+
 OFCondition DcmOtherByteOtherWord::setVR(DcmEVR vr)
 {
     setTagVR(vr);
@@ -119,7 +160,7 @@ OFCondition DcmOtherByteOtherWord::setVR(DcmEVR vr)
 // ********************************
 
 
-void DcmOtherByteOtherWord::print(STD_NAMESPACE ostream&out,
+void DcmOtherByteOtherWord::print(STD_NAMESPACE ostream &out,
                                   const size_t flags,
                                   const int level,
                                   const char * /*pixelFileName*/,
@@ -138,43 +179,50 @@ void DcmOtherByteOtherWord::print(STD_NAMESPACE ostream&out,
         /* check data */
         if ((wordValues != NULL) || (byteValues != NULL))
         {
-            /* determine number of values to be printed */
-            const unsigned int vrSize = (evr == EVR_OW || evr == EVR_lt) ? 4 : 2;
-            const unsigned long count = (evr == EVR_OW || evr == EVR_lt) ? (getLengthField() / 2) : getLengthField();
-            unsigned long expectedLength = count * (vrSize + 1) - 1;
-            const unsigned long printCount =
-                ((expectedLength > DCM_OptPrintLineLength) && (flags & DCMTypes::PF_shortenLongTagValues)) ?
-                (DCM_OptPrintLineLength - 3 /* for "..." */ + 1 /* for last "\" */) / (vrSize + 1) : count;
-            unsigned long printedLength = printCount * (vrSize + 1) - 1;
-            /* print line start with tag and VR */
-            printInfoLineStart(out, flags, level);
-            /* print multiple values */
-            if (printCount > 0)
+            const unsigned long count = getNumberOfValues();
+            /* double-check length field for valid value */
+            if (count > 0)
             {
-                out << STD_NAMESPACE hex << STD_NAMESPACE setfill('0');
-                if (evr == EVR_OW || evr == EVR_lt)
+                /* determine number of values to be printed */
+                const unsigned int vrSize = (evr == EVR_OW || evr == EVR_lt) ? 4 : 2;
+                unsigned long expectedLength = count * (vrSize + 1) - 1;
+                const unsigned long printCount =
+                    ((expectedLength > DCM_OptPrintLineLength) && (flags & DCMTypes::PF_shortenLongTagValues)) ?
+                    (DCM_OptPrintLineLength - 3 /* for "..." */ + 1 /* for last "\" */) / (vrSize + 1) : count;
+                unsigned long printedLength = printCount * (vrSize + 1) - 1;
+                /* print line start with tag and VR */
+                printInfoLineStart(out, flags, level);
+                /* print multiple values */
+                if (printCount > 0)
                 {
-                    /* print word values in hex mode */
-                    out << STD_NAMESPACE setw(vrSize) << (*(wordValues++));
-                    for (unsigned long i = 1; i < printCount; i++)
-                        out << "\\" << STD_NAMESPACE setw(vrSize) << (*(wordValues++));
-                } else {
-                    /* print byte values in hex mode */
-                    out << STD_NAMESPACE setw(vrSize) << OFstatic_cast(int, *(byteValues++));
-                    for (unsigned long i = 1; i < printCount; i++)
-                        out << "\\" << STD_NAMESPACE setw(vrSize) << OFstatic_cast(int, *(byteValues++));
+                    out << STD_NAMESPACE hex << STD_NAMESPACE setfill('0');
+                    if (evr == EVR_OW || evr == EVR_lt)
+                    {
+                        /* print word values in hex mode */
+                        out << STD_NAMESPACE setw(vrSize) << (*(wordValues++));
+                        for (unsigned long i = 1; i < printCount; i++)
+                            out << "\\" << STD_NAMESPACE setw(vrSize) << (*(wordValues++));
+                    } else {
+                        /* print byte values in hex mode */
+                        out << STD_NAMESPACE setw(vrSize) << OFstatic_cast(int, *(byteValues++));
+                        for (unsigned long i = 1; i < printCount; i++)
+                            out << "\\" << STD_NAMESPACE setw(vrSize) << OFstatic_cast(int, *(byteValues++));
+                    }
+                    /* reset i/o manipulators */
+                    out << STD_NAMESPACE dec << STD_NAMESPACE setfill(' ');
                 }
-                /* reset i/o manipulators */
-                out << STD_NAMESPACE dec << STD_NAMESPACE setfill(' ');
+                /* print trailing "..." if data has been truncated */
+                if (printCount < count)
+                {
+                    out << "...";
+                    printedLength += 3;
+                }
+                /* print line end with length, VM and tag name */
+                printInfoLineEnd(out, flags, printedLength);
+            } else {
+                /* count can be zero if we have an invalid OW element with less than two bytes length */
+                printInfoLine(out, flags, level, "(invalid value)");
             }
-            /* print trailing "..." if data has been truncated */
-            if (printCount < count)
-            {
-                out << "...";
-                printedLength += 3;
-            }
-            /* print line end with length, VM and tag name */
-            printInfoLineEnd(out, flags, printedLength);
         } else
             printInfoLine(out, flags, level, "(no value available)");
     } else
@@ -182,7 +230,7 @@ void DcmOtherByteOtherWord::print(STD_NAMESPACE ostream&out,
 }
 
 
-void DcmOtherByteOtherWord::printPixel(STD_NAMESPACE ostream&out,
+void DcmOtherByteOtherWord::printPixel(STD_NAMESPACE ostream &out,
                                        const size_t flags,
                                        const int level,
                                        const char *pixelFileName,
@@ -220,13 +268,21 @@ void DcmOtherByteOtherWord::printPixel(STD_NAMESPACE ostream&out,
                     {
                         swapIfNecessary(EBO_LittleEndian, gLocalByteOrder, data, getLengthField(), sizeof(Uint16));
                         setByteOrder(EBO_LittleEndian);
-                        fwrite(data, sizeof(Uint16), OFstatic_cast(size_t, getLengthField() / sizeof(Uint16)), file);
+                        const size_t tobewritten = OFstatic_cast(size_t, getLengthField() / sizeof(Uint16));
+                        const size_t written = fwrite(data, sizeof(Uint16), tobewritten, file);
+                        if (written != tobewritten)
+                            DCMDATA_WARN("DcmOtherByteOtherWord: Some bytes were not written: " << (tobewritten - written));
                     }
                 } else {
                     Uint8 *data = NULL;
                     getUint8Array(data);
                     if (data != NULL)
-                        fwrite(data, sizeof(Uint8), OFstatic_cast(size_t, getLengthField()), file);
+                    {
+                        const size_t tobewritten = OFstatic_cast(size_t, getLengthField());
+                        const size_t written = fwrite(data, sizeof(Uint8), tobewritten, file);
+                        if (written != tobewritten)
+                            DCMDATA_WARN("DcmOtherByteOtherWord: Some bytes were not written: " << (tobewritten - written));
+                    }
                 }
                 fclose(file);
             } else {
@@ -254,11 +310,13 @@ OFCondition DcmOtherByteOtherWord::alignValue()
         // if this is part of a very large multi-frame object.
         Uint8 *bytes = OFstatic_cast(Uint8 *, getValue(getByteOrder()));
 
-        if (bytes)
+        // getValue() could call loadValue() which then calls postLoadValue()
+        // which in turn calls this function again. Thus, we have to make sure
+        // that the length field is still odd after getValue() returns.
+        if (bytes && (getLengthField() & 1) != 0)
         {
-            // set zero pad byte
-            bytes[getLengthField()] = 0;
-            // increase length field
+            // newValueField always allocates an even number of bytes
+            // and sets the pad byte to zero, so we can safely increase Length here
             setLengthField(getLengthField() + 1);
         }
     }
@@ -285,7 +343,7 @@ OFCondition DcmOtherByteOtherWord::putUint8Array(const Uint8 *byteValue,
         /* check for valid 8 bit data */
         if ((byteValue != NULL) && (getTag().getEVR() != EVR_OW && getTag().getEVR() != EVR_lt))
         {
-            errorFlag = putValue(byteValue, sizeof(Uint8) * OFstatic_cast(Uint32, numBytes));
+            errorFlag = putValue(byteValue, OFstatic_cast(Uint32, sizeof(Uint8) * OFstatic_cast(size_t, numBytes)));
             alignValue();
         } else
             errorFlag = EC_CorruptedData;
@@ -303,7 +361,7 @@ OFCondition DcmOtherByteOtherWord::putUint16Array(const Uint16 *wordValue,
     {
         /* check for valid 16 bit data */
         if ((wordValue != NULL) && (getTag().getEVR() == EVR_OW || getTag().getEVR() == EVR_lt))
-            errorFlag = putValue(wordValue, sizeof(Uint16) * OFstatic_cast(Uint32, numWords));
+            errorFlag = putValue(wordValue, OFstatic_cast(Uint32, sizeof(Uint16) * OFstatic_cast(size_t, numWords)));
         else
             errorFlag = EC_CorruptedData;
     } else
@@ -320,7 +378,7 @@ OFCondition DcmOtherByteOtherWord::createUint8Array(const Uint32 numBytes,
 {
     /* check value representation */
     if ((getTag().getEVR() != EVR_OW) && (getTag().getEVR() != EVR_lt))
-        errorFlag = createEmptyValue(sizeof(Uint8) * OFstatic_cast(Uint32, numBytes));
+        errorFlag = createEmptyValue(OFstatic_cast(Uint32, sizeof(Uint8) * OFstatic_cast(size_t, numBytes)));
     else
         errorFlag = EC_CorruptedData;
     if (errorFlag.good())
@@ -336,7 +394,14 @@ OFCondition DcmOtherByteOtherWord::createUint16Array(const Uint32 numWords,
 {
     /* check value representation */
     if ((getTag().getEVR() == EVR_OW) || (getTag().getEVR() == EVR_lt))
-        errorFlag = createEmptyValue(sizeof(Uint16) * OFstatic_cast(Uint32, numWords));
+    {
+        Uint32 bytesRequired = 0;
+        OFBool size_fits = OFStandard::safeMult(numWords, OFstatic_cast(Uint32, sizeof(Uint16)), bytesRequired);
+        if (size_fits)
+            errorFlag = createEmptyValue(bytesRequired);
+        else
+            errorFlag = EC_CorruptedData;
+    }
     else
         errorFlag = EC_CorruptedData;
     if (errorFlag.good())
@@ -352,55 +417,60 @@ OFCondition DcmOtherByteOtherWord::createUint16Array(const Uint32 numWords,
 
 OFCondition DcmOtherByteOtherWord::putString(const char *stringVal)
 {
+    /* determine length of the string value */
+    const size_t stringLen = (stringVal != NULL) ? strlen(stringVal) : 0;
+    /* call the real function */
+    return putString(stringVal, OFstatic_cast(Uint32, stringLen));
+}
+
+
+OFCondition DcmOtherByteOtherWord::putString(const char *stringVal,
+                                             const Uint32 stringLen)
+{
     errorFlag = EC_Normal;
-    /* check input string */
-    if ((stringVal != NULL) && (strlen(stringVal) > 0))
+    /* determine VM of the string */
+    unsigned long vm = DcmElement::determineVM(stringVal, stringLen);
+    if (vm > 0)
     {
-        unsigned long vm = getVMFromString(stringVal);
-        if (vm > 0)
+        const DcmEVR evr = getTag().getEVR();
+        Uint8 *byteField = NULL;
+        Uint16 *wordField = NULL;
+        /* create new value field */
+        if (evr == EVR_OW || evr == EVR_lt)
+            wordField = new Uint16[vm];
+        else
+            byteField = new Uint8[vm];
+        Uint16 intVal = 0;
+        OFString value;
+        size_t pos = 0;
+        /* retrieve binary data from hexa-decimal string */
+        for (unsigned long i = 0; (i < vm) && errorFlag.good(); i++)
         {
-            const DcmEVR evr = getTag().getEVR();
-            Uint8 *byteField = NULL;
-            Uint16 *wordField = NULL;
-            /* create new value field */
-            if (evr == EVR_OW || evr == EVR_lt)
-                wordField = new Uint16[vm];
-            else
-                byteField = new Uint8[vm];
-            const char *s = stringVal;
-            Uint16 intVal = 0;
-            char *value;
-            /* retrieve binary data from hexa-decimal string */
-            for (unsigned long i = 0; (i < vm) && errorFlag.good(); i++)
+            /* get specified value from multi-valued string */
+            pos = DcmElement::getValueFromString(stringVal, pos, stringLen, value);
+            if (!value.empty())
             {
-                /* get first value stored in 's', set 's' to beginning of the next value */
-                value = getFirstValueFromString(s);
-                if (value != NULL)
-                {
-                    /* integer overflow is currently not checked! */
-                    if (sscanf(value, "%hx", &intVal) != 1)
-                        errorFlag = EC_CorruptedData;
-                    else if (evr == EVR_OW || evr == EVR_lt)
-                        wordField[i] = OFstatic_cast(Uint16, intVal);
-                    else
-                        byteField[i] = OFstatic_cast(Uint8, intVal);
-                    delete[] value;
-                } else
+                /* integer overflow is currently not checked! */
+                if (sscanf(value.c_str(), "%hx", &intVal) != 1)
                     errorFlag = EC_CorruptedData;
-            }
-            /* set binary data as the element value */
-            if (errorFlag.good())
-            {
-                if (evr == EVR_OW || evr == EVR_lt)
-                    errorFlag = putUint16Array(wordField, vm);
+                else if (evr == EVR_OW || evr == EVR_lt)
+                    wordField[i] = OFstatic_cast(Uint16, intVal);
                 else
-                    errorFlag = putUint8Array(byteField, vm);
-            }
-            /* delete temporary buffers */
-            delete[] byteField;
-            delete[] wordField;
-        } else
-            putValue(NULL, 0);
+                    byteField[i] = OFstatic_cast(Uint8, intVal);
+            } else
+                errorFlag = EC_CorruptedData;
+        }
+        /* set binary data as the element value */
+        if (errorFlag.good())
+        {
+            if (evr == EVR_OW || evr == EVR_lt)
+                errorFlag = putUint16Array(wordField, vm);
+            else
+                errorFlag = putUint8Array(byteField, vm);
+        }
+        /* delete temporary buffers */
+        delete[] byteField;
+        delete[] wordField;
     } else
         putValue(NULL, 0);
     return errorFlag;
@@ -428,7 +498,7 @@ OFCondition DcmOtherByteOtherWord::getUint8(Uint8 &byteVal,
     }
     /* clear value in case of error */
     if (errorFlag.bad())
-	    byteVal = 0;
+        byteVal = 0;
     return errorFlag;
 }
 
@@ -464,7 +534,7 @@ OFCondition DcmOtherByteOtherWord::getUint16(Uint16 &wordVal,
     }
     /* clear value in case of error */
     if (errorFlag.bad())
-	    wordVal = 0;
+        wordVal = 0;
     return errorFlag;
 }
 
@@ -508,7 +578,7 @@ OFCondition DcmOtherByteOtherWord::getOFString(OFString &stringVal,
         {
             /* ... and convert it to a character string (hex mode) */
             char buffer[32];
-            sprintf(buffer, "%2.2hx", uint8Val);
+            sprintf(buffer, "%2.2hx", OFstatic_cast(unsigned short, uint8Val));
             /* assign result */
             stringVal = buffer;
         }
@@ -668,342 +738,139 @@ OFCondition DcmOtherByteOtherWord::writeSignatureFormat(
 OFCondition DcmOtherByteOtherWord::writeXML(STD_NAMESPACE ostream &out,
                                             const size_t flags)
 {
-    /* XML start tag: <element tag="gggg,eeee" vr="XX" ...> */
-    if (!(flags & DCMTypes::XF_writeBinaryData))
-        writeXMLStartTag(out, flags, "binary=\"hidden\"");
-    else if (flags & DCMTypes::XF_encodeBase64)
-        writeXMLStartTag(out, flags, "binary=\"base64\"");
-    else
-        writeXMLStartTag(out, flags, "binary=\"yes\"");
-    /* write element value (if loaded) */
-    if (valueLoaded() && (flags & DCMTypes::XF_writeBinaryData))
+    /* OB/OW data requires special handling in the Native DICOM Model format */
+    if (flags & DCMTypes::XF_useNativeModel)
     {
-        const DcmEVR evr = getTag().getEVR();
-        /* encode binary data as Base64 */
-        if (flags & DCMTypes::XF_encodeBase64)
+        /* write XML start tag */
+        writeXMLStartTag(out, flags);
+        /* for an empty value field, we do not need to do anything */
+        if (getLengthField() > 0)
         {
-            Uint8 *byteValues = OFstatic_cast(Uint8 *, getValue());
-            if ((evr == EVR_OW) || (evr == EVR_lt))
+            /* encode binary data as Base64 */
+            if (flags & DCMTypes::XF_encodeBase64)
             {
-                /* Base64 encoder requires big endian input data */
-                swapIfNecessary(EBO_BigEndian, gLocalByteOrder, byteValues, getLengthField(), sizeof(Uint16));
-                /* update the byte order indicator variable correspondingly */
-                setByteOrder(EBO_BigEndian);
-            }
-            OFStandard::encodeBase64(out, byteValues, OFstatic_cast(size_t, getLengthField()));
-        } else {
-            if ((evr == EVR_OW) || (evr == EVR_lt))
-            {
-                /* get and check 16 bit data */
-                Uint16 *wordValues = NULL;
-                if (getUint16Array(wordValues).good() && (wordValues != NULL))
+                const DcmEVR evr = getTag().getEVR();
+                out << "<InlineBinary>";
+                Uint8 *byteValues = OFstatic_cast(Uint8 *, getValue());
+                if ((evr == EVR_OW) || (evr == EVR_lt))
                 {
-                    const unsigned long count = getLengthField() / 2;
-                    out << STD_NAMESPACE hex << STD_NAMESPACE setfill('0');
-                    /* print word values in hex mode */
-                    out << STD_NAMESPACE setw(4) << (*(wordValues++));
-                    for (unsigned long i = 1; i < count; i++)
-                        out << "\\" << STD_NAMESPACE setw(4) << (*(wordValues++));
-                    /* reset i/o manipulators */
-                    out << STD_NAMESPACE dec << STD_NAMESPACE setfill(' ');
+                    /* Base64 encoder requires big endian input data */
+                    swapIfNecessary(EBO_BigEndian, gLocalByteOrder, byteValues, getLengthField(), sizeof(Uint16));
+                    /* update the byte order indicator variable correspondingly */
+                    setByteOrder(EBO_BigEndian);
                 }
+                OFStandard::encodeBase64(out, byteValues, OFstatic_cast(size_t, getLengthField()));
+                out << "</InlineBinary>" << OFendl;
             } else {
-                /* get and check 8 bit data */
-                Uint8 *byteValues = NULL;
-                if (getUint8Array(byteValues).good() && (byteValues != NULL))
+                /* generate a new UID but the binary data is not (yet) written. */
+                OFUUID uuid;
+                out << "<BulkData uuid=\"";
+                uuid.print(out, OFUUID::ER_RepresentationHex);
+                out << "\"/>" << OFendl;
+            }
+        }
+        /* write XML end tag */
+        writeXMLEndTag(out, flags);
+    } else {
+        /* XML start tag: <element tag="gggg,eeee" vr="XX" ...> */
+        if (!(flags & DCMTypes::XF_writeBinaryData))
+            writeXMLStartTag(out, flags, "binary=\"hidden\"");
+        else if (flags & DCMTypes::XF_encodeBase64)
+            writeXMLStartTag(out, flags, "binary=\"base64\"");
+        else
+            writeXMLStartTag(out, flags, "binary=\"yes\"");
+        /* write element value (if loaded) */
+        if (valueLoaded() && (flags & DCMTypes::XF_writeBinaryData))
+        {
+            const DcmEVR evr = getTag().getEVR();
+            /* encode binary data as Base64 */
+            if (flags & DCMTypes::XF_encodeBase64)
+            {
+                Uint8 *byteValues = OFstatic_cast(Uint8 *, getValue());
+                if ((evr == EVR_OW) || (evr == EVR_lt))
                 {
-                    const unsigned long count = getLengthField();
-                    out << STD_NAMESPACE hex << STD_NAMESPACE setfill('0');
-                    /* print byte values in hex mode */
-                    out << STD_NAMESPACE setw(2) << OFstatic_cast(int, *(byteValues++));
-                    for (unsigned long i = 1; i < count; i++)
-                        out << "\\" << STD_NAMESPACE setw(2) << OFstatic_cast(int, *(byteValues++));
-                    /* reset i/o manipulators */
-                    out << STD_NAMESPACE dec << STD_NAMESPACE setfill(' ');
+                    /* Base64 encoder requires big endian input data */
+                    swapIfNecessary(EBO_BigEndian, gLocalByteOrder, byteValues, getLengthField(), sizeof(Uint16));
+                    /* update the byte order indicator variable correspondingly */
+                    setByteOrder(EBO_BigEndian);
+                }
+                OFStandard::encodeBase64(out, byteValues, OFstatic_cast(size_t, getLengthField()));
+            } else {
+                if ((evr == EVR_OW) || (evr == EVR_lt))
+                {
+                    /* get and check 16 bit data */
+                    Uint16 *wordValues = NULL;
+                    if (getUint16Array(wordValues).good() && (wordValues != NULL))
+                    {
+                        const unsigned long count = getLengthField() / OFstatic_cast(unsigned long, sizeof(Uint16));
+                        /* count can be zero if we have an invalid element with less than two bytes length */
+                        if (count > 0)
+                        {
+                            out << STD_NAMESPACE hex << STD_NAMESPACE setfill('0');
+                            /* print word values in hex mode */
+                            out << STD_NAMESPACE setw(4) << (*(wordValues++));
+                            for (unsigned long i = 1; i < count; i++)
+                                out << "\\" << STD_NAMESPACE setw(4) << (*(wordValues++));
+                            /* reset i/o manipulators */
+                            out << STD_NAMESPACE dec << STD_NAMESPACE setfill(' ');
+                        }
+                    }
+                } else {
+                    /* get and check 8 bit data */
+                    Uint8 *byteValues = NULL;
+                    if (getUint8Array(byteValues).good() && (byteValues != NULL))
+                    {
+                        const unsigned long count = getLengthField();
+                        out << STD_NAMESPACE hex << STD_NAMESPACE setfill('0');
+                        /* print byte values in hex mode */
+                        out << STD_NAMESPACE setw(2) << OFstatic_cast(int, *(byteValues++));
+                        for (unsigned long i = 1; i < count; i++)
+                            out << "\\" << STD_NAMESPACE setw(2) << OFstatic_cast(int, *(byteValues++));
+                        /* reset i/o manipulators */
+                        out << STD_NAMESPACE dec << STD_NAMESPACE setfill(' ');
+                    }
                 }
             }
         }
+        /* XML end tag: </element> */
+        writeXMLEndTag(out, flags);
     }
-    /* XML end tag: </element> */
-    writeXMLEndTag(out, flags);
     /* always report success */
     return EC_Normal;
 }
 
 
-/*
-** CVS/RCS Log:
-** $Log: dcvrobow.cc,v $
-** Revision 1.64  2010-10-29 10:57:21  joergr
-** Added support for colored output to the print() method.
-**
-** Revision 1.63  2010-10-20 16:44:17  joergr
-** Use type cast macros (e.g. OFstatic_cast) where appropriate.
-**
-** Revision 1.62  2010-10-14 13:14:10  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.61  2010-08-18 14:50:06  joergr
-** Revised warning message to indicate that existing pixel data raw files are
-** never overwritten.
-**
-** Revision 1.60  2010-04-23 14:30:34  joergr
-** Added new method to all VR classes which checks whether the stored value
-** conforms to the VR definition and to the specified VM.
-**
-** Revision 1.59  2009-12-04 17:07:51  joergr
-** Sightly modified some log messages.
-**
-** Revision 1.58  2009-11-04 09:58:10  uli
-** Switched to logging mechanism provided by the "new" oflog module
-**
-** Revision 1.57  2009-09-15 15:02:31  joergr
-** Enhanced implementation of writeXML() by writing hex numbers directly to the
-** output stream instead of creating a temporary string first.
-**
-** Revision 1.56  2009-09-15 10:30:31  joergr
-** Removed alternative implementation of getOFStringArray(). Now, always the
-** OFStringStream approach is used.
-**
-** Revision 1.55  2009-09-03 17:22:26  joergr
-** Fixed issue with getOFStringArray() when using standard C++ string class.
-**
-** Revision 1.54  2009-04-30 15:09:34  joergr
-** Fixed bug in writeXML(): Used wrong byte order for 16-bit data on systems
-** with big endian byte-ordering (wrong parameter order for swapBytes() call).
-** Fixed memory leak in putElementContent() for base64 encoded data.
-** Avoid swapping the byte-ording back to the original state in printPixel().
-** Update the byte order variable in writeXML() and printPixel() if necessary.
-**
-** Revision 1.53  2008-08-15 09:26:33  meichel
-** Under certain conditions (odd length compressed pixel data fragments)
-**   class DcmOtherByteOtherWord needs to load the attribute value into main
-**   memory during a write() operation, in order to add a pad byte. A new flag
-**   compactAfterTransfer now makes sure that the memory is released once the
-**   write operation has finished, so that only a single fragment at a time
-**   needs to fully reside in memory.
-**
-** Revision 1.52  2008-07-17 10:31:32  onken
-** Implemented copyFrom() method for complete DcmObject class hierarchy, which
-** permits setting an instance's value from an existing object. Implemented
-** assignment operator where necessary.
-**
-** Revision 1.51  2007-11-29 14:30:21  meichel
-** Write methods now handle large raw data elements (such as pixel data)
-**   without loading everything into memory. This allows very large images to
-**   be sent over a network connection, or to be copied without ever being
-**   fully in memory.
-**
-** Revision 1.50  2007/06/29 14:17:49  meichel
-** Code clean-up: Most member variables in module dcmdata are now private,
-**   not protected anymore.
-**
-** Revision 1.49  2007/06/26 16:24:23  joergr
-** Added new variant of encodeBase64() method that outputs directly to a stream
-** (avoids using a memory buffer for large binary data).
-**
-** Revision 1.48  2007/06/07 09:03:18  joergr
-** Added createUint8Array() and createUint16Array() methods.
-**
-** Revision 1.47  2006/10/13 10:11:30  joergr
-** Fixed wrong formatting.
-**
-** Revision 1.46  2006/08/15 15:49:54  meichel
-** Updated all code in module dcmdata to correctly compile when
-**   all standard C++ classes remain in namespace std.
-**
-** Revision 1.45  2005/12/08 15:41:57  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.44  2005/11/15 16:59:25  meichel
-** Added new pseudo VR type EVR_lt that is used for LUT Data when read in
-**   implicit VR, which may be US, SS or OW. DCMTK always treats EVR_lt like OW.
-**
-** Revision 1.43  2004/02/04 16:49:49  joergr
-** Adapted type casts to new-style typecast operators defined in ofcast.h.
-** Removed acknowledgements with e-mail addresses from CVS log.
-**
-** Revision 1.42  2003/04/17 15:59:45  joergr
-** Use method OFString::c_str() instead of OFString::operator[] to avoid range
-** checking (which implies an "expensive" strlen() call).
-**
-** Revision 1.41  2002/12/06 13:12:36  joergr
-** Enhanced "print()" function by re-working the implementation and replacing
-** the boolean "showFullData" parameter by a more general integer flag.
-** Made source code formatting more consistent with other modules/files.
-**
-** Revision 1.40  2002/11/27 12:06:57  meichel
-** Adapted module dcmdata to use of new header file ofstdinc.h
-**
-** Revision 1.39  2002/08/27 16:55:59  meichel
-** Initial release of new DICOM I/O stream classes that add support for stream
-**   compression (deflated little endian explicit VR transfer syntax)
-**
-** Revision 1.38  2002/07/08 14:44:42  meichel
-** Improved dcmdata behaviour when reading odd tag length. Depending on the
-**   global boolean flag dcmAcceptOddAttributeLength, the parser now either accepts
-**   odd length attributes or implements the old behaviour, i.e. assumes a real
-**   length larger by one.
-**
-** Revision 1.37  2002/05/14 08:22:56  joergr
-** Added support for Base64 (MIME) encoded binary data.
-**
-** Revision 1.36  2002/04/25 10:32:16  joergr
-** Added getOFString() implementation.
-** Added/modified getOFStringArray() implementation.
-** Added support for XML output of DICOM objects.
-**
-** Revision 1.35  2002/04/16 13:43:25  joergr
-** Added configurable support for C++ ANSI standard includes (e.g. streams).
-**
-** Revision 1.34  2001/10/02 11:48:33  joergr
-** Added getUint8/16 routines to class DcmOtherByteOtherWord.
-**
-** Revision 1.33  2001/09/25 17:19:58  meichel
-** Adapted dcmdata to class OFCondition
-**
-** Revision 1.32  2001/06/01 15:49:18  meichel
-** Updated copyright header
-**
-** Revision 1.31  2000/11/07 16:56:24  meichel
-** Initial release of dcmsign module for DICOM Digital Signatures
-**
-** Revision 1.30  2000/04/14 15:55:09  meichel
-** Dcmdata library code now consistently uses ofConsole for error output.
-**
-** Revision 1.29  2000/03/08 16:26:49  meichel
-** Updated copyright header.
-**
-** Revision 1.28  2000/03/07 15:41:02  joergr
-** Added explicit type casts to make Sun CC 2.0.1 happy.
-**
-** Revision 1.27  2000/03/06 16:08:05  meichel
-** Changed a couple of definitions that implied that Uint32 or size_t are long
-**
-** Revision 1.26  2000/03/03 14:05:39  meichel
-** Implemented library support for redirecting error messages into memory
-**   instead of printing them to stdout/stderr for GUI applications.
-**
-** Revision 1.25  2000/02/23 15:12:07  meichel
-** Corrected macro for Borland C++ Builder 4 workaround.
-**
-** Revision 1.24  2000/02/10 16:04:59  joergr
-** Enhanced handling of PixelData/Item element. Externally stored raw data is
-** now always imported as little endian and swapped if necessary. This change
-** reflects the new 'export' feature of dcmdump.
-**
-** Revision 1.23  2000/02/10 10:52:24  joergr
-** Added new feature to dcmdump (enhanced print method of dcmdata): write
-** pixel data/item value fields to raw files.
-**
-** Revision 1.22  2000/02/03 16:55:20  joergr
-** Avoid EVR_pixelItem in comparisons (compare with != EVR_OW instead).
-**
-** Revision 1.21  2000/02/03 16:35:58  joergr
-** Corrected bug that caused wrong calculation of group length for sequence
-** of items (e.g. encapsulated pixel data).
-**
-** Revision 1.20  2000/02/01 10:12:11  meichel
-** Avoiding to include <stdlib.h> as extern "C" on Borland C++ Builder 4,
-**   workaround for bug in compiler header files.
-**
-** Revision 1.19  1999/03/31 09:25:55  meichel
-** Updated copyright header in module dcmdata
-**
-** Revision 1.18  1997/07/21 08:11:43  andreas
-** - Support for CP 14. PixelData and OverlayData can have VR OW or OB
-**   (depending on the transfer syntax). New internal value
-**   representation (only for ident()) for OverlayData.
-** - New environment for encapsulated pixel representations. DcmPixelData
-**   can contain different representations and uses codecs to convert
-**   between them. Codecs are derived from the DcmCodec class. New error
-**   codes are introduced for handling of representations. New internal
-**   value representation (only for ident()) for PixelData
-** - Replace all boolean types (BOOLEAN, CTNBOOLEAN, DICOM_BOOL, BOOL)
-**   with one unique boolean type OFBool.
-**
-** Revision 1.17  1997/07/07 07:51:35  andreas
-** - Changed type for Tag attribute in DcmObject from prointer to value
-** - Enhanced (faster) byte swapping routine. swapIfNecessary moved from
-**   a method in DcmObject to a general function.
-**
-** Revision 1.16  1997/07/03 15:10:15  andreas
-** - removed debugging functions Bdebug() and Edebug() since
-**   they write a static array and are not very useful at all.
-**   Cdebug and Vdebug are merged since they have the same semantics.
-**   The debugging functions in dcmdata changed their interfaces
-**   (see dcmdata/include/dcdebug.h)
-**
-** Revision 1.15  1997/06/13 13:07:31  andreas
-** - Corrected printing of OW values. The length of the output array was
-**   computed incorrectly.
-**
-** Revision 1.14  1997/05/27 13:49:03  andreas
-** - Add method canWriteXfer to class DcmObject and all derived classes.
-**   This method checks whether it is possible to convert the original
-**   transfer syntax to an new transfer syntax. The check is used in the
-**   dcmconv utility to prohibit the change of a compressed transfer
-**   syntax to a uncompressed.
-**
-** Revision 1.13  1997/05/22 16:54:20  andreas
-** - Corrected wrong output length in print routine
-**
-** Revision 1.12  1997/05/16 08:31:28  andreas
-** - Revised handling of GroupLength elements and support of
-**   DataSetTrailingPadding elements. The enumeratio E_GrpLenEncoding
-**   got additional enumeration values (for a description see dctypes.h).
-**   addGroupLength and removeGroupLength methods are replaced by
-**   computeGroupLengthAndPadding. To support Padding, the parameters of
-**   element and sequence write functions changed.
-**
-** Revision 1.11  1997/04/18 08:17:20  andreas
-** - The put/get-methods for all VRs did not conform to the C++-Standard
-**   draft. Some Compilers (e.g. SUN-C++ Compiler, Metroworks
-**   CodeWarrier, etc.) create many warnings concerning the hiding of
-**   overloaded get methods in all derived classes of DcmElement.
-**   So the interface of all value representation classes in the
-**   library are changed rapidly, e.g.
-**   OFCondition get(Uint16 & value, const unsigned long pos);
-**   becomes
-**   OFCondition getUint16(Uint16 & value, const unsigned long pos);
-**   All (retired) "returntype get(...)" methods are deleted.
-**   For more information see dcmdata/include/dcelem.h
-**
-** Revision 1.10  1997/03/26 17:15:59  hewett
-** Added very preliminary support for Unknown VR (UN) described in
-** Supplement 14.  WARNING: handling of unknown attributes with undefined
-** length is not yet supported.
-**
-** Revision 1.9  1996/08/05 08:46:20  andreas
-** new print routine with additional parameters:
-**         - print into files
-**         - fix output length for elements
-** corrected error in search routine with parameter ESM_fromStackTop
-**
-** Revision 1.8  1996/05/06 10:22:47  meichel
-** Copy constructor now handles case when VR=unknown.
-**
-** Revision 1.7  1996/04/16 16:05:24  andreas
-** - better support und bug fixes for NULL element value
-**
-** Revision 1.6  1996/03/26 09:59:36  meichel
-** corrected bug (deletion of const char *) which prevented compilation on NeXT
-**
-** Revision 1.5  1996/01/29 13:38:33  andreas
-** - new put method for every VR to put value as a string
-** - better and unique print methods
-**
-** Revision 1.4  1996/01/09 11:06:50  andreas
-** New Support for Visual C++
-** Correct problems with inconsistent const declarations
-** Correct error in reading Item Delimitation Elements
-**
-** Revision 1.3  1996/01/05 13:27:51  andreas
-** - changed to support new streaming facilities
-** - unique read/write methods for file and block transfer
-** - more cleanups
-**
-** Revision 1.2  1995/11/23 17:03:07  hewett
-** Updated for loadable data dictionary.  Some cleanup (more to do).
-**
-*/
+// ********************************
+
+
+OFCondition DcmOtherByteOtherWord::writeJson(STD_NAMESPACE ostream &out,
+                                             DcmJsonFormat &format)
+{
+    /* write JSON Opener */
+    writeJsonOpener(out, format);
+    /* for an empty value field, we do not need to do anything */
+    if (getLengthField() > 0)
+    {
+        OFString value;
+        if (format.asBulkDataURI(getTag(), value))
+        {
+            /* return defined BulkDataURI */
+            format.printBulkDataURIPrefix(out);
+            DcmJsonFormat::printString(out, value);
+        }
+        else
+        {
+            /* encode binary data as Base64 */
+            format.printInlineBinaryPrefix(out);
+            out << "\"";
+            /* adjust byte order to little endian */
+            Uint8 *byteValues = OFstatic_cast(Uint8 *, getValue(EBO_LittleEndian));
+            OFStandard::encodeBase64(out, byteValues, OFstatic_cast(size_t, getLengthField()));
+            out << "\"";
+        }
+    }
+    /* write JSON Closer */
+    writeJsonCloser(out, format);
+    /* always report success */
+    return EC_Normal;
+}

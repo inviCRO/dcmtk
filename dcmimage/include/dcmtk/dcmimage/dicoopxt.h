@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1996-2010, OFFIS e.V.
+ *  Copyright (C) 1996-2016, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Joerg Riesmeier
  *
  *  Purpose: DicomColorOutputPixelTemplate (Header)
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:29 $
- *  CVS/RCS Revision: $Revision: 1.28 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -156,7 +149,7 @@ class DiColorOutputPixelTemplate
      *
      ** @param  plane  number of the plane to be retrieved (0..2)
      *
-     ** @return pointer to beginning of plane if sucessful, NULL otherwise
+     ** @return pointer to beginning of plane if successful, NULL otherwise
      */
     inline const void *getPlane(const int plane) const
     {
@@ -186,9 +179,9 @@ class DiColorOutputPixelTemplate
     {
         if (Data != NULL)
         {
-            register T2 *p = Data;
-            register unsigned long i;
-            register int j;
+            T2 *p = Data;
+            unsigned long i;
+            int j;
             for (i = FrameSize; i != 0; --i)
                 for (j = 3; j != 0; --j)
                     stream << OFstatic_cast(unsigned long, *(p++)) << " ";     // typecast to resolve problems with 'char'
@@ -207,9 +200,9 @@ class DiColorOutputPixelTemplate
     {
         if (Data != NULL)
         {
-            register T2 *p = Data;
-            register unsigned long i;
-            register int j;
+            T2 *p = Data;
+            unsigned long i;
+            int j;
             for (i = FrameSize; i != 0; --i)
                 for (j = 3; j != 0; --j)
                     fprintf(stream, "%lu ", OFstatic_cast(unsigned long, *(p++)));
@@ -250,12 +243,12 @@ class DiColorOutputPixelTemplate
             if (Data != NULL)
             {
                 DCMIMAGE_DEBUG("converting color pixel data to output format");
-                register T2 *q = Data;
-                register unsigned long i;
+                T2 *q = Data;
+                unsigned long i;
                 const T2 max2 = OFstatic_cast(T2, DicomImageClass::maxval(bits2));
                 if (planar)
                 {
-                    register const T1 *p;
+                    const T1 *p;
                     if (bits1 == bits2)
                     {
                         for (int j = 0; j < 3; ++j)
@@ -339,7 +332,7 @@ class DiColorOutputPixelTemplate
                 }
                 else /* not planar */
                 {
-                    register int j;
+                    int j;
                     if (bits1 == bits2)
                     {
                         /* invert output data */
@@ -422,101 +415,3 @@ class DiColorOutputPixelTemplate
 
 
 #endif
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: dicoopxt.h,v $
- * Revision 1.28  2010-10-14 13:16:29  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.27  2010-10-05 15:34:41  joergr
- * Output information on conversion process to the logger (debug mode).
- * Fixed various Doxygen API documentation issues.
- *
- * Revision 1.26  2010-03-01 09:08:46  uli
- * Removed some unnecessary include directives in the headers.
- *
- * Revision 1.25  2006-08-15 16:35:01  meichel
- * Updated the code in module dcmimage to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.24  2005/12/08 16:01:33  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.23  2004/02/06 11:18:18  joergr
- * Distinguish more clearly between const and non-const access to pixel data.
- *
- * Revision 1.22  2003/12/23 16:06:21  joergr
- * Replaced additional post-increment/decrement operators by pre-increment/
- * decrement operators.
- *
- * Revision 1.21  2003/12/23 11:36:24  joergr
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- * Removed leading underscore characters from preprocessor symbols (reserved
- * symbols). Updated copyright header.
- * Replaced post-increment/decrement operators by pre-increment/decrement
- * operators where appropriate (e.g. 'i++' by '++i').
- *
- * Revision 1.20  2002/06/26 17:20:31  joergr
- * Added type cast to keep MSVC6 quiet.
- *
- * Revision 1.19  2002/06/26 16:17:16  joergr
- * Added support for polarity flag to color images.
- *
- * Revision 1.18  2001/11/09 16:42:04  joergr
- * Removed 'inline' specifier from certain methods.
- *
- * Revision 1.17  2001/06/01 15:49:29  meichel
- * Updated copyright header
- *
- * Revision 1.16  2000/03/30 14:15:44  joergr
- * Corrected wrong bit expansion of output pixel data (left shift is not
- * correct).
- *
- * Revision 1.15  2000/03/08 16:21:50  meichel
- * Updated copyright header.
- *
- * Revision 1.14  1999/09/17 14:03:43  joergr
- * Enhanced efficiency of some "for" loops.
- *
- * Revision 1.13  1999/08/17 10:28:47  joergr
- * Commented unused parameter name to avoid compiler warnings.
- * Removed unused parameter.
- *
- * Revision 1.12  1999/07/23 13:20:45  joergr
- * Enhanced handling of corrupted pixel data (wrong length).
- *
- * Revision 1.11  1999/04/30 16:12:03  meichel
- * Minor code purifications to keep IBM xlC quiet
- *
- * Revision 1.10  1999/04/29 09:31:13  joergr
- * Moved color related image files back to non-public part.
- *
- * Revision 1.1  1999/04/28 14:57:31  joergr
- * Moved files from dcmimage module to dcmimgle to support new pastel color
- * output format.
- *
- * Revision 1.8  1999/01/20 14:43:12  joergr
- * Replaced invocation of getCount() by member variable Count where possible.
- * Added new output method to fill external memory buffer with rendered pixel
- * data.
- *
- * Revision 1.7  1998/12/22 13:23:57  joergr
- * Added comments that the routines for expanding pixel's depth have to be
- * enhanced in the future (replicate bit pattern instead of shifting). Same
- * question for reducing depth.
- *
- * Revision 1.6  1998/11/27 13:46:00  joergr
- * Added copyright message. Replaced delete by delete[] for array types.
- *
- * Revision 1.5  1998/07/01 08:39:19  joergr
- * Minor changes to avoid compiler warnings (gcc 2.8.1 with additional
- * options), e.g. add copy constructors.
- *
- * Revision 1.4  1998/05/11 14:53:12  joergr
- * Added CVS/RCS header to each file.
- *
- *
- */

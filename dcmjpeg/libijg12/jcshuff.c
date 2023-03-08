@@ -254,7 +254,7 @@ flush_bits (working_state * state)
 /* Encode a single block's worth of coefficients */
 
 LOCAL(boolean)
-encode_one_block (working_state * state, JCOEFPTR block, int last_dc_val,
+encode_one_block (working_state * state, const JCOEFPTR block, int last_dc_val,
 		  c_derived_tbl *dctbl, c_derived_tbl *actbl)
 {
   register int temp, temp2;
@@ -475,7 +475,7 @@ finish_pass_huff (j_compress_ptr cinfo)
 /* Process a single block's worth of coefficients */
 
 LOCAL(void)
-htest_one_block (j_compress_ptr cinfo, JCOEFPTR block, int last_dc_val,
+htest_one_block (j_compress_ptr cinfo, const JCOEFPTR block, int last_dc_val,
 		 long dc_counts[], long ac_counts[])
 {
   register int temp;
@@ -629,6 +629,7 @@ finish_pass_gather (j_compress_ptr cinfo)
 METHODDEF(boolean)
 need_optimization_pass (j_compress_ptr cinfo)
 {
+  (void)cinfo;
   return TRUE;
 }
 
@@ -647,7 +648,7 @@ jinit_shuff_encoder (j_compress_ptr cinfo)
   entropy = (shuff_entropy_ptr)
     (*cinfo->mem->alloc_small) ((j_common_ptr) cinfo, JPOOL_IMAGE,
 				SIZEOF(shuff_entropy_encoder));
-  lossyc->entropy_private = (struct jpeg_entropy_encoder *) entropy;
+  lossyc->entropy_private = (void *) entropy;
   lossyc->pub.entropy_start_pass = start_pass_huff;
   lossyc->pub.need_optimization_pass = need_optimization_pass;
 

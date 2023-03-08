@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2001-2010, OFFIS e.V.
+ *  Copyright (C) 2001-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,25 +17,10 @@
  *
  *  Purpose: Compress DICOM file
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:13:38 $
- *  CVS/RCS Revision: $Revision: 1.29 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CSTDIO
-#define INCLUDE_CSTRING
-#include "dcmtk/ofstd/ofstdinc.h"
-
-#ifdef HAVE_GUSI_H
-#include <GUSI.h>
-#endif
 
 #include "dcmtk/dcmdata/dctk.h"
 #include "dcmtk/dcmdata/cmdlnarg.h"
@@ -68,11 +53,6 @@ static char rcsid[] = "$dcmtk: " OFFIS_CONSOLE_APPLICATION " v"
 int main(int argc, char *argv[])
 {
 
-#ifdef HAVE_GUSI_H
-  GUSISetup(GUSIwithSIOUXSockets);
-  GUSISetup(GUSIwithInternetSockets);
-#endif
-
   const char *opt_ifname = NULL;
   const char *opt_ofname = NULL;
 
@@ -88,7 +68,7 @@ int main(int argc, char *argv[])
 
 
   // JPEG options
-  E_TransferSyntax opt_oxfer = EXS_JPEGProcess14SV1TransferSyntax;
+  E_TransferSyntax opt_oxfer = EXS_JPEGProcess14SV1;
   OFCmdUnsignedInt opt_selection_value = 6;
   OFCmdUnsignedInt opt_point_transform = 0;
   OFCmdUnsignedInt opt_quality = 90;
@@ -97,8 +77,11 @@ int main(int argc, char *argv[])
   int              opt_compressedBits = 0; // 0=auto, 8/12/16=force
   E_CompressionColorSpaceConversion opt_compCSconversion = ECC_lossyYCbCr;
   E_DecompressionColorSpaceConversion opt_decompCSconversion = EDC_photometricInterpretation;
-  E_SubSampling    opt_sampleFactors = ESS_444;
-  OFBool           opt_useYBR422 = OFFalse;
+  OFBool           opt_predictor6WorkaroundEnable = OFFalse;
+  OFBool           opt_cornellWorkaroundEnable = OFFalse;
+  OFBool           opt_forceSingleFragmentPerFrame = OFFalse;
+  E_SubSampling    opt_sampleFactors = ESS_422;
+  OFBool           opt_useYBR422 = OFTrue;
   OFCmdUnsignedInt opt_fragmentSize = 0; // 0=unlimited
   OFBool           opt_createOffsetTable = OFTrue;
   int              opt_windowType = 0;  /* default: no windowing; 1=Wi, 2=Wl, 3=Wm, 4=Wh, 5=Ww, 6=Wn, 7=Wr */
@@ -110,6 +93,7 @@ int main(int argc, char *argv[])
   OFBool           opt_usePixelValues = OFTrue;
   OFBool           opt_useModalityRescale = OFFalse;
   OFBool           opt_trueLossless = OFTrue;
+  OFBool           opt_lossless = OFTrue;
   OFBool           lossless = OFTrue;  /* see opt_oxfer */
 
   OFConsoleApplication app(OFFIS_CONSOLE_APPLICATION, "Encode DICOM file to JPEG transfer syntax", rcsid);
@@ -174,7 +158,7 @@ int main(int argc, char *argv[])
       cmd.addOption("--bits-force-12",       "+bt",    "force 12 bits/sample (not with baseline)");
       cmd.addOption("--bits-force-16",       "+bs",    "force 16 bits/sample (lossless only)");
 
-    cmd.addSubGroup("compression color space conversion (overriden by +tl):");
+    cmd.addSubGroup("compression color space conversion (overridden by +tl):");
       cmd.addOption("--color-ybr",           "+cy",    "use YCbCr for color images if lossy (default)");
       cmd.addOption("--color-rgb",           "+cr",    "use RGB for color images if lossy");
       cmd.addOption("--monochrome",          "+cm",    "convert color images to monochrome");
@@ -187,11 +171,16 @@ int main(int argc, char *argv[])
       cmd.addOption("--conv-always",         "+ca",    "always convert YCbCr to RGB");
       cmd.addOption("--conv-never",          "+cn",    "never convert color space");
 
-    cmd.addSubGroup("standard YCbCr component subsampling (not with +tl):");
-      cmd.addOption("--sample-444",          "+s4",    "4:4:4 sampling with YBR_FULL (default)");
-      cmd.addOption("--sample-422",          "+s2",    "4:2:2 subsampling with YBR_FULL_422");
+    cmd.addSubGroup("decompr. workaround options for incorrect encodings (if input is compressed):");
+      cmd.addOption("--workaround-pred6",    "+w6",    "enable workaround for JPEG lossless images\nwith overflow in predictor 6");
+      cmd.addOption("--workaround-incpl",    "+wi",    "enable workaround for incomplete JPEG data");
+      cmd.addOption("--workaround-cornell",  "+wc",    "enable workaround for 16-bit JPEG lossless\nCornell images with Huffman table overflow");
 
-    cmd.addSubGroup("non-standard YCbCr component subsampling (not with +tl):");
+    cmd.addSubGroup("YCbCr component subsampling (lossy JPEG only):");
+      cmd.addOption("--sample-422",          "+s2",    "4:2:2 subsampling with YBR_FULL_422 (default)");
+
+    cmd.addSubGroup("non-standard YCbCr component subsampling (lossy JPEG only):");
+      cmd.addOption("--nonstd-444",          "+s4",    "4:4:4 sampling with YBR_FULL");
       cmd.addOption("--nonstd-422-full",     "+n2",    "4:2:2 subsampling with YBR_FULL");
       cmd.addOption("--nonstd-411-full",     "+n1",    "4:1:1 subsampling with YBR_FULL");
       cmd.addOption("--nonstd-411",          "+np",    "4:1:1 subsampling with YBR_FULL_422");
@@ -256,7 +245,7 @@ int main(int argc, char *argv[])
 
     /* evaluate command line */
     prepareCmdLineArgs(argc, argv, OFFIS_CONSOLE_APPLICATION);
-    if (app.parseCommandLine(cmd, argc, argv, OFCommandLine::PF_ExpandWildcards))
+    if (app.parseCommandLine(cmd, argc, argv))
     {
       /* check exclusive options first */
       if (cmd.hasExclusiveOption())
@@ -318,16 +307,40 @@ int main(int argc, char *argv[])
       // JPEG options
 
       cmd.beginOptionBlock();
-      if (cmd.findOption("--encode-lossless-sv1")) opt_oxfer = EXS_JPEGProcess14SV1TransferSyntax;
-      if (cmd.findOption("--encode-lossless")) opt_oxfer = EXS_JPEGProcess14TransferSyntax;
-      if (cmd.findOption("--encode-baseline")) opt_oxfer = EXS_JPEGProcess1TransferSyntax;
-      if (cmd.findOption("--encode-extended")) opt_oxfer = EXS_JPEGProcess2_4TransferSyntax;
-      if (cmd.findOption("--encode-spectral")) opt_oxfer = EXS_JPEGProcess6_8TransferSyntax;
-      if (cmd.findOption("--encode-progressive")) opt_oxfer = EXS_JPEGProcess10_12TransferSyntax;
+      if (cmd.findOption("--encode-lossless-sv1"))
+      {
+          opt_oxfer = EXS_JPEGProcess14SV1;
+          opt_lossless = OFTrue;
+      }
+      if (cmd.findOption("--encode-lossless"))
+      {
+          opt_oxfer = EXS_JPEGProcess14;
+          opt_lossless = OFTrue;
+      }
+      if (cmd.findOption("--encode-baseline"))
+      {
+          opt_oxfer = EXS_JPEGProcess1;
+          opt_lossless = OFFalse;
+      }
+      if (cmd.findOption("--encode-extended"))
+      {
+          opt_oxfer = EXS_JPEGProcess2_4;
+          opt_lossless = OFFalse;
+      }
+      if (cmd.findOption("--encode-spectral"))
+      {
+          opt_oxfer = EXS_JPEGProcess6_8;
+          opt_lossless = OFFalse;
+      }
+      if (cmd.findOption("--encode-progressive"))
+      {
+          opt_oxfer = EXS_JPEGProcess10_12;
+          opt_lossless = OFFalse;
+      }
       cmd.endOptionBlock();
 
       // check for JPEG lossless output transfer syntaxes
-      lossless = (opt_oxfer == EXS_JPEGProcess14SV1TransferSyntax) || (opt_oxfer == EXS_JPEGProcess14TransferSyntax);
+      lossless = (opt_oxfer == EXS_JPEGProcess14SV1) || (opt_oxfer == EXS_JPEGProcess14);
 
       cmd.beginOptionBlock();
       if (cmd.findOption("--true-lossless"))
@@ -349,7 +362,7 @@ int main(int argc, char *argv[])
 
       if (cmd.findOption("--selection-value"))
       {
-        app.checkDependence("--selection-value", "--encode-lossless", opt_oxfer == EXS_JPEGProcess14TransferSyntax);
+        app.checkDependence("--selection-value", "--encode-lossless", opt_oxfer == EXS_JPEGProcess14);
         app.checkValue(cmd.getValueAndCheckMinMax(opt_selection_value, OFstatic_cast(OFCmdUnsignedInt, 1), OFstatic_cast(OFCmdUnsignedInt, 7)));
       }
 
@@ -389,16 +402,16 @@ int main(int argc, char *argv[])
       if (cmd.findOption("--bits-force-12"))
       {
         app.checkConflict("--bits-force-12", "--true-lossless", opt_trueLossless);
-        app.checkConflict("--bits-force-12", "--encode-baseline", opt_oxfer == EXS_JPEGProcess1TransferSyntax);
+        app.checkConflict("--bits-force-12", "--encode-baseline", opt_oxfer == EXS_JPEGProcess1);
         opt_compressedBits = 12;
       }
       if (cmd.findOption("--bits-force-16"))
       {
         app.checkConflict("--bits-force-16", "--true-lossless", opt_trueLossless);
-        app.checkConflict("--bits-force-16", "--encode-baseline", opt_oxfer == EXS_JPEGProcess1TransferSyntax);
-        app.checkConflict("--bits-force-16", "--encode-extended", opt_oxfer == EXS_JPEGProcess2_4TransferSyntax);
-        app.checkConflict("--bits-force-16", "--encode-spectral", opt_oxfer == EXS_JPEGProcess6_8TransferSyntax);
-        app.checkConflict("--bits-force-16", "--encode-progressive", opt_oxfer == EXS_JPEGProcess10_12TransferSyntax);
+        app.checkConflict("--bits-force-16", "--encode-baseline", opt_oxfer == EXS_JPEGProcess1);
+        app.checkConflict("--bits-force-16", "--encode-extended", opt_oxfer == EXS_JPEGProcess2_4);
+        app.checkConflict("--bits-force-16", "--encode-spectral", opt_oxfer == EXS_JPEGProcess6_8);
+        app.checkConflict("--bits-force-16", "--encode-progressive", opt_oxfer == EXS_JPEGProcess10_12);
         opt_compressedBits = 16;
       }
       cmd.endOptionBlock();
@@ -449,34 +462,43 @@ int main(int argc, char *argv[])
       cmd.endOptionBlock();
       if (opt_trueLossless) opt_decompCSconversion = EDC_never;
 
+      if (cmd.findOption("--workaround-pred6")) opt_predictor6WorkaroundEnable = OFTrue;
+      if (cmd.findOption("--workaround-incpl")) opt_forceSingleFragmentPerFrame = OFTrue;
+      if (cmd.findOption("--workaround-cornell")) opt_cornellWorkaroundEnable = OFTrue;
+
       cmd.beginOptionBlock();
-      if (cmd.findOption("--sample-444"))
+      if (cmd.findOption("--nonstd-444"))
       {
-        app.checkConflict("--sample-444", "--true-lossless", opt_trueLossless);
+        app.checkConflict("--nonstd-444", "--true-lossless", opt_trueLossless);
+        app.checkConflict("--nonstd-444", "--pseudo-lossless", opt_lossless);
         opt_sampleFactors = ESS_444;
         opt_useYBR422 = OFFalse;
       }
       if (cmd.findOption("--sample-422"))
       {
         app.checkConflict("--sample-422", "--true-lossless", opt_trueLossless);
+        app.checkConflict("--sample-422", "--pseudo-lossless", opt_lossless);
         opt_sampleFactors = ESS_422;
         opt_useYBR422 = OFTrue;
       }
       if (cmd.findOption("--nonstd-422-full"))
       {
         app.checkConflict("--nonstd-422-full", "--true-lossless", opt_trueLossless);
+        app.checkConflict("--nonstd-422-full", "--pseudo-lossless", opt_lossless);
         opt_sampleFactors = ESS_422;
         opt_useYBR422 = OFFalse;
       }
       if (cmd.findOption("--nonstd-411-full"))
       {
         app.checkConflict("--nonstd-411-full", "--true-lossless", opt_trueLossless);
+        app.checkConflict("--nonstd-411-full", "--pseudo-lossless", opt_lossless);
         opt_sampleFactors = ESS_411;
         opt_useYBR422 = OFFalse;
       }
       if (cmd.findOption("--nonstd-411"))
       {
         app.checkConflict("--nonstd-411", "--true-lossless", opt_trueLossless);
+        app.checkConflict("--nonstd-411", "--pseudo-lossless", opt_lossless);
         opt_sampleFactors = ESS_411;
         opt_useYBR422 = OFTrue;
       }
@@ -565,16 +587,8 @@ int main(int argc, char *argv[])
       cmd.endOptionBlock();
 
       cmd.beginOptionBlock();
-      if (cmd.findOption("--enable-new-vr"))
-      {
-        dcmEnableUnknownVRGeneration.set(OFTrue);
-        dcmEnableUnlimitedTextVRGeneration.set(OFTrue);
-      }
-      if (cmd.findOption("--disable-new-vr"))
-      {
-        dcmEnableUnknownVRGeneration.set(OFFalse);
-        dcmEnableUnlimitedTextVRGeneration.set(OFFalse);
-      }
+      if (cmd.findOption("--enable-new-vr")) dcmEnableGenerationOfNewVRs();
+      if (cmd.findOption("--disable-new-vr")) dcmDisableGenerationOfNewVRs();
       cmd.endOptionBlock();
 
       cmd.beginOptionBlock();
@@ -607,7 +621,11 @@ int main(int argc, char *argv[])
     // register global decompression codecs
     DJDecoderRegistration::registerCodecs(
       opt_decompCSconversion,
-      opt_uidcreation);
+      opt_uidcreation,
+      EPC_default,
+      opt_predictor6WorkaroundEnable,
+      opt_cornellWorkaroundEnable,
+      opt_forceSingleFragmentPerFrame);
 
     // register global compression codecs
     DJEncoderRegistration::registerCodecs(
@@ -621,14 +639,14 @@ int main(int argc, char *argv[])
       opt_sampleFactors,
       opt_useYBR422,
       opt_secondarycapture,
-      opt_windowType,
-      opt_windowParameter,
+      OFstatic_cast(Uint32, opt_windowType),
+      OFstatic_cast(Uint32, opt_windowParameter),
       opt_windowCenter,
       opt_windowWidth,
-      opt_roiLeft,
-      opt_roiTop,
-      opt_roiWidth,
-      opt_roiHeight,
+      OFstatic_cast(Uint32, opt_roiLeft),
+      OFstatic_cast(Uint32, opt_roiTop),
+      OFstatic_cast(Uint32, opt_roiWidth),
+      OFstatic_cast(Uint32, opt_roiHeight),
       opt_usePixelValues,
       opt_useModalityRescale,
       opt_acceptWrongPaletteTags,
@@ -694,8 +712,7 @@ int main(int argc, char *argv[])
     if (lossless)
         rp = &rp_lossless;
 
-    dataset->chooseRepresentation(opt_oxfer, rp);
-    if (dataset->canWriteXfer(opt_oxfer))
+    if (dataset->chooseRepresentation(opt_oxfer, rp).good() && dataset->canWriteXfer(opt_oxfer))
     {
       OFLOG_INFO(dcmcjpegLogger, "Output transfer syntax " << opt_oxferSyn.getXferName() << " can be written");
     } else {
@@ -723,124 +740,3 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
-
-/*
- * CVS/RCS Log:
- * $Log: dcmcjpeg.cc,v $
- * Revision 1.29  2010-10-14 13:13:38  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.28  2010-05-05 15:35:04  joergr
- * Fixed wrong conflict check of command line options: now --true-lossless is
- * only enabled by default for JPEG lossless output transfer syntaxes.
- * Use type cast macros (e.g. OFstatic_cast) where appropriate.
- *
- * Revision 1.27  2010-03-24 15:05:32  joergr
- * Added new options for the color space conversion during decompression based
- * on the color model that is "guessed" by the underlying JPEG library (IJG).
- *
- * Revision 1.26  2009-10-07 12:44:33  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.25  2009-08-21 09:46:52  joergr
- * Added parameter 'writeMode' to save/write methods which allows for specifying
- * whether to write a dataset or fileformat as well as whether to update the
- * file meta information or to create a new file meta information header.
- * Added check making sure that a DICOMDIR file is never compressed.
- * Use helper function checkDependence() and checkConflict() where appropriate.
- * Made error messages more consistent with other compression tools.
- *
- * Revision 1.24  2009-08-05 10:30:00  joergr
- * Fixed various issues with syntax usage (e.g. layout and formatting).
- *
- * Revision 1.23  2009-04-21 14:07:14  joergr
- * Fixed minor inconsistencies in manpage / syntax usage.
- *
- * Revision 1.22  2009-03-19 12:11:13  joergr
- * Replaced '\n' by OFendl where appropriate.
- *
- * Revision 1.21  2008-09-25 14:49:45  joergr
- * Moved output of resource identifier in order to avoid printing the same
- * information twice.
- *
- * Revision 1.20  2008-09-25 13:58:28  joergr
- * Added support for printing the expanded command line arguments.
- * Always output the resource identifier of the command line tool in debug mode.
- *
- * Revision 1.19  2006/08/16 16:30:20  meichel
- * Updated all code in module dcmjpeg to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.18  2006/07/27 14:05:02  joergr
- * Changed parameter "exclusive" of method addOption() from type OFBool into an
- * integer parameter "flags". Prepended prefix "PF_" to parseLine() flags.
- * Option "--help" is no longer an exclusive option by default.
- *
- * Revision 1.17  2006/07/17 10:45:07  joergr
- * Fixed layout and formatting issues.
- *
- * Revision 1.16  2006/01/31 11:33:52  onken
- * Fixed some commandline option checks in connection with true lossless switches.
- *
- * Revision 1.15  2005/12/08 15:43:20  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.14  2005/12/02 09:40:59  joergr
- * Added new command line option that ignores the transfer syntax specified in
- * the meta header and tries to detect the transfer syntax automatically from
- * the dataset.
- * Added new command line option that checks whether a given file starts with a
- * valid DICOM meta header.
- *
- * Revision 1.13  2005/11/29 15:57:15  onken
- * Added commandline options --accept-acr-nema and --accept-palettes
- * (same as in dcm2pnm) to dcmcjpeg and extended dcmjpeg to support
- * these options. Thanks to Gilles Mevel for suggestion.
- *
- * Revision 1.11  2005/11/29 08:48:38  onken
- * Added support for "true" lossless compression in dcmjpeg, that doesn't
- *   use dcmimage classes, but compresses raw pixel data (8 and 16 bit) to
- *   avoid losses in quality caused by color space conversions or modality
- *   transformations etc.
- * Corresponding commandline option in dcmcjpeg (new default)
- *
- * Revision 1.10  2005/11/07 17:10:21  meichel
- * All tools that both read and write a DICOM file now call loadAllDataIntoMemory()
- *   to make sure they do not destroy a file when output = input.
- *
- * Revision 1.9  2004/01/16 14:28:01  joergr
- * Updated copyright header.
- *
- * Revision 1.8  2002/11/27 15:39:56  meichel
- * Adapted module dcmjpeg to use of new header file ofstdinc.h
- *
- * Revision 1.7  2002/11/26 08:44:41  meichel
- * Replaced all includes for "zlib.h" with <zlib.h>
- *   to avoid inclusion of zlib.h in the makefile dependencies.
- *
- * Revision 1.6  2002/09/23 18:14:06  joergr
- * Added new command line option "--version" which prints the name and version
- * number of external libraries used (incl. preparation for future support of
- * 'config.guess' host identifiers).
- *
- * Revision 1.5  2002/08/20 12:20:58  meichel
- * Adapted code to new loadFile and saveFile methods, thus removing direct
- *   use of the DICOM stream classes.
- *
- * Revision 1.4  2002/07/10 12:26:01  meichel
- * Fixed memory leak in command line applications
- *
- * Revision 1.3  2001/12/20 10:41:45  meichel
- * Fixed warnings reported by Sun CC 2.0.1
- *
- * Revision 1.2  2001/11/19 15:13:22  meichel
- * Introduced verbose mode in module dcmjpeg. If enabled, warning
- *   messages from the IJG library are printed on ofConsole, otherwise
- *   the library remains quiet.
- *
- * Revision 1.1  2001/11/13 15:56:09  meichel
- * Initial release of module dcmjpeg
- *
- *
- */

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1999-2010, OFFIS e.V.
+ *  Copyright (C) 1999-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,20 +17,9 @@
  *
  *  Purpose: Presentation State Viewer - Network Receive Component (Store SCP)
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:13:45 $
- *  CVS/RCS Revision: $Revision: 1.59 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
-
-#ifdef HAVE_GUSI_H
-#include <GUSI.h>
-#endif
 
 BEGIN_EXTERN_C
 #ifdef HAVE_FCNTL_H
@@ -51,6 +40,7 @@ END_EXTERN_C
 #include "dcmtk/dcmnet/diutil.h"
 #include "dcmtk/dcmdata/cmdlnarg.h"
 #include "dcmtk/ofstd/ofconapp.h"
+#include "dcmtk/ofstd/ofstd.h"
 #include "dcmtk/dcmqrdb/dcmqrdbi.h"     /* for LOCK_IMAGE_FILES */
 #include "dcmtk/dcmqrdb/dcmqrdbs.h"     /* for DcmQueryRetrieveDatabaseStatus */
 #include "dcmtk/dcmpstat/dvpsmsg.h"     /* for class DVPSIPCClient */
@@ -112,7 +102,7 @@ static void cleanChildren()
 {
 #ifdef HAVE_WAITPID
     int stat_loc;
-#elif HAVE_WAIT3
+#elif defined(HAVE_WAIT3)
     struct rusage rusage;
 #if defined(__NeXT__)
     /* some systems need a union wait as argument to wait3 */
@@ -234,15 +224,14 @@ static associationType negotiateAssociation(
     }
     else
     {
-      time_t t = time(NULL);
-      OFLOG_INFO(dcmpsrcvLogger, "Association Received (" << (*assoc)->params->DULparams.callingPresentationAddress
-             << ":" << (*assoc)->params->DULparams.callingAPTitle << " -> "
-             << (*assoc)->params->DULparams.calledAPTitle
-             << ") " << ctime(&t));
+      OFLOG_INFO(dcmpsrcvLogger, "Association Received ("
+          << (*assoc)->params->DULparams.callingPresentationAddress << ":"
+          << (*assoc)->params->DULparams.callingAPTitle << " -> "
+          << (*assoc)->params->DULparams.calledAPTitle << ")");
 
       ASC_setAPTitles((*assoc)->params, NULL, NULL, aetitle);
       /* Application Context Name */
-      cond = ASC_getApplicationContextName((*assoc)->params, buf);
+      cond = ASC_getApplicationContextName((*assoc)->params, buf, sizeof(buf));
       if (cond.bad() || strcmp(buf, DICOM_STDAPPLICATIONCONTEXT) != 0)
       {
           /* reject: the application context name is not supported */
@@ -308,7 +297,7 @@ static associationType negotiateAssociation(
         /*  accept any of the storage syntaxes */
         cond = ASC_acceptContextsWithPreferredTransferSyntaxes(
           (*assoc)->params,
-          dcmAllStorageSOPClassUIDs, numberOfAllDcmStorageSOPClassUIDs,
+          dcmAllStorageSOPClassUIDs, numberOfDcmAllStorageSOPClassUIDs,
           (const char**)transferSyntaxes, numTransferSyntaxes);
         errorCond(cond, "Cannot accept presentation contexts:");
       }
@@ -376,7 +365,7 @@ checkRequestAgainstDataset(
     DIC_UI sopClass;
     DIC_UI sopInstance;
 
-    if (!DU_findSOPClassAndInstanceInDataSet(dataSet, sopClass, sopInstance, opt_correctUIDPadding))
+    if (!DU_findSOPClassAndInstanceInDataSet(dataSet, sopClass, sizeof(sopClass), sopInstance, sizeof(sopInstance), opt_correctUIDPadding))
     {
       OFLOG_ERROR(dcmpsrcvLogger, "Bad image file: " << fname);
       rsp->DimseStatus = STATUS_STORE_Error_CannotUnderstand;
@@ -465,6 +454,9 @@ storeProgressCallback(
         {
           OFLOG_ERROR(dcmpsrcvLogger, "Cannot write image file: " << context->fileName);
           rsp->DimseStatus = STATUS_STORE_Refused_OutOfResources;
+
+          // delete incomplete file
+          OFStandard::deleteFile(context->fileName);
         }
       }
       saveImageToDB(context, req, context->fileName, rsp, statusDetail);
@@ -512,7 +504,7 @@ static OFCondition storeSCP(
         /* callback will send back sop class not supported status */
         status = STATUS_STORE_Refused_SOPClassNotSupported;
         /* must still receive data */
-        strcpy(imageFileName, NULL_DEVICE_NAME);
+        OFStandard::strlcpy(imageFileName, NULL_DEVICE_NAME, sizeof(imageFileName));
     }
     else
     {
@@ -521,7 +513,7 @@ static OFCondition storeSCP(
       {
         OFLOG_ERROR(dcmpsrcvLogger, "Unable to access database '" << dbfolder << "'");
         /* must still receive data */
-        strcpy(imageFileName, NULL_DEVICE_NAME);
+        OFStandard::strlcpy(imageFileName, NULL_DEVICE_NAME, sizeof(imageFileName));
         /* callback will send back out of resources status */
         status = STATUS_STORE_Refused_OutOfResources;
         dbhandle = NULL;
@@ -531,11 +523,11 @@ static OFCondition storeSCP(
         if (dbhandle->makeNewStoreFileName(
             request->AffectedSOPClassUID,
             request->AffectedSOPInstanceUID,
-            imageFileName).bad())
+            imageFileName, sizeof(imageFileName)).bad())
         {
             OFLOG_ERROR(dcmpsrcvLogger, "storeSCP: Database: DB_makeNewStoreFileName Failed");
             /* must still receive data */
-            strcpy(imageFileName, NULL_DEVICE_NAME);
+            OFStandard::strlcpy(imageFileName, NULL_DEVICE_NAME, sizeof(imageFileName));
             /* callback will send back out of resources status */
             status = STATUS_STORE_Refused_OutOfResources;
         }
@@ -555,7 +547,7 @@ static OFCondition storeSCP(
     dcmtk_flock(lockfd, LOCK_EX);
 #endif
 
-    /* we must still retrieve the data set even if some error has occured */
+    /* we must still retrieve the data set even if some error has occurred */
     StoreContext context(dbhandle, status, imageFileName, &dcmff, opt_correctUIDPadding);
 
     if (opt_bitpreserving)
@@ -573,11 +565,8 @@ static OFCondition storeSCP(
     if (cond.bad() || (context.status != STATUS_Success))
     {
         /* remove file */
-        if (strcpy(imageFileName, NULL_DEVICE_NAME) != 0)
-        {
-          OFLOG_INFO(dcmpsrcvLogger, "Store SCP: Deleting Image File: " << imageFileName);
-          unlink(imageFileName);
-        }
+        OFLOG_INFO(dcmpsrcvLogger, "Store SCP: Deleting Image File: " << imageFileName);
+        OFStandard::deleteFile(imageFileName);
         if (dbhandle) dbhandle->pruneInvalidRecords();
     }
 
@@ -730,7 +719,6 @@ static void terminateAllReceivers(DVConfiguration& dvi)
   OFBool recUseTLS=OFFalse;
   T_ASC_Network *net=NULL;
   T_ASC_Parameters *params=NULL;
-  DIC_NODENAME localHost;
   DIC_NODENAME peerHost;
   T_ASC_Association *assoc=NULL;
   OFBool prepared = OFTrue;
@@ -743,8 +731,8 @@ static void terminateAllReceivers(DVConfiguration& dvi)
   if (tlsFolder==NULL) tlsFolder = ".";
 
   /* key file format */
-  int keyFileFormat = SSL_FILETYPE_PEM;
-  if (! dvi.getTLSPEMFormat()) keyFileFormat = SSL_FILETYPE_ASN1;
+  DcmKeyFileFormat keyFileFormat = DCF_Filetype_PEM;
+  if (! dvi.getTLSPEMFormat()) keyFileFormat = DCF_Filetype_PEM;
 #endif
 
   if ((ASC_initializeNetwork(NET_REQUESTOR, 0, 30, &net).bad())) return;
@@ -800,36 +788,30 @@ static void terminateAllReceivers(DVConfiguration& dvi)
       if (tlsCACertificateFolder==NULL) tlsCACertificateFolder = ".";
 
       /* ciphersuites */
-#if OPENSSL_VERSION_NUMBER >= 0x0090700fL
-      OFString tlsCiphersuites(TLS1_TXT_RSA_WITH_AES_128_SHA ":" SSL3_TXT_RSA_DES_192_CBC3_SHA);
-#else
-      OFString tlsCiphersuites(SSL3_TXT_RSA_DES_192_CBC3_SHA);
-#endif
-      Uint32 tlsNumberOfCiphersuites = dvi.getTargetNumberOfCipherSuites(recID);
-      if (tlsNumberOfCiphersuites > 0)
-      {
-        tlsCiphersuites.clear();
-        OFString currentSuite;
-        const char *currentOpenSSL;
-        for (Uint32 ui=0; ui<tlsNumberOfCiphersuites; ui++)
-        {
-          dvi.getTargetCipherSuite(recID, ui, currentSuite);
-          if (NULL != (currentOpenSSL = DcmTLSTransportLayer::findOpenSSLCipherSuiteName(currentSuite.c_str())))
-          {
-            if (tlsCiphersuites.length() > 0) tlsCiphersuites += ":";
-            tlsCiphersuites += currentOpenSSL;
-          }
-        }
-      }
-      DcmTLSTransportLayer *tLayer = new DcmTLSTransportLayer(DICOM_APPLICATION_REQUESTOR, tlsRandomSeedFile.c_str());
+      DcmTLSTransportLayer *tLayer = new DcmTLSTransportLayer(NET_REQUESTOR, tlsRandomSeedFile.c_str(), OFFalse);
       if (tLayer)
       {
+
+        // determine TLS profile
+        OFString profileName;
+        const char *profileNamePtr = dvi.getTargetTLSProfile(recID);
+        if (profileNamePtr) profileName = profileNamePtr;
+        DcmTLSSecurityProfile tlsProfile = TSP_Profile_BCP195;  // default
+        if (profileName == "BCP195") tlsProfile = TSP_Profile_BCP195;
+        else if (profileName == "BCP195-ND") tlsProfile = TSP_Profile_BCP195_ND;
+        else if (profileName == "BCP195-EX") tlsProfile = TSP_Profile_BCP195_Extended;
+        else if (profileName == "AES") tlsProfile = TSP_Profile_AES;
+        else if (profileName == "BASIC") tlsProfile = TSP_Profile_Basic;
+        else if (profileName == "NULL") tlsProfile = TSP_Profile_IHE_ATNA_Unencrypted;
+
+        (void) tLayer->setTLSProfile(tlsProfile);
+        (void) tLayer->activateCipherSuites();
+
         if (tlsCACertificateFolder) tLayer->addTrustedCertificateDir(tlsCACertificateFolder, keyFileFormat);
         if (tlsDHParametersFile.size() > 0) tLayer->setTempDHParameters(tlsDHParametersFile.c_str());
         tLayer->setPrivateKeyPasswd(tlsPrivateKeyPassword); // never prompt on console
         tLayer->setPrivateKeyFile(tlsPrivateKeyFile.c_str(), keyFileFormat);
         tLayer->setCertificateFile(tlsCertificateFile.c_str(), keyFileFormat);
-        tLayer->setCipherSuites(tlsCiphersuites.c_str());
         tLayer->setCertificateVerification(DCV_ignoreCertificate);
         ASC_setTransportLayer(net, tLayer, 1);
       }
@@ -837,7 +819,7 @@ static void terminateAllReceivers(DVConfiguration& dvi)
       prepared = OFFalse;
 #endif
     } else {
-      DcmTransportLayer *dLayer = new DcmTransportLayer(DICOM_APPLICATION_REQUESTOR);
+      DcmTransportLayer *dLayer = new DcmTransportLayer();
       ASC_setTransportLayer(net, dLayer, 1);
     }
     if (prepared && recAETitle && (recPort > 0))
@@ -846,9 +828,8 @@ static void terminateAllReceivers(DVConfiguration& dvi)
       {
         ASC_setTransportLayerType(params, recUseTLS);
         ASC_setAPTitles(params, dvi.getNetworkAETitle(), recAETitle, NULL);
-        gethostname(localHost, sizeof(localHost) - 1);
         sprintf(peerHost, "%s:%d", "localhost", (int)recPort);
-        ASC_setPresentationAddresses(params, localHost, peerHost);
+        ASC_setPresentationAddresses(params, OFStandard::getHostName().c_str(), peerHost);
         // we propose only the "shutdown" SOP class in implicit VR
         ASC_addPresentationContext(params, 1, UID_PrivateShutdownSOPClass, &xfer, 1);
         // request shutdown association, abort if some strange peer accepts it
@@ -860,9 +841,7 @@ static void terminateAllReceivers(DVConfiguration& dvi)
   } /* for loop */
 
   ASC_dropNetwork(&net);
-#ifdef HAVE_WINSOCK_H
-  WSACleanup();
-#endif
+  OFStandard::shutdownNetwork();
   return;
 }
 
@@ -874,17 +853,9 @@ static void terminateAllReceivers(DVConfiguration& dvi)
 
 int main(int argc, char *argv[])
 {
-
-#ifdef HAVE_GUSI_H
-    GUSISetup(GUSIwithSIOUXSockets);
-    GUSISetup(GUSIwithInternetSockets);
-#endif
-
-#ifdef HAVE_WINSOCK_H
-    WSAData winSockData;
-    /* we need at least version 1.1 */
-    WORD winSockVersionNeeded = MAKEWORD( 1, 1 );
-    WSAStartup(winSockVersionNeeded, &winSockData);
+    OFStandard::initializeNetwork();
+#ifdef WITH_OPENSSL
+    DcmTLSTransportLayer::initializeOpenSSL();
 #endif
 
     int         opt_terminate = 0;         /* default: no terminate mode */
@@ -909,7 +880,7 @@ int main(int argc, char *argv[])
 
     /* evaluate command line */
     prepareCmdLineArgs(argc, argv, OFFIS_CONSOLE_APPLICATION);
-    if (app.parseCommandLine(cmd, argc, argv, OFCommandLine::PF_ExpandWildcards))
+    if (app.parseCommandLine(cmd, argc, argv))
     {
       /* check exclusive options first */
       if (cmd.hasExclusiveOption())
@@ -927,7 +898,7 @@ int main(int argc, char *argv[])
             COUT << "- ZLIB, Version " << zlibVersion() << OFendl;
 #endif
 #ifdef WITH_OPENSSL
-            COUT << "- " << OPENSSL_VERSION_TEXT << OFendl;
+            COUT << "- " << DcmTLSTransportLayer::getOpenSSLVersionName() << OFendl;
 #endif
             return 0;
          }
@@ -946,8 +917,8 @@ int main(int argc, char *argv[])
 
     if ((opt_cfgID == 0)&&(! opt_terminate))
     {
-        OFLOG_FATAL(dcmpsrcvLogger, "paramter receiver-id required unless --terminate is specified");
-        return 10;
+      OFLOG_FATAL(dcmpsrcvLogger, "parameter receiver-id required unless --terminate is specified");
+      return 10;
     }
 
     if (opt_cfgName)
@@ -959,14 +930,14 @@ int main(int argc, char *argv[])
         return 10;
       }
     } else {
-        OFLOG_FATAL(dcmpsrcvLogger, "missing configuration file name");
-        return 10;
+      OFLOG_FATAL(dcmpsrcvLogger, "missing configuration file name");
+      return 10;
     }
 
     /* make sure data dictionary is loaded */
     if (!dcmDataDict.isDictionaryLoaded())
     {
-        OFLOG_WARN(dcmpsrcvLogger, "no data dictionary loaded, check environment variable: " << DCM_DICT_ENVIRONMENT_VARIABLE);
+      OFLOG_WARN(dcmpsrcvLogger, "no data dictionary loaded, check environment variable: " << DCM_DICT_ENVIRONMENT_VARIABLE);
     }
 
     DVConfiguration dvi(opt_cfgName);
@@ -1046,79 +1017,50 @@ int main(int argc, char *argv[])
     if (tlsCACertificateFolder==NULL) tlsCACertificateFolder = ".";
 
     /* key file format */
-    int keyFileFormat = SSL_FILETYPE_PEM;
-    if (! dvi.getTLSPEMFormat()) keyFileFormat = SSL_FILETYPE_ASN1;
+    DcmKeyFileFormat keyFileFormat = DCF_Filetype_PEM;
+    if (! dvi.getTLSPEMFormat()) keyFileFormat = DCF_Filetype_ASN1;
 
-    /* ciphersuites */
-#if OPENSSL_VERSION_NUMBER >= 0x0090700fL
-    OFString tlsCiphersuites(TLS1_TXT_RSA_WITH_AES_128_SHA ":" SSL3_TXT_RSA_DES_192_CBC3_SHA);
-#else
-    OFString tlsCiphersuites(SSL3_TXT_RSA_DES_192_CBC3_SHA);
-#endif
-    Uint32 tlsNumberOfCiphersuites = dvi.getTargetNumberOfCipherSuites(opt_cfgID);
-    if (tlsNumberOfCiphersuites > 0)
-    {
-      tlsCiphersuites.clear();
-      OFString currentSuite;
-      const char *currentOpenSSL;
-      for (Uint32 ui=0; ui<tlsNumberOfCiphersuites; ui++)
-      {
-        dvi.getTargetCipherSuite(opt_cfgID, ui, currentSuite);
-        if (NULL == (currentOpenSSL = DcmTLSTransportLayer::findOpenSSLCipherSuiteName(currentSuite.c_str())))
-        {
-          OFLOG_FATAL(dcmpsrcvLogger, "ciphersuite '" << currentSuite << "' is unknown. Known ciphersuites are:");
-          unsigned long numSuites = DcmTLSTransportLayer::getNumberOfCipherSuites();
-          for (unsigned long cs=0; cs < numSuites; cs++)
-          {
-            OFLOG_FATAL(dcmpsrcvLogger, "    " << DcmTLSTransportLayer::getTLSCipherSuiteName(cs));
-          }
-          return 1;
-        } else {
-          if (tlsCiphersuites.length() > 0) tlsCiphersuites += ":";
-          tlsCiphersuites += currentOpenSSL;
-        }
-      }
-    }
 #else
     if (useTLS)
     {
-        OFLOG_FATAL(dcmpsrcvLogger, "not compiled with OpenSSL, cannot use TLS");
-        return 10;
+      OFLOG_FATAL(dcmpsrcvLogger, "not compiled with OpenSSL, cannot use TLS");
+      return 10;
     }
 #endif
 
     if (networkAETitle==NULL)
     {
-        OFLOG_FATAL(dcmpsrcvLogger, "no application entity title");
-        return 10;
+      OFLOG_FATAL(dcmpsrcvLogger, "no application entity title");
+      return 10;
     }
 
     if (networkPort==0)
     {
-        OFLOG_FATAL(dcmpsrcvLogger, "no or invalid port number");
-        return 10;
+      OFLOG_FATAL(dcmpsrcvLogger, "no or invalid port number");
+      return 10;
     }
 
+#ifndef DISABLE_PORT_PERMISSION_CHECK
 #ifdef HAVE_GETEUID
     /* if port is privileged we must be as well */
     if ((networkPort < 1024)&&(geteuid() != 0))
     {
-        OFLOG_FATAL(dcmpsrcvLogger, "cannot listen on port " << networkPort << ", insufficient privileges");
-        return 10;
+      OFLOG_FATAL(dcmpsrcvLogger, "cannot listen on port " << networkPort << ", insufficient privileges");
+      return 10;
     }
+#endif
 #endif
 
     if (networkMaxPDU==0) networkMaxPDU = DEFAULT_MAXPDU;
     else if (networkMaxPDU > ASC_MAXIMUMPDUSIZE)
     {
-        OFLOG_FATAL(dcmpsrcvLogger, "max PDU size " << networkMaxPDU << " too big, using default: " << DEFAULT_MAXPDU);
-        networkMaxPDU = DEFAULT_MAXPDU;
+      OFLOG_FATAL(dcmpsrcvLogger, "max PDU size " << networkMaxPDU << " too big, using default: " << DEFAULT_MAXPDU);
+      networkMaxPDU = DEFAULT_MAXPDU;
     }
 
     if (networkDisableNewVRs)
     {
-      dcmEnableUnknownVRGeneration.set(OFFalse);
-      dcmEnableUnlimitedTextVRGeneration.set(OFFalse);
+      dcmDisableGenerationOfNewVRs();
     }
 
     OFOStringStream verboseParameters;
@@ -1149,37 +1091,6 @@ int main(int argc, char *argv[])
     verboseParameters << "  TLS             : ";
     if (useTLS) verboseParameters << "enabled" << OFendl; else verboseParameters << "disabled" << OFendl;
 
-#ifdef WITH_OPENSSL
-    if (useTLS)
-    {
-      verboseParameters << "  TLS certificate : " << tlsCertificateFile << OFendl
-           << "  TLS key file    : " << tlsPrivateKeyFile << OFendl
-           << "  TLS DH params   : " << tlsDHParametersFile << OFendl
-           << "  TLS PRNG seed   : " << tlsRandomSeedFile << OFendl
-           << "  TLS CA directory: " << tlsCACertificateFolder << OFendl
-           << "  TLS ciphersuites: " << tlsCiphersuites << OFendl
-           << "  TLS key format  : ";
-      if (keyFileFormat == SSL_FILETYPE_PEM) verboseParameters << "PEM" << OFendl; else verboseParameters << "DER" << OFendl;
-      verboseParameters << "  TLS cert verify : ";
-      switch (tlsCertVerification)
-      {
-          case DCV_checkCertificate:
-            verboseParameters << "verify" << OFendl;
-            break;
-          case DCV_ignoreCertificate:
-            verboseParameters << "ignore" << OFendl;
-            break;
-          default:
-            verboseParameters << "require" << OFendl;
-            break;
-      }
-    }
-#endif
-
-    verboseParameters << OFStringStream_ends;
-    OFSTRINGSTREAM_GETSTR(verboseParameters, verboseParametersString)
-    OFLOG_INFO(dcmpsrcvLogger, verboseParametersString);
-
     /* check if we can get access to the database */
     const char *dbfolder = dvi.getDatabaseFolder();
 
@@ -1207,14 +1118,42 @@ int main(int argc, char *argv[])
     DcmTLSTransportLayer *tLayer = NULL;
     if (useTLS)
     {
-      tLayer = new DcmTLSTransportLayer(DICOM_APPLICATION_ACCEPTOR, tlsRandomSeedFile.c_str());
+      tLayer = new DcmTLSTransportLayer(NET_ACCEPTOR, tlsRandomSeedFile.c_str(), OFFalse);
       if (tLayer == NULL)
       {
         OFLOG_FATAL(dcmpsrcvLogger, "unable to create TLS transport layer");
         return 1;
       }
 
-      if (tlsCACertificateFolder && (TCS_ok != tLayer->addTrustedCertificateDir(tlsCACertificateFolder, keyFileFormat)))
+      // determine TLS profile
+      OFString profileName;
+      const char *profileNamePtr = dvi.getTargetTLSProfile(opt_cfgID);
+      if (profileNamePtr) profileName = profileNamePtr;
+      DcmTLSSecurityProfile tlsProfile = TSP_Profile_BCP195;  // default
+      if (profileName == "BCP195") tlsProfile = TSP_Profile_BCP195;
+      else if (profileName == "BCP195-ND") tlsProfile = TSP_Profile_BCP195_ND;
+      else if (profileName == "AES") tlsProfile = TSP_Profile_AES;
+      else if (profileName == "BASIC") tlsProfile = TSP_Profile_Basic;
+      else if (profileName == "NULL") tlsProfile = TSP_Profile_IHE_ATNA_Unencrypted;
+      else
+      {
+        OFLOG_WARN(dcmpsrcvLogger, "unknown TLS profile '" << profileName << "', ignoring");
+      }
+
+      if (tLayer->setTLSProfile(tlsProfile).bad())
+      {
+        OFLOG_FATAL(dcmpsrcvLogger, "unable to select the TLS security profile");
+        return 1;
+      }
+
+      // activate cipher suites
+      if (tLayer->activateCipherSuites().bad())
+      {
+        OFLOG_FATAL(dcmpsrcvLogger, "unable to activate the selected list of TLS ciphersuites");
+        return 1;
+      }
+
+      if (tlsCACertificateFolder && (tLayer->addTrustedCertificateDir(tlsCACertificateFolder, keyFileFormat).bad()))
       {
         OFLOG_WARN(dcmpsrcvLogger, "unable to load certificates from directory '" << tlsCACertificateFolder << "', ignoring");
       }
@@ -1224,12 +1163,12 @@ int main(int argc, char *argv[])
       }
       tLayer->setPrivateKeyPasswd(tlsPrivateKeyPassword); // never prompt on console
 
-      if (TCS_ok != tLayer->setPrivateKeyFile(tlsPrivateKeyFile.c_str(), keyFileFormat))
+      if (tLayer->setPrivateKeyFile(tlsPrivateKeyFile.c_str(), keyFileFormat).bad())
       {
         OFLOG_FATAL(dcmpsrcvLogger, "unable to load private TLS key from '" << tlsPrivateKeyFile<< "'");
         return 1;
       }
-      if (TCS_ok != tLayer->setCertificateFile(tlsCertificateFile.c_str(), keyFileFormat))
+      if (tLayer->setCertificateFile(tlsCertificateFile.c_str(), keyFileFormat).bad())
       {
         OFLOG_FATAL(dcmpsrcvLogger, "unable to load certificate from '" << tlsCertificateFile << "'");
         return 1;
@@ -1239,17 +1178,42 @@ int main(int argc, char *argv[])
         OFLOG_FATAL(dcmpsrcvLogger, "private key '" << tlsPrivateKeyFile << "' and certificate '" << tlsCertificateFile << "' do not match");
         return 1;
       }
-      if (TCS_ok != tLayer->setCipherSuites(tlsCiphersuites.c_str()))
-      {
-        OFLOG_FATAL(dcmpsrcvLogger, "unable to set selected cipher suites");
-        return 1;
-      }
 
       tLayer->setCertificateVerification(tlsCertVerification);
 
     }
 
+    if (useTLS)
+    {
+      OFString cslist;
+      if (tLayer) tLayer->getListOfCipherSuitesForOpenSSL(cslist);
+      verboseParameters << "  TLS certificate : " << tlsCertificateFile << OFendl
+           << "  TLS key file    : " << tlsPrivateKeyFile << OFendl
+           << "  TLS DH params   : " << tlsDHParametersFile << OFendl
+           << "  TLS PRNG seed   : " << tlsRandomSeedFile << OFendl
+           << "  TLS CA directory: " << tlsCACertificateFolder << OFendl
+           << "  TLS ciphersuites: " << cslist << OFendl
+           << "  TLS key format  : ";
+      if (keyFileFormat == DCF_Filetype_PEM) verboseParameters << "PEM" << OFendl; else verboseParameters << "DER" << OFendl;
+      verboseParameters << "  TLS cert verify : ";
+      switch (tlsCertVerification)
+      {
+          case DCV_checkCertificate:
+            verboseParameters << "verify" << OFendl;
+            break;
+          case DCV_ignoreCertificate:
+            verboseParameters << "ignore" << OFendl;
+            break;
+          default:
+            verboseParameters << "require" << OFendl;
+            break;
+      }
+    }
 #endif
+
+    verboseParameters << OFStringStream_ends;
+    OFSTRINGSTREAM_GETSTR(verboseParameters, verboseParametersString)
+    OFLOG_INFO(dcmpsrcvLogger, verboseParametersString);
 
     while (!finished1)
     {
@@ -1273,14 +1237,12 @@ int main(int argc, char *argv[])
       }
 #endif
 
-#if defined(HAVE_SETUID) && defined(HAVE_GETUID)
-      /* return to normal uid so that we can't do too much damage in case
-       * things go very wrong.   Only relevant if the program is setuid root,
-       * and run by another user.  Running as root user may be
-       * potentially disasterous if this program screws up badly.
-       */
-      setuid(getuid());
-#endif
+      /* drop root privileges now and revert to the calling user id (if we are running as setuid root) */
+      if (OFStandard::dropPrivileges().bad())
+      {
+          OFLOG_FATAL(dcmpsrcvLogger, "setuid() failed, maximum number of processes/threads for uid already running.");
+          return 1;
+      }
 
 #ifdef HAVE_FORK
       int timeout=1;
@@ -1353,8 +1315,8 @@ int main(int argc, char *argv[])
               dropAssociation(&assoc);
             } else if (pid > 0)
             {
-              /* parent process */
-              assoc = NULL;
+              /* we're the parent process, close accepted socket and continue */
+              dropAssociation(&assoc);
             } else {
               /* child process */
 
@@ -1387,15 +1349,15 @@ int main(int argc, char *argv[])
             // initialize startup info
             const char *receiver_application = dvi.getReceiverName();
             PROCESS_INFORMATION procinfo;
-            STARTUPINFO sinfo;
+            STARTUPINFOA sinfo;
             OFBitmanipTemplate<char>::zeroMem((char *)&sinfo, sizeof(sinfo));
             sinfo.cb = sizeof(sinfo);
             char commandline[4096];
             sprintf(commandline, "%s %s %s", receiver_application, opt_cfgName, opt_cfgID);
 #ifdef DEBUG
-            if (CreateProcess(NULL, commandline, NULL, NULL, 0, 0, NULL, NULL, &sinfo, &procinfo))
+            if (CreateProcessA(NULL, commandline, NULL, NULL, 0, 0, NULL, NULL, &sinfo, &procinfo))
 #else
-            if (CreateProcess(NULL, commandline, NULL, NULL, 0, DETACHED_PROCESS, NULL, NULL, &sinfo, &procinfo))
+            if (CreateProcessA(NULL, commandline, NULL, NULL, 0, DETACHED_PROCESS, NULL, NULL, &sinfo, &procinfo))
 #endif
             {
 #ifdef WITH_OPENSSL
@@ -1447,9 +1409,7 @@ int main(int argc, char *argv[])
       delete messageClient;
     }
 
-#ifdef HAVE_WINSOCK_H
-    WSACleanup();
-#endif
+    OFStandard::shutdownNetwork();
 
 #ifdef WITH_OPENSSL
     if (tLayer)
@@ -1475,217 +1435,3 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
-
-/*
- * CVS/RCS Log:
- * $Log: dcmpsrcv.cc,v $
- * Revision 1.59  2010-10-14 13:13:45  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.58  2010-06-03 10:32:58  joergr
- * Replaced calls to strerror() by new helper function OFStandard::strerror()
- * which results in using the thread safe version of strerror() if available.
- *
- * Revision 1.57  2009-11-27 10:50:57  joergr
- * Fixed various issues with syntax usage (e.g. layout and formatting).
- * Sightly modifed log messages.
- *
- * Revision 1.56  2009-11-24 14:12:56  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.55  2008-09-25 16:30:24  joergr
- * Added support for printing the expanded command line arguments.
- * Always output the resource identifier of the command line tool in debug mode.
- *
- * Revision 1.54  2006/08/15 16:57:01  meichel
- * Updated the code in module dcmpstat to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.53  2006/07/27 14:41:35  joergr
- * Changed parameter "exclusive" of method addOption() from type OFBool into an
- * integer parameter "flags". Prepended prefix "PF_" to parseLine() flags.
- * Option "--help" is no longer an exclusive option by default.
- *
- * Revision 1.52  2006/06/23 10:24:43  meichel
- * All Store SCPs in DCMTK now store the source application entity title in the
- *   metaheader, both in normal and in bit-preserving mode.
- *
- * Revision 1.51  2005/12/08 15:46:10  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.50  2005/11/28 15:29:05  meichel
- * File dcdebug.h is not included by any other header file in the toolkit
- *   anymore, to minimize the risk of name clashes of macro debug().
- *
- * Revision 1.49  2005/11/23 16:10:32  meichel
- * Added support for AES ciphersuites in TLS module. All TLS-enabled
- *   tools now support the "AES TLS Secure Transport Connection Profile".
- *
- * Revision 1.48  2005/11/16 14:58:23  meichel
- * Set association timeout in ASC_initializeNetwork to 30 seconds. This improves
- *   the responsiveness of the tools if the peer blocks during assoc negotiation.
- *
- * Revision 1.47  2005/10/25 08:55:59  meichel
- * Updated list of UIDs and added support for new transfer syntaxes
- *   and storage SOP classes.
- *
- * Revision 1.46  2005/04/04 10:11:53  meichel
- * Module dcmpstat now uses the dcmqrdb API instead of imagectn for maintaining
- *   the index database
- *
- * Revision 1.45  2004/02/04 15:44:38  joergr
- * Removed acknowledgements with e-mail addresses from CVS log.
- *
- * Revision 1.44  2003/09/05 09:27:05  meichel
- * Modified code to use class DcmPresentationState instead of DVPresentationState.
- *
- * Revision 1.43  2003/09/04 10:10:59  joergr
- * Converted variable opt_verbose from int into OFBool to fix warnings reported
- * by MSVC6.
- *
- * Revision 1.42  2002/11/26 08:44:28  meichel
- * Replaced all includes for "zlib.h" with <zlib.h>
- *   to avoid inclusion of zlib.h in the makefile dependencies.
- *
- * Revision 1.41  2002/11/25 18:27:34  meichel
- * Converted compile time option to leniently handle space padded UIDs
- *   in the Storage Service Class into command line / config file option.
- *
- * Revision 1.40  2002/09/23 19:06:31  joergr
- * Fixed typo in pre-processor directive.
- *
- * Revision 1.39  2002/09/23 18:26:09  joergr
- * Added new command line option "--version" which prints the name and version
- * number of external libraries used (incl. preparation for future support of
- * 'config.guess' host identifiers).
- *
- * Revision 1.38  2002/08/20 12:21:54  meichel
- * Adapted code to new loadFile and saveFile methods, thus removing direct
- *   use of the DICOM stream classes.
- *
- * Revision 1.37  2002/06/14 10:20:52  meichel
- * Removed dependency from class DVInterface. Significantly reduces
- *   size of binary.
- *
- * Revision 1.36  2002/05/02 14:10:04  joergr
- * Added support for standard and non-standard string streams (which one is
- * supported is detected automatically via the configure mechanism).
- *
- * Revision 1.35  2002/04/16 14:01:28  joergr
- * Added configurable support for C++ ANSI standard includes (e.g. streams).
- *
- * Revision 1.34  2002/01/08 10:31:46  joergr
- * Corrected spelling of function dcmGenerateUniqueIdentifier().
- *
- * Revision 1.33  2001/10/12 13:46:49  meichel
- * Adapted dcmpstat to OFCondition based dcmnet module (supports strict mode).
- *
- * Revision 1.32  2001/09/28 13:48:20  joergr
- * Replaced "cerr" by "CERR".
- * Added "#include <iomanip.h>" to keep gcc 3.0 quiet.
- *
- * Revision 1.31  2001/06/07 14:34:09  joergr
- * Removed comment.
- *
- * Revision 1.29  2001/06/01 15:50:09  meichel
- * Updated copyright header
- *
- * Revision 1.28  2001/06/01 11:02:06  meichel
- * Implemented global flag and command line option to disable reverse
- *   DNS hostname lookup using gethostbyaddr when accepting associations.
- *
- * Revision 1.27  2000/11/14 13:24:34  meichel
- * Fixed two problems with dcmpsrcv which caused the application not to
- *   terminate if the IPC server could not be found or not to start another
- *   receiver when run on Win32 platforms.
- *
- * Revision 1.26  2000/11/13 14:20:31  joergr
- * Added missing #include.
- *
- * Revision 1.25  2000/11/10 16:21:13  meichel
- * Fixed problem with DICOMscope being unable to shut down receiver processes
- *   that are operating with TLS encryption by adding a special shutdown mode to
- *   dcmpsrcv.
- *
- * Revision 1.24  2000/11/08 18:38:03  meichel
- * Updated dcmpstat IPC protocol for additional message parameters
- *
- * Revision 1.23  2000/10/23 12:19:15  joergr
- * Added missing parameter to call of function handleClient (only appeared
- * on systems not supporting 'fork' command).
- *
- * Revision 1.22  2000/10/16 12:33:53  joergr
- * Moved incorrectly placed #endif statement to correct position.
- *
- * Revision 1.20  2000/10/10 12:23:45  meichel
- * Added extensions for TLS encrypted communication
- *
- * Revision 1.19  2000/05/31 13:02:24  meichel
- * Moved dcmpstat macros and constants into a common header file
- *
- * Revision 1.18  2000/05/30 14:03:29  joergr
- * Added new private SOP class (UID definition) to allow external shutdown
- * of console applications via negotiation of this special SOP class
- * (currently used for imagectn and dcmpsrcv).
- *
- * Revision 1.17  2000/04/14 16:34:37  meichel
- * Global VR generation flags are now derived from OFGlobal and, thus,
- *   safe for use in multi-thread applications.
- *
- * Revision 1.16  2000/03/08 16:28:43  meichel
- * Updated copyright header.
- *
- * Revision 1.15  2000/03/06 18:21:46  joergr
- * Avoid empty statement in the body of if-statements (MSVC6 reports warnings).
- *
- * Revision 1.14  2000/03/03 14:13:27  meichel
- * Implemented library support for redirecting error messages into memory
- *   instead of printing them to stdout/stderr for GUI applications.
- *
- * Revision 1.13  2000/02/29 12:13:43  meichel
- * Removed support for VS value representation. This was proposed in CP 101
- *   but never became part of the standard.
- *
- * Revision 1.12  2000/02/02 15:18:00  meichel
- * Replaced some #if statements by more robust #ifdef
- *
- * Revision 1.11  1999/11/24 10:21:55  meichel
- * Fixed locking problem in dcmpssnd and dcmpsrcv on Win9x platforms.
- *
- * Revision 1.10  1999/09/06 13:29:48  meichel
- * Enhanced max receive PDU range to 4-128K.
- *
- * Revision 1.9  1999/05/05 14:23:56  joergr
- * Modified parameter of CreateProcess call to avoid creation of new command
- * line window under Windows.
- *
- * Revision 1.8  1999/05/03 14:16:38  joergr
- * Minor code purifications to keep Sun CC 2.0.1 quiet.
- *
- * Revision 1.7  1999/04/30 16:36:56  meichel
- * Renamed all flock calls to dcmtk_flock to avoid name clash between flock()
- * emulation based on fcntl() and a constructor for struct flock.
- *
- * Revision 1.6  1999/04/28 15:45:07  meichel
- * Cleaned up module dcmpstat apps, adapted to new command line class
- *   and added short documentation.
- *
- * Revision 1.5  1999/02/25 18:34:54  joergr
- * Added debug code (explicitly delete data dictionary).
- *
- * Revision 1.4  1999/02/09 14:33:01  meichel
- * Changed some bool consts from true to OFTrue.
- *
- * Revision 1.3  1999/02/08 12:52:17  meichel
- * Removed dummy parameter from DVInterface constructor.
- *
- * Revision 1.2  1999/01/27 15:58:57  meichel
- * Corrected locking behaviour of dcmpsrcv on Win32 platforms.
- *
- * Revision 1.1  1999/01/27 14:59:24  meichel
- * Implemented DICOM network receive application "dcmpsrcv" which receives
- *   images and presentation states and stores them in the local database.
- *
- *
- */

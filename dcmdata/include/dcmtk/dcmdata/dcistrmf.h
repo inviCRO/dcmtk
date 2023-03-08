@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2020, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose: DcmInputFileStream and related classes,
  *    implements streamed input from files.
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:41 $
- *  CVS/RCS Revision: $Revision: 1.9 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCISTRMF_H
@@ -33,17 +26,17 @@
 #include "dcmtk/config/osconfig.h"
 #include "dcmtk/dcmdata/dcistrma.h"
 
-
 /** producer class that reads data from a plain file.
  */
-class DcmFileProducer: public DcmProducer
+class DCMTK_DCMDATA_EXPORT DcmFileProducer: public DcmProducer
 {
 public:
   /** constructor
-   *  @param filename name of file to be opened, must not be NULL or empty
+   *  @param filename name of file to be opened (may contain wide chars
+   *    if support enabled)
    *  @param offset byte offset to skip from the start of file
    */
-  DcmFileProducer(const char *filename, offile_off_t offset = 0);
+  DcmFileProducer(const OFFilename &filename, offile_off_t offset = 0);
 
   /// destructor
   virtual ~DcmFileProducer();
@@ -114,17 +107,20 @@ private:
 
 /** input stream factory for plain files
  */
-class DcmInputFileStreamFactory: public DcmInputStreamFactory
+class DCMTK_DCMDATA_EXPORT DcmInputFileStreamFactory: public DcmInputStreamFactory
 {
 public:
 
   /** constructor
-   *  @param filename name of file to be opened, must not be NULL or empty
+   *  @param filename name of file to be opened (may contain wide chars
+   *    if support enabled)
    *  @param offset byte offset to skip from the start of file
    */
-  DcmInputFileStreamFactory(const char *filename, offile_off_t offset);
+  DcmInputFileStreamFactory(const OFFilename &filename, offile_off_t offset);
 
-  /// copy constructor
+  /** copy constructor
+   * @param arg the factory to copy
+   */
   DcmInputFileStreamFactory(const DcmInputFileStreamFactory &arg);
 
   /// destructor
@@ -142,14 +138,37 @@ public:
     return new DcmInputFileStreamFactory(*this);
   }
 
-private:
+  /** returns an enum describing the class to which this instance belongs
+   *  @return class to which this instance belongs
+   */
+  virtual DcmInputStreamFactoryType ident() const
+  {
+    return DFT_DcmInputFileStreamFactory;
+  }
 
+  /** returns name of the file
+   *  @return name of file
+   */
+  virtual OFFilename const & getFilename() const
+  {
+      return filename_;
+  }
+
+  /** returns offset of the data in the file
+   *  @return offset of the data in the file
+   */
+  virtual offile_off_t getOffset() const
+  {
+      return offset_;
+  }
+
+private:
 
   /// private unimplemented copy assignment operator
   DcmInputFileStreamFactory& operator=(const DcmInputFileStreamFactory&);
 
   /// filename
-  OFString filename_;
+  OFFilename filename_;
 
   /// offset in file
   offile_off_t offset_;
@@ -159,14 +178,15 @@ private:
 
 /** input stream that reads from a plain file
  */
-class DcmInputFileStream: public DcmInputStream
+class DCMTK_DCMDATA_EXPORT DcmInputFileStream: public DcmInputStream
 {
 public:
   /** constructor
-   *  @param filename name of file to be opened, must not be NULL or empty
+   *  @param filename name of file to be opened (may contain wide chars
+   *    if support enabled)
    *  @param offset byte offset to skip from the start of file
    */
-  DcmInputFileStream(const char *filename, offile_off_t offset = 0);
+  DcmInputFileStream(const OFFilename &filename, offile_off_t offset = 0);
 
   /// destructor
   virtual ~DcmInputFileStream();
@@ -194,7 +214,7 @@ private:
   DcmFileProducer producer_;
 
   /// filename
-  OFString filename_;
+  OFFilename filename_;
 };
 
 /** class that manages the life cycle of a temporary file.
@@ -202,17 +222,17 @@ private:
  *  is decreased to zero, unlinks (deletes) the file and then the handler
  *  object itself.
  */
-class DcmTempFileHandler
+class DCMTK_DCMDATA_EXPORT DcmTempFileHandler
 {
 public:
 
   /** static method that permits creation of instances of
    *  this class (only) on the heap, never on the stack.
    *  A newly created instance always has a reference counter of 1.
-   *  @param fname path to temporary file
+   *  @param filename path to temporary file (may contain wide chars
+   *    if support enabled)
    */
-
-  static DcmTempFileHandler *newInstance(const char *fname);
+  static DcmTempFileHandler *newInstance(const OFFilename &filename);
 
   /** create an input stream that permits reading from the temporary file
    *  @return pointer to input stream. Note that there is no guarantee
@@ -233,9 +253,10 @@ private:
 
   /** private constructor.
    *  Instances of this class are always created through newInstance().
-   *  @param fname path to temporary file
+   *  @param filename path to temporary file (may contain wide chars
+   *    if support enabled)
    */
-  DcmTempFileHandler(const char *fname);
+  DcmTempFileHandler(const OFFilename &filename);
 
   /** private destructor. Instances of this class
    *  are always deleted through the reference counting methods
@@ -255,17 +276,18 @@ private:
 
 #ifdef WITH_THREADS
   /// mutex for MT-safe reference counting
+  /// @remark this member is only available if DCMTK is compiled with thread
+  /// support enabled.
   OFMutex mutex_;
 #endif
 
   /// path to temporary file
-  OFString filename_;
-
+  OFFilename filename_;
 };
 
 /** input stream factory for temporary file handlers
  */
-class DcmInputTempFileStreamFactory: public DcmInputStreamFactory
+class DCMTK_DCMDATA_EXPORT DcmInputTempFileStreamFactory: public DcmInputStreamFactory
 {
 public:
 
@@ -275,7 +297,9 @@ public:
    */
   DcmInputTempFileStreamFactory(DcmTempFileHandler *handler);
 
-  /// copy constructor
+  /** copy constructor
+   * @param arg the factory to copy
+   */
   DcmInputTempFileStreamFactory(const DcmInputTempFileStreamFactory &arg);
 
   /// destructor, decreases reference counter of temporary file handler
@@ -290,6 +314,14 @@ public:
    */
   virtual DcmInputStreamFactory *clone() const;
 
+  /** returns an enum describing the class to which this instance belongs
+   *  @return class to which this instance belongs
+   */
+  virtual DcmInputStreamFactoryType ident() const
+  {
+    return DFT_DcmInputTempFileStreamFactory;
+  }
+
 private:
 
   /// private unimplemented copy assignment operator
@@ -297,46 +329,6 @@ private:
 
   /// handler for temporary file
   DcmTempFileHandler *fileHandler_;
-
 };
 
-
 #endif
-
-/*
- * CVS/RCS Log:
- * $Log: dcistrmf.h,v $
- * Revision 1.9  2010-10-14 13:15:41  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.8  2010-10-04 14:44:39  joergr
- * Replaced "#ifdef _REENTRANT" by "#ifdef WITH_THREADS" where appropriate (i.e.
- * in all cases where OFMutex, OFReadWriteLock, etc. are used).
- *
- * Revision 1.7  2010-03-01 09:08:44  uli
- * Removed some unnecessary include directives in the headers.
- *
- * Revision 1.6  2009-11-04 09:58:07  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.5  2008-05-29 10:39:43  meichel
- * Implemented new classes DcmTempFileHandler and DcmInputTempFileStreamFactory
- *   that perform thread-safe reference counted life cycle management of a
- *   temporary file and are needed for DcmElement temporary file extensions to come.
- *
- * Revision 1.4  2007/02/19 15:45:41  meichel
- * Class DcmInputStream and related classes are now safe for use with
- *   large files (2 GBytes or more) if supported by compiler and operating system.
- *
- * Revision 1.3  2005/12/08 16:28:17  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.2  2002/11/27 12:07:21  meichel
- * Adapted module dcmdata to use of new header file ofstdinc.h
- *
- * Revision 1.1  2002/08/27 16:55:33  meichel
- * Initial release of new DICOM I/O stream classes that add support for stream
- *   compression (deflated little endian explicit VR transfer syntax)
- *
- *
- */

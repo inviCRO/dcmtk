@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: Implementation of class DcmByteString
  *
- *  Last Update:      $Author: uli $
- *  Update Date:      $Date: 2010-11-08 09:49:03 $
- *  CVS/RCS Revision: $Revision: 1.61 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -31,17 +24,67 @@
 #include "dcmtk/ofstd/ofstream.h"
 #include "dcmtk/ofstd/ofstring.h"
 #include "dcmtk/ofstd/ofstd.h"
+#include "dcmtk/dcmdata/dcjson.h"
 #include "dcmtk/dcmdata/dcbytstr.h"
 #include "dcmtk/dcmdata/dcvr.h"
+#include "dcmtk/dcmdata/dcmatch.h"
 
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CSTDIO
-#define INCLUDE_CSTRING
-#define INCLUDE_NEW
-#include "dcmtk/ofstd/ofstdinc.h"
+// global flags
+
+OFGlobal<OFBool> dcmEnableVRCheckerForStringValues(OFTrue);
+
+
+// global function to get a particular component of a DICOM string
+OFCondition getStringPart(OFString &result,
+                          const char *str,
+                          const unsigned long len,
+                          const unsigned long pos)
+{
+    OFCondition l_error = EC_Normal;
+    /* check string parameter */
+    if (str != NULL)
+    {
+        /* search for beginning of specified string component */
+        unsigned long i = 0;
+        unsigned long curPos = 0;
+        while ((curPos < pos) && (i++ < len))
+        {
+            if (*str++ == '\\')
+                curPos++;
+        }
+        /* if found ... */
+        if (curPos == pos)
+        {
+            /* search for end of specified string component */
+            const char *p = str;
+            while ((*p != '\\') && (i++ < len))
+                p++;
+            /* check whether string component is non-empty */
+            if (p - str > 0)
+                result.assign(str, p - str);
+            else
+                result.clear();
+        } else {
+            /* specified component index not found in string */
+            l_error = EC_IllegalParameter;
+        }
+    } else
+        l_error = EC_IllegalParameter;
+    return l_error;
+}
 
 
 // ********************************
+
+DcmByteString::DcmByteString(const DcmTag &tag)
+  : DcmElement(tag, 0),
+    paddingChar(' '),
+    maxLength(DCM_UndefinedLength),
+    realLength(0),
+    fStringMode(DCM_UnknownString),
+    nonSignificantChars()
+{
+}
 
 
 DcmByteString::DcmByteString(const DcmTag &tag,
@@ -62,7 +105,7 @@ DcmByteString::DcmByteString(const DcmByteString &old)
     maxLength(old.maxLength),
     realLength(old.realLength),
     fStringMode(old.fStringMode),
-    nonSignificantChars()
+    nonSignificantChars(old.nonSignificantChars)
 {
 }
 
@@ -74,28 +117,79 @@ DcmByteString::~DcmByteString()
 
 DcmByteString &DcmByteString::operator=(const DcmByteString &obj)
 {
-  if (this != &obj)
-  {
-    DcmElement::operator=(obj);
+    if (this != &obj)
+    {
+        DcmElement::operator=(obj);
 
-    /* copy member variables */
-    realLength = obj.realLength;
-    fStringMode = obj.fStringMode;
-    paddingChar = obj.paddingChar;
-    maxLength = obj.maxLength;
-  }
-  return *this;
+        /* copy member variables */
+        paddingChar = obj.paddingChar;
+        maxLength = obj.maxLength;
+        realLength = obj.realLength;
+        fStringMode = obj.fStringMode;
+        nonSignificantChars = obj.nonSignificantChars;
+    }
+    return *this;
 }
+
+
+int DcmByteString::compare(const DcmElement& rhs) const
+{
+    int result = DcmElement::compare(rhs);
+    if (result != 0)
+    {
+        return result;
+    }
+
+    /* cast away constness (dcmdata is not const correct...) */
+    DcmByteString* myThis = NULL;
+    DcmByteString* myRhs = NULL;
+    myThis = OFconst_cast(DcmByteString*, this);
+    myRhs = OFstatic_cast(DcmByteString*, OFconst_cast(DcmElement*, &rhs));
+
+    /* compare number of values */
+    unsigned long rhsNumValues = myRhs->getNumberOfValues();
+    unsigned long thisNumValues = myThis->getNumberOfValues();
+    if (thisNumValues < rhsNumValues)
+    {
+        return -1;
+    }
+    else if (thisNumValues > rhsNumValues)
+    {
+        return 1;
+    }
+
+    /* iterate over all components and test equality */
+    for (unsigned long count = 0; count < thisNumValues; count++)
+    {
+        OFString val;
+        if (myThis->getOFString(val, count).good())
+        {
+            OFString rhsVal;
+            if (myRhs->getOFString(rhsVal, count).good())
+            {
+                result = val.compare(rhsVal);
+                if (result != 0)
+                {
+                    return result;
+                }
+            }
+        }
+    }
+    /* all values equal */
+    return 0;
+}
+
+
 
 
 OFCondition DcmByteString::copyFrom(const DcmObject& rhs)
 {
-  if (this != &rhs)
-  {
-    if (rhs.ident() != ident()) return EC_IllegalCall;
-    *this = OFstatic_cast(const DcmByteString &, rhs);
-  }
-  return EC_Normal;
+    if (this != &rhs)
+    {
+        if (rhs.ident() != ident()) return EC_IllegalCall;
+        *this = OFstatic_cast(const DcmByteString &, rhs);
+    }
+    return EC_Normal;
 }
 
 
@@ -111,25 +205,19 @@ DcmEVR DcmByteString::ident() const
 
 unsigned long DcmByteString::getVM()
 {
-    char *s = NULL;
+    char *str = NULL;
+    Uint32 len = 0;
     /* get stored string value */
-    getString(s);
-    unsigned long vm = 0;
-    /*  check for empty string */
-    if ((s == NULL) || (getLengthField() == 0))
-        vm = 0;
-    else
-    {
-        /* count number of delimiters */
-        vm = 1;
-        char c;
-        while ((c = *s++) != 0)
-        {
-            if (c == '\\')
-                vm++;
-        }
-    }
-    return vm;
+    getString(str, len);
+    /* and determine the VM */
+    return DcmElement::determineVM(str, len);
+}
+
+
+unsigned long DcmByteString::getNumberOfValues()
+{
+    /* same as value multiplicity unless overwritten in a derived class */
+    return getVM();
 }
 
 
@@ -139,6 +227,7 @@ OFCondition DcmByteString::clear()
     errorFlag = DcmElement::clear();
     /* set string representation to unknown */
     fStringMode = DCM_UnknownString;
+    realLength = 0;
     return errorFlag;
 }
 
@@ -151,7 +240,7 @@ Uint32 DcmByteString::getRealLength()
         /* strips non-significant trailing spaces (padding) and determines 'realLength' */
         makeMachineByteString();
     }
-    /* strig length of the internal representation */
+    /* string length of the internal representation */
     return realLength;
 }
 
@@ -178,19 +267,36 @@ void DcmByteString::print(STD_NAMESPACE ostream& out,
     {
         /* get string data */
         char *stringVal = NULL;
-        getString(stringVal);
-        if (stringVal)
+        Uint32 stringLen = 0;
+        getString(stringVal, stringLen);
+        if ((stringVal != NULL) && (stringLen > 0))
         {
             /* print line start with tag and VR */
             printInfoLineStart(out, flags, level);
             out << '[';
 
             OFString outString;
+            /* do not create more output than actually needed */
+            const size_t outStrLen = (flags & DCMTypes::PF_shortenLongTagValues) ? DCM_OptPrintLineLength : 0 /* all characters */;
+            /* check whether string has to be converted to markup or octal representation */
             if (flags & DCMTypes::PF_convertToMarkup)
-              OFStandard::convertToMarkupString(stringVal, outString, OFTrue, OFStandard::MM_XML, OFFalse);
-              else outString = stringVal;
+            {
+                OFString inString(stringVal, stringLen);
+                OFStandard::convertToMarkupString(inString, outString, OFTrue, OFStandard::MM_XML, OFFalse, outStrLen);
+            }
+            else if (flags & DCMTypes::PF_convertToOctalNumbers)
+            {
+                OFString inString(stringVal, stringLen);
+                OFStandard::convertToOctalString(inString, outString, outStrLen);
+            } else {
+                /* check whether we need the full string or the prefix only */
+                if ((outStrLen == 0) || (outStrLen > stringLen))
+                    outString.assign(stringVal, stringLen);
+                else
+                    outString.assign(stringVal, outStrLen);
+            }
 
-            unsigned long printedLength = outString.length() + 2 /* for enclosing brackets */;
+            size_t printedLength = outString.length() + 2 /* for enclosing brackets */;
 
             /* check whether full value text should be printed */
             if ((flags & DCMTypes::PF_shortenLongTagValues) && (printedLength > DCM_OptPrintLineLength))
@@ -203,22 +309,21 @@ void DcmByteString::print(STD_NAMESPACE ostream& out,
                 out << outString << ']';
 
             /* print line end with length, VM and tag name */
-            printInfoLineEnd(out, flags, printedLength);
+            printInfoLineEnd(out, flags, OFstatic_cast(unsigned long, printedLength));
         } else
-            printInfoLine(out, flags, level, "(no value available)" );
+            printInfoLine(out, flags, level, "(no value available)");
     } else
-        printInfoLine(out, flags, level, "(not loaded)" );
+        printInfoLine(out, flags, level, "(not loaded)");
 }
 
 
 // ********************************
 
 
-OFCondition DcmByteString::write(
-    DcmOutputStream &outStream,
-    const E_TransferSyntax oxfer,
-    const E_EncodingType enctype,
-    DcmWriteCache *wcache)
+OFCondition DcmByteString::write(DcmOutputStream &outStream,
+                                 const E_TransferSyntax oxfer,
+                                 const E_EncodingType enctype,
+                                 DcmWriteCache *wcache)
 {
     if (getTransferState() == ERW_notInitialized)
         errorFlag = EC_IllegalCall;
@@ -234,11 +339,10 @@ OFCondition DcmByteString::write(
 }
 
 
-OFCondition DcmByteString::writeSignatureFormat(
-    DcmOutputStream &outStream,
-    const E_TransferSyntax oxfer,
-    const E_EncodingType enctype,
-    DcmWriteCache *wcache)
+OFCondition DcmByteString::writeSignatureFormat(DcmOutputStream &outStream,
+                                                const E_TransferSyntax oxfer,
+                                                const E_EncodingType enctype,
+                                                DcmWriteCache *wcache)
 {
     if (getTransferState() == ERW_notInitialized)
         errorFlag = EC_IllegalCall;
@@ -260,37 +364,62 @@ OFCondition DcmByteString::getOFString(OFString &stringVal,
                                        const unsigned long pos,
                                        OFBool /*normalize*/)
 {
-    errorFlag = EC_Normal;
     /* check given string position index */
     if (pos >= getVM())
-        errorFlag = EC_IllegalParameter;
-    else
     {
+        /* treat an empty string as a special case */
+        if (pos == 0)
+        {
+            errorFlag = EC_Normal;
+            stringVal.clear();
+        } else
+            errorFlag = EC_IllegalParameter;
+    } else {
         /* get string data */
-        char *s = OFstatic_cast(char *, getValue());
-        /* extract specified string component */
-        errorFlag = getStringPart(stringVal, s, pos);
+        char *str = NULL;
+        Uint32 len = 0;
+        errorFlag = getString(str, len);
+        /* check whether string value is present */
+        if ((str != NULL) && (len > 0))
+        {
+            /* extract specified string component */
+            errorFlag = getStringPart(stringVal, str, len, pos);
+        } else
+            stringVal.clear();
     }
+    return errorFlag;
+}
+
+
+OFCondition DcmByteString::getOFStringArray(OFString &stringVal,
+                                            OFBool normalize)
+{
+    /* check whether time-consuming normalization is really needed */
+    if (normalize)
+        errorFlag = DcmElement::getOFStringArray(stringVal, normalize);
+    else
+        errorFlag = getStringValue(stringVal);
     return errorFlag;
 }
 
 
 OFCondition DcmByteString::getStringValue(OFString &stringVal)
 {
-    const char *s = OFstatic_cast(char *, getValue());
+    char *str = NULL;
+    Uint32 len = 0;
+    errorFlag = getString(str, len);
     /* check whether string value is present */
-    if (s != NULL)
-        stringVal = s;
-    else {
-        /* return empty string in case of empty value field */
-        stringVal = "";
-    }
+    if ((str != NULL) && (len > 0))
+        stringVal.assign(str, len);
+    else
+        stringVal.clear();
     return errorFlag;
 }
 
 
 OFCondition DcmByteString::getString(char *&stringVal)
 {
+    errorFlag = EC_Normal;
     /* get string data */
     stringVal = OFstatic_cast(char *, getValue());
     /* convert to internal string representation (without padding) if required */
@@ -300,28 +429,127 @@ OFCondition DcmByteString::getString(char *&stringVal)
 }
 
 
+OFCondition DcmByteString::getString(char *&stringVal,
+                                     Uint32 &stringLen)
+{
+    /* get string data */
+    errorFlag = getString(stringVal);
+    /* return the real length of the value */
+    stringLen = realLength;
+    return errorFlag;
+}
+
+
 // ********************************
 
 
 OFCondition DcmByteString::putString(const char *stringVal)
 {
+    /* determine length of the string value */
+    const size_t stringLen = (stringVal != NULL) ? strlen(stringVal) : 0;
+    /* call the real function */
+    return putString(stringVal, OFstatic_cast(Uint32, stringLen));
+}
+
+
+OFCondition DcmByteString::putString(const char *stringVal,
+                                     const Uint32 stringLen)
+{
     errorFlag = EC_Normal;
     /* check for an empty string parameter */
-    if ((stringVal != NULL) && (strlen(stringVal) > 0))
-        putValue(stringVal, strlen(stringVal));
+    if ((stringVal != NULL) && (stringLen > 0))
+        putValue(stringVal, stringLen);
     else
         putValue(NULL, 0);
     /* make sure that extra padding is removed from the string */
     fStringMode = DCM_UnknownString;
-    makeMachineByteString();
+    makeMachineByteString(stringLen);
     return errorFlag;
 }
 
 
-OFCondition DcmByteString::putOFStringArray(const OFString &stringVal)
+OFCondition DcmByteString::putOFStringAtPos(const OFString& stringVal,
+                                            const unsigned long pos)
 {
-    /* sets the value of a complete (possibly multi-valued) string attribute */
-    return putString(stringVal.c_str());
+    OFCondition result;
+    // Get old value
+    OFString str;
+    result = getOFStringArray( str );
+    if (result.good())
+    {
+        size_t currentVM = getNumberOfValues();
+        // Trivial case: No values are set and new value should go to first position
+        if ( (currentVM == 0) && (pos == 0))
+            return putOFStringArray(stringVal);
+
+        // 1st case: Insert at the end
+        // If we insert at a position that does not yet exist, append missing number of components by
+        // adding the corresponding number of backspace chars, append new float value and return.
+        size_t futureVM = pos + 1;
+        if (futureVM > currentVM)
+        {
+            str = str.append(currentVM == 0 ? futureVM - currentVM - 1 : futureVM - currentVM, '\\');
+            str = str.append(stringVal);
+            return putOFStringArray(str);
+        }
+
+        // 2nd case: New value should be at position 0
+        size_t rightPos = 0;
+        if (pos == 0)
+        {
+            // First value is empty: Insert new value
+            if (str[0] == '\\')
+            {
+                str = str.insert(0, stringVal);
+            }
+            // First value is set: Replace old value with new value
+            else
+            {
+                rightPos = str.find_first_of('\\', 0);
+                str = str.replace(0, rightPos, stringVal);
+            }
+            return putOFStringArray(str);
+        }
+
+        // 3rd case: New value should be inserted somewhere in the middle
+        size_t leftPos = 0;
+        size_t vmPos = 0;
+        // First, find the correct position, and then insert / replace new value
+        do
+        {
+            // Step from value to value by looking for delimiters.
+            // Special handling first search (start looking at position 0 instead of 1)
+            if (vmPos == 0) leftPos = str.find('\\', 0);
+            else leftPos = str.find('\\', leftPos + 1 );
+            // leftPos = str.find('\\', leftPos == 0 ? 0 : leftPos +1);
+            if (leftPos != OFString_npos)
+            {
+                vmPos++;
+            }
+        }
+        while ( (leftPos != OFString_npos) && (vmPos != pos) );
+        rightPos = str.find_first_of('\\', leftPos+1);
+        if (rightPos == OFString_npos) rightPos = str.length();
+
+        // If we do not have an old value of size 1 or we have an empty value
+        if (rightPos - leftPos == 1)
+        {
+            // Empty value
+            if (str.at(leftPos) == '\\')
+                str = str.insert(rightPos, stringVal);
+            // Old value (length 1)
+            else
+                str = str.replace(leftPos, 1, stringVal);
+        }
+        // Otherwise replace existing old value (length > 1)
+        else
+        {
+            str = str.replace(leftPos+1, rightPos - leftPos, stringVal);
+        }
+        // Finally re-insert all values include new value
+        result = putOFStringArray( str );
+    }
+    return result;
 }
 
 
@@ -352,29 +580,33 @@ OFCondition DcmByteString::makeDicomByteString()
 }
 
 
-OFCondition DcmByteString::makeMachineByteString()
+OFCondition DcmByteString::makeMachineByteString(const Uint32 length)
 {
     errorFlag = EC_Normal;
     /* get string data */
     char *value = OFstatic_cast(char *, getValue());
-    /* determine initial string length */
     if (value != NULL)
     {
-        realLength = strlen(value);
-        /* remove all trailing spaces if automatic input data correction is enabled */
-        if (dcmEnableAutomaticInputDataCorrection.get())
+        /* check whether string representation is not the internal one */
+        if (fStringMode != DCM_MachineString)
         {
-            /*
-            ** This code removes extra padding chars at the end of
-            ** a ByteString.  Trailing padding can cause problems
-            ** when comparing strings.
-            */
-            if (realLength > 0)
+            /* determine initial string length */
+            realLength = (length == 0) ? getLengthField() : length;
+            /* remove all trailing spaces if automatic input data correction is enabled */
+            if (dcmEnableAutomaticInputDataCorrection.get())
             {
-                size_t i = 0;
-                for(i = OFstatic_cast(size_t, realLength); (i > 0) && (value[i - 1] == paddingChar); i--)
-                    value[i - 1] = '\0';
-                realLength = OFstatic_cast(Uint32, i);
+                /*
+                ** This code removes extra padding characters at the end of a ByteString.
+                ** Trailing padding can cause problems when comparing strings.  This kind
+                ** of padding is non-significant for all string-based value representations.
+                */
+                if (realLength > 0)
+                {
+                    size_t i = OFstatic_cast(size_t, realLength);
+                    while ((i > 0) && (value[i - 1] == paddingChar))
+                        value[--i] = '\0';
+                    realLength = OFstatic_cast(Uint32, i);
+                }
             }
         }
     } else
@@ -401,8 +633,8 @@ Uint8 *DcmByteString::newValueField()
              * equal to the maximum length, because we are not able then to make this value even (+1)
              * which would an overflow on some systems as well as being illegal in DICOM
              */
-            DCMDATA_WARN("DcmByteString: " << getTagName() << " " << getTag().getXTag()
-                << " has odd, maximum length (" << DCM_UndefinedLength << ") and therefore is not loaded");
+            DCMDATA_WARN("DcmByteString: Element " << getTagName() << " " << getTag()
+                << " has odd maximum length (" << DCM_UndefinedLength << ") and therefore is not loaded");
             errorFlag = EC_CorruptedData;
             return NULL;
         }
@@ -413,7 +645,15 @@ Uint8 *DcmByteString::newValueField()
         // back to the caller.
         value = new (std::nothrow) Uint8[lengthField + 2];
 #else
-        value = new Uint8[lengthField + 2];
+        /* make sure that the pointer is set to NULL in case of error */
+        try
+        {
+            value = new Uint8[lengthField + 2];
+        }
+        catch (STD_NAMESPACE bad_alloc const &)
+        {
+            value = NULL;
+        }
 #endif
 
         /* terminate string after real length */
@@ -427,17 +667,25 @@ Uint8 *DcmByteString::newValueField()
             setLengthField(lengthField);
         }
     } else {
-        /* length is even */
+        /* length is even, but we need an extra byte for the terminating 0 byte */
 #ifdef HAVE_STD__NOTHROW
         // we want to use a non-throwing new here if available.
         // If the allocation fails, we report an EC_MemoryExhausted error
         // back to the caller.
         value = new (std::nothrow) Uint8[lengthField + 1];
 #else
-        value = new Uint8[lengthField + 1];
+        /* make sure that the pointer is set to NULL in case of error */
+        try
+        {
+            value = new Uint8[lengthField + 1];
+        }
+        catch (STD_NAMESPACE bad_alloc const &)
+        {
+            value = NULL;
+        }
 #endif
     }
-    /* make sure that the string is properly terminates by a 0 byte */
+    /* make sure that the string is properly terminated by a 0 byte */
     if (value != NULL)
         value[lengthField] = 0;
     else
@@ -472,51 +720,62 @@ void DcmByteString::postLoadValue()
 
 OFCondition DcmByteString::verify(const OFBool autocorrect)
 {
-    char *value = NULL;
+    char *str = NULL;
+    Uint32 len = 0;
     /* get string data */
-    errorFlag = getString(value);
+    errorFlag = getString(str, len);
     /* check for non-empty string */
-    if ((value != NULL) && (realLength != 0))
+    if ((str != NULL) && (len > 0))
     {
-        /* create a temporary buffer for the string value */
-        char *tempstr = new char[realLength + 1];
-        unsigned long field = 0;
-        unsigned long num = getVM();
-        unsigned long pos = 0;
-        unsigned long temppos = 0;
-        char c;
-        /* check all string components */
-        while (field < num )
+        /* check whether there is anything to verify at all */
+        if (maxLength != DCM_UndefinedLength)
         {
-            unsigned long fieldlen = 0;
-            /* check size limit for each string component */
-            while (((c = value[pos++]) != 0) && (c != '\\'))
+            const unsigned long vm = getVM();
+            /* TODO: is it really a good idea to create a copy of the string? */
+            OFString value(str, len);
+            size_t posStart = 0;
+            unsigned long vmNum = 0;
+            /* check all string components */
+            while (posStart != OFString_npos)
             {
-                if ((fieldlen < maxLength) && autocorrect)
-                    tempstr[temppos++] = c;
-                fieldlen++;
+                ++vmNum;
+                /* search for next component separator */
+                size_t posEnd = (vm > 1) ? value.find('\\', posStart) : OFString_npos;
+                const size_t fieldLen = (posEnd == OFString_npos) ? value.length() - posStart : posEnd - posStart;
+                /* check size limit for each string component */
+                if (fieldLen > maxLength)
+                {
+                    DCMDATA_DEBUG("DcmByteString::verify() Maximum length violated in element "
+                        << getTagName() << " " << getTag() << " value " << vmNum << ": " << fieldLen
+                        << " bytes found but only " << maxLength << " bytes allowed");
+                    errorFlag = EC_MaximumLengthViolated;
+                    if (autocorrect)
+                    {
+                        const size_t excess = fieldLen - maxLength;
+                        DCMDATA_DEBUG("DcmByteString::verify() Removing " << excess
+                            << " bytes from the end of value " << vmNum);
+                        /* erase excessive part of the string component */
+                        value.erase(posStart + maxLength, excess);
+                        /* correct the position end marker */
+                        posEnd -= excess;
+                    }
+                }
+                posStart = (posEnd == OFString_npos) ? posEnd : posEnd + 1;
             }
-            if (fieldlen >= maxLength)
-                errorFlag = EC_CorruptedData;
-            /* 'c' is either '\\' or NULL */
-            if (autocorrect)
-                tempstr[temppos++] = c;
-            field++;
-            if (pos > getLengthField())
-                break;
+            /* replace current string value if auto correction is enabled */
+            if (autocorrect && errorFlag.bad())
+            {
+                putOFStringArray(value);
+                /* the above method also sets 'errorFlag', so we need to assign the error code again */
+                errorFlag = EC_MaximumLengthViolated;
+            }
         }
-        /* replace current string value if auto correction is enabled */
-        if (autocorrect)
-            putString(tempstr);
-        delete[] tempstr;
     }
     /* report a debug message if an error occurred */
     if (errorFlag.bad())
     {
-        DCMDATA_DEBUG("DcmByteString::verify() Illegal values in Tag ("
-            << STD_NAMESPACE hex << STD_NAMESPACE setfill('0')
-            << STD_NAMESPACE setw(4) << getGTag() << ","
-            << STD_NAMESPACE setw(4) << getETag() << ") VM=" << getVM());
+        DCMDATA_WARN("DcmByteString: One or more illegal values in element "
+            << getTagName() << " " << getTag() << " with VM=" << getVM());
     }
     return errorFlag;
 }
@@ -524,23 +783,18 @@ OFCondition DcmByteString::verify(const OFBool autocorrect)
 
 OFBool DcmByteString::containsExtendedCharacters(const OFBool checkAllStrings)
 {
+    OFBool result = OFFalse;
     /* only check if parameter is true since derived VRs are not affected
        by the attribute SpecificCharacterSet (0008,0005) */
     if (checkAllStrings)
     {
-        char *c = NULL;
-        if (getString(c).good() && c)
-        {
-            while (*c)
-            {
-                /* check for 8 bit characters */
-                if (OFstatic_cast(unsigned char, *c) > 127)
-                    return OFTrue;
-                ++c;
-            }
-        }
+        char *str = NULL;
+        Uint32 len = 0;
+        /* determine length in order to support possibly embedded NULL bytes */
+        if (getString(str, len).good())
+            result = containsExtendedCharacters(str, len);
     }
-    return OFFalse;
+    return result;
 }
 
 
@@ -571,49 +825,12 @@ OFBool DcmByteString::isEmpty(const OFBool normalize)
 // ********************************
 
 
-// global function to get a particular component of a DICOM string
-OFCondition getStringPart(OFString &result,
-                          const char *orgStr,
-                          const unsigned long pos)
-{
-    OFCondition l_error = EC_Normal;
-    /* check string parameter */
-    if (orgStr != NULL)
-    {
-        /* search for beginning of specified string component  */
-        unsigned long i = 0;
-        while ((i < pos) && (*orgStr != '\0'))
-        {
-            if (*orgStr++ == '\\')
-                i++;
-        }
-        /* if found ... */
-        if (i == pos)
-        {
-            /* search for end of specified string component  */
-            const char *t = orgStr;
-            while ((*t != '\0') && (*t != '\\'))
-                t++;
-            /* check whether string component is non-empty */
-            if (t - orgStr > 0)
-                result.assign(orgStr, t - orgStr);
-            else
-                result = "";
-        } else {
-            /* specified component index not found in string */
-            l_error = EC_IllegalParameter;
-        }
-    } else
-        l_error = EC_IllegalParameter;
-    return l_error;
-}
-
-
 // global function for normalizing a DICOM string
 void normalizeString(OFString &string,
                      const OFBool multiPart,
                      const OFBool leading,
-                     const OFBool trailing)
+                     const OFBool trailing,
+                     const char paddingChar)
 {
     /* check for non-empty string */
     if (!string.empty())
@@ -627,7 +844,7 @@ void normalizeString(OFString &string,
             if (leading)
             {
                 offset = 0;
-                while ((partindex + offset < len) && (string[partindex + offset] == ' '))
+                while ((partindex + offset < len) && (string[partindex + offset] == paddingChar))
                     offset++;
                 if (offset > 0)
                     string.erase(partindex, offset);
@@ -645,7 +862,7 @@ void normalizeString(OFString &string,
             if (trailing && partindex)
             {
                 offset = partindex - 1;
-                while ((offset > 0) && (string[offset] == ' '))
+                while ((offset > 0) && (string[offset] == paddingChar))
                     offset--;
                 if (offset != partindex - 1)
                 {
@@ -654,8 +871,8 @@ void normalizeString(OFString &string,
                         string.erase(offset, partindex - offset);
                         partindex = offset;
                     } else {
-                        string.erase(offset+1, partindex - offset-1);
-                        partindex = offset+1;
+                        string.erase(offset + 1, partindex - offset - 1);
+                        partindex = offset + 1;
                     }
                 }
             }
@@ -666,6 +883,26 @@ void normalizeString(OFString &string,
     }
 }
 
+
+// ********************************
+
+
+OFBool DcmByteString::containsExtendedCharacters(const char *stringVal,
+                                                 const size_t stringLen)
+{
+    if (stringVal != NULL)
+    {
+        for (size_t i = stringLen; i != 0; --i)
+        {
+            /* check for 8 bit characters */
+            if (OFstatic_cast(unsigned char, *stringVal++) > 127)
+                return OFTrue;
+        }
+    }
+    return OFFalse;
+}
+
+
 // ********************************
 
 
@@ -673,314 +910,148 @@ OFCondition DcmByteString::checkStringValue(const OFString &value,
                                             const OFString &vm,
                                             const OFString &vr,
                                             const int vrID,
-                                            const size_t maxLen)
+                                            const size_t maxLen,
+                                            const OFString &charset)
 {
     OFCondition result = EC_Normal;
     const size_t valLen = value.length();
     if (valLen > 0)
     {
-      /* do we need to search for value components at all? */
-      if (vm.empty())
-      {
-        /* check value length (if a maximum is specified) */
-        if ((maxLen > 0) && (value.length() > maxLen))
-          result = EC_MaximumLengthViolated;
-        /* check value representation */
-        else if (DcmElement::scanValue(value, vr) != vrID)
-          result = EC_ValueRepresentationViolated;
-      } else {
-        size_t posStart = 0;
-        unsigned long vmNum = 0;
-        /* iterate over all value components */
-        while (posStart != OFString_npos)
+        /* do we need to search for value components at all? */
+        if (vm.empty())
         {
-          ++vmNum;
-          /* search for next component separator */
-          const size_t posEnd = value.find('\\', posStart);
-          const size_t length = (posEnd == OFString_npos) ? valLen - posStart : posEnd - posStart;
-          /* check length of current value component */
-          if ((maxLen > 0) && (length > maxLen))
-          {
-            result = EC_MaximumLengthViolated;
-            break;
-          } else {
-            /* check value representation */
-            if (DcmElement::scanValue(value, vr, posStart, length) != vrID)
+            /* check value length (if a maximum is specified) */
+            if ((maxLen > 0) && (value.length() > maxLen))
+                result = EC_MaximumLengthViolated;
+            else if (dcmEnableVRCheckerForStringValues.get())
             {
-              result = EC_ValueRepresentationViolated;
-              break;
+                /* check for non-ASCII characters (if default character set used) */
+                if (charset.empty() || (charset == "ISO_IR 6"))
+                {
+                    if (containsExtendedCharacters(value.c_str(), value.length()))
+                        result = EC_InvalidCharacter;
+                }
+                if (result.good())
+                {
+                    /* currently, the VR checker only supports ASCII and Latin-1 */
+                    if (charset.empty() || (charset == "ISO_IR 6") || (charset == "ISO_IR 100"))
+                    {
+                        /* check value representation (VR) */
+                        if (DcmElement::scanValue(value, vr) != vrID)
+                            result = EC_ValueRepresentationViolated;
+                    }
+                }
             }
-          }
-          posStart = (posEnd == OFString_npos) ? posEnd : posEnd + 1;
+        } else {
+            size_t posStart = 0;
+            unsigned long vmNum = 0;
+            /* iterate over all value components */
+            while (posStart != OFString_npos)
+            {
+                ++vmNum;
+                /* search for next component separator */
+                const size_t posEnd = value.find('\\', posStart);
+                const size_t length = (posEnd == OFString_npos) ? valLen - posStart : posEnd - posStart;
+                /* check length of current value component */
+                if ((maxLen > 0) && (length > maxLen))
+                {
+                    result = EC_MaximumLengthViolated;
+                    break;
+                }
+                else if (dcmEnableVRCheckerForStringValues.get())
+                {
+                    /* check for non-ASCII characters (if default character set used) */
+                    if (charset.empty() || (charset == "ISO_IR 6"))
+                    {
+                        if (containsExtendedCharacters(value.c_str() + posStart, length))
+                        {
+                            result = EC_InvalidCharacter;
+                            break;
+                        }
+                    }
+                    /* currently, the VR checker only supports ASCII and Latin-1 */
+                    if (charset.empty() || (charset == "ISO_IR 6") || (charset == "ISO_IR 100"))
+                    {
+                        /* check value representation (VR) */
+                        if (DcmElement::scanValue(value, vr, posStart, length) != vrID)
+                        {
+                            result = EC_ValueRepresentationViolated;
+                            break;
+                        }
+                    }
+                }
+                posStart = (posEnd == OFString_npos) ? posEnd : posEnd + 1;
+            }
+            if (result.good())
+            {
+                /* check value multiplicity (VM) */
+                result = DcmElement::checkVM(vmNum, vm);
+            }
         }
-        if (result.good())
-        {
-          /* check value multiplicity */
-          result = DcmElement::checkVM(vmNum, vm);
-        }
-      }
     }
     return result;
 }
 
 
-/*
-** CVS/RCS Log:
-** $Log: dcbytstr.cc,v $
-** Revision 1.61  2010-11-08 09:49:03  uli
-** Fixed even more gcc warnings caused by additional compiler flags.
-**
-** Revision 1.60  2010-10-20 16:44:16  joergr
-** Use type cast macros (e.g. OFstatic_cast) where appropriate.
-**
-** Revision 1.59  2010-10-14 13:14:06  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.58  2010-04-23 14:33:28  joergr
-** Renamed static helper function checkValue() to checkStringValue().
-**
-** Revision 1.57  2009-12-04 17:13:30  joergr
-** Slightly modified some log messages.
-**
-** Revision 1.56  2009-11-13 13:11:20  joergr
-** Fixed minor issues in log output.
-**
-** Revision 1.55  2009-11-04 09:58:09  uli
-** Switched to logging mechanism provided by the "new" oflog module
-**
-** Revision 1.54  2009-08-07 14:35:49  joergr
-** Enhanced isEmpty() method by checking whether the data element value consists
-** of non-significant characters only.
-**
-** Revision 1.53  2009-08-03 09:02:59  joergr
-** Added methods that check whether a given string value conforms to the VR and
-** VM definitions of the DICOM standards.
-**
-** Revision 1.52  2009-03-02 14:41:08  joergr
-** Fixed bug that caused the print flag PF_convertToMarkup always being set.
-**
-** Revision 1.51  2009-01-29 15:34:45  onken
-** Fixed length overflow in case of private attributes having maximum length
-** values. Minor code simplifications.
-**
-** Revision 1.50  2008-07-17 10:31:31  onken
-** Implemented copyFrom() method for complete DcmObject class hierarchy, which
-** permits setting an instance's value from an existing object. Implemented
-** assignment operator where necessary.
-**
-** Revision 1.49  2008-04-28 09:22:41  meichel
-** New flag DCMTypes::PF_convertToMarkup causes DcmObject::print to
-**   quote non-ASCII string content as XML markup
-**
-** Revision 1.48  2007/11/29 14:30:20  meichel
-** Write methods now handle large raw data elements (such as pixel data)
-**   without loading everything into memory. This allows very large images to
-**   be sent over a network connection, or to be copied without ever being
-**   fully in memory.
-**
-** Revision 1.47  2007/11/23 15:42:36  meichel
-** Copy assignment operators in dcmdata now safe for self assignment
-**
-** Revision 1.46  2007/06/29 14:17:49  meichel
-** Code clean-up: Most member variables in module dcmdata are now private,
-**   not protected anymore.
-**
-** Revision 1.45  2006/12/15 14:14:44  joergr
-** Added new method that checks whether a DICOM object or element is affected
-** by SpecificCharacterSet (0008,0005).
-**
-** Revision 1.44  2006/12/13 13:59:49  joergr
-** Added new optional parameter "checkAllStrings" to method containsExtended
-** Characters().
-**
-** Revision 1.43  2006/11/08 17:00:04  meichel
-** Added DcmByteString::containsExtendedCharacters
-**
-** Revision 1.42  2006/10/13 10:07:02  joergr
-** Renamed variable "string" to "stringVal".
-**
-** Revision 1.41  2006/08/15 15:49:54  meichel
-** Updated all code in module dcmdata to correctly compile when
-**   all standard C++ classes remain in namespace std.
-**
-** Revision 1.40  2005/12/08 15:40:56  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.39  2005/11/28 15:53:13  meichel
-** Renamed macros in dcdebug.h
-**
-** Revision 1.38  2004/02/04 16:10:49  joergr
-** Adapted type casts to new-style typecast operators defined in ofcast.h.
-** Removed acknowledgements with e-mail addresses from CVS log.
-**
-** Revision 1.37  2003/12/11 13:40:46  meichel
-** newValueField() now uses std::nothrow new if available
-**
-** Revision 1.36  2002/12/06 13:07:28  joergr
-** Enhanced "print()" function by re-working the implementation and replacing
-** the boolean "showFullData" parameter by a more general integer flag.
-** Made source code formatting more consistent with other modules/files.
-**
-** Revision 1.35  2002/11/27 12:06:42  meichel
-** Adapted module dcmdata to use of new header file ofstdinc.h
-**
-** Revision 1.34  2002/08/27 16:55:43  meichel
-** Initial release of new DICOM I/O stream classes that add support for stream
-**   compression (deflated little endian explicit VR transfer syntax)
-**
-** Revision 1.33  2002/07/08 14:44:38  meichel
-** Improved dcmdata behaviour when reading odd tag length. Depending on the
-**   global boolean flag dcmAcceptOddAttributeLength, the parser now either accepts
-**   odd length attributes or implements the old behaviour, i.e. assumes a real
-**   length larger by one.
-**
-** Revision 1.32  2002/04/25 10:13:47  joergr
-** Removed getOFStringArray() implementation.
-**
-** Revision 1.31  2002/04/16 13:43:14  joergr
-** Added configurable support for C++ ANSI standard includes (e.g. streams).
-**
-** Revision 1.30  2001/09/25 17:19:46  meichel
-** Adapted dcmdata to class OFCondition
-**
-** Revision 1.29  2001/06/01 15:48:58  meichel
-** Updated copyright header
-**
-** Revision 1.28  2000/11/07 16:56:17  meichel
-** Initial release of dcmsign module for DICOM Digital Signatures
-**
-** Revision 1.27  2000/04/14 16:10:09  meichel
-** Global flag dcmEnableAutomaticInputDataCorrection now derived from OFGlobal
-**   and, thus, safe for use in multi-thread applications.
-**
-** Revision 1.26  2000/03/08 16:26:29  meichel
-** Updated copyright header.
-**
-** Revision 1.25  2000/02/23 15:11:46  meichel
-** Corrected macro for Borland C++ Builder 4 workaround.
-**
-** Revision 1.24  2000/02/10 10:52:16  joergr
-** Added new feature to dcmdump (enhanced print method of dcmdata): write
-** pixel data/item value fields to raw files.
-**
-** Revision 1.23  2000/02/02 14:32:47  joergr
-** Replaced 'delete' statements by 'delete[]' for objects created with 'new[]'.
-**
-** Revision 1.22  2000/02/01 10:12:04  meichel
-** Avoiding to include <stdlib.h> as extern "C" on Borland C++ Builder 4,
-**   workaround for bug in compiler header files.
-**
-** Revision 1.21  1999/03/31 09:25:16  meichel
-** Updated copyright header in module dcmdata
-**
-** Revision 1.20  1998/11/12 16:48:13  meichel
-** Implemented operator= for all classes derived from DcmObject.
-**
-** Revision 1.19  1998/07/15 15:51:46  joergr
-** Removed several compiler warnings reported by gcc 2.8.1 with
-** additional options, e.g. missing copy constructors and assignment
-** operators, initialization of member variables in the body of a
-** constructor instead of the member initialization list, hiding of
-** methods by use of identical names, uninitialized member variables,
-** missing const declaration of char pointers. Replaced tabs by spaces.
-**
-** Revision 1.18  1997/10/13 11:33:48  hewett
-** Fixed bug in DcmByteString::getOFString due to inverse logic causing
-** a string to be retrieved for all illegal values of pos while the errorFlag
-** was set to EC_IllegalCall for all legal values of pos.
-**
-** Revision 1.17  1997/09/11 15:18:16  hewett
-** Added a putOFStringArray method.
-**
-** Revision 1.16  1997/08/29 08:32:53  andreas
-** - Added methods getOFString and getOFStringArray for all
-**   string VRs. These methods are able to normalise the value, i. e.
-**   to remove leading and trailing spaces. This will be done only if
-**   it is described in the standard that these spaces are not relevant.
-**   These methods do not test the strings for conformance, this means
-**   especially that they do not delete spaces where they are not allowed!
-**   getOFStringArray returns the string with all its parts separated by \
-**   and getOFString returns only one value of the string.
-**   CAUTION: Currently getString returns a string with trailing
-**   spaces removed (if dcmEnableAutomaticInputDataCorrection == OFTrue) and
-**   truncates the original string (since it is not copied!). If you rely on this
-**   behaviour please change your application now.
-**   Future changes will ensure that getString returns the original
-**   string from the DICOM object (NULL terminated) inclusive padding.
-**   Currently, if you call getOF... before calling getString without
-**   normalisation, you can get the original string read from the DICOM object.
-**
-** Revision 1.15  1997/07/24 13:10:50  andreas
-** - Removed Warnings from SUN CC 2.0.1
-**
-** Revision 1.14  1997/07/21 07:56:39  andreas
-** - Corrected error in length computation of DcmItem for strings in
-**   items.
-** - Replace all boolean types (BOOLEAN, CTNBOOLEAN, DICOM_BOOL, BOOL)
-**   with one unique boolean type OFBool.
-**
-** Revision 1.13  1997/07/03 15:09:52  andreas
-** - removed debugging functions Bdebug() and Edebug() since
-**   they write a static array and are not very useful at all.
-**   Cdebug and Vdebug are merged since they have the same semantics.
-**   The debugging functions in dcmdata changed their interfaces
-**   (see dcmdata/include/dcdebug.h)
-**
-** Revision 1.12  1997/05/16 08:31:27  andreas
-** - Revised handling of GroupLength elements and support of
-**   DataSetTrailingPadding elements. The enumeratio E_GrpLenEncoding
-**   got additional enumeration values (for a description see dctypes.h).
-**   addGroupLength and removeGroupLength methods are replaced by
-**   computeGroupLengthAndPadding. To support Padding, the parameters of
-**   element and sequence write functions changed.
-**
-** Revision 1.11  1997/04/18 08:17:13  andreas
-** - The put/get-methods for all VRs did not conform to the C++-Standard
-**   draft. Some Compilers (e.g. SUN-C++ Compiler, Metroworks
-**   CodeWarrier, etc.) create many warnings concerning the hiding of
-**   overloaded get methods in all derived classes of DcmElement.
-**   So the interface of all value representation classes in the
-**   library are changed rapidly, e.g.
-**   OFCondition get(Uint16 & value, const unsigned long pos);
-**   becomes
-**   OFCondition getUint16(Uint16 & value, const unsigned long pos);
-**   All (retired) "returntype get(...)" methods are deleted.
-**   For more information see dcmdata/include/dcelem.h
-**
-** Revision 1.10  1997/03/26 17:05:51  hewett
-** Added global flag for disabling the automatic correction of small errors.
-** Such behaviour is undesirable when performing data validation.
-**
-** Revision 1.9  1996/08/05 08:46:07  andreas
-** new print routine with additional parameters:
-**         - print into files
-**         - fix output length for elements
-** corrected error in search routine with parameter ESM_fromStackTop
-**
-** Revision 1.8  1996/05/31 09:09:08  hewett
-** The stripping of trailing padding characters has been restored (without
-** the 8bit char removal bug).  Trailing padding characters are insignificant
-** and if they are not removed problems arise with string comparisons since
-** the dicom encoding rules require the addition of a padding character for
-** odd length strings.
-**
-** Revision 1.7  1996/05/30 17:17:49  hewett
-** Disabled erroneous code to strip trailing padding characters.
-**
-** Revision 1.6  1996/04/16 16:05:22  andreas
-** - better support und bug fixes for NULL element value
-**
-** Revision 1.5  1996/03/11 13:17:23  hewett
-** Removed get function for unsigned char*
-**
-** Revision 1.4  1996/01/09 11:06:42  andreas
-** New Support for Visual C++
-** Correct problems with inconsistent const declarations
-** Correct error in reading Item Delimitation Elements
-**
-** Revision 1.3  1996/01/05 13:27:32  andreas
-** - changed to support new streaming facilities
-** - unique read/write methods for file and block transfer
-** - more cleanups
-**
-*/
+// ********************************
+
+
+OFCondition DcmByteString::writeJson(STD_NAMESPACE ostream &out,
+                                     DcmJsonFormat &format)
+{
+    /* always write JSON Opener */
+    DcmElement::writeJsonOpener(out, format);
+    /* write element value (if non-empty) */
+    if (!isEmpty())
+    {
+        OFString value;
+        OFCondition status = getOFString(value, 0L);
+        if (status.bad())
+            return status;
+        format.printValuePrefix(out);
+        DcmJsonFormat::printValueString(out, value);
+        const unsigned long vm = getVM();
+        for (unsigned long valNo = 1; valNo < vm; ++valNo)
+        {
+            status = getOFString(value, valNo);
+            if (status.bad())
+                return status;
+            format.printNextArrayElementPrefix(out);
+            DcmJsonFormat::printValueString(out, value);
+        }
+        format.printValueSuffix(out);
+    }
+    /* write JSON Closer  */
+    DcmElement::writeJsonCloser(out, format);
+    /* always report success */
+    return EC_Normal;
+}
+
+
+OFBool DcmByteString::matches(const DcmElement& candidate,
+                              const OFBool enableWildCardMatching) const
+{
+  if (ident() == candidate.ident())
+  {
+    // some const casts to call the getter functions, I do not modify the values, I promise!
+    DcmByteString& key = OFconst_cast(DcmByteString&,*this);
+    DcmElement& can = OFconst_cast(DcmElement&,candidate);
+    OFString a, b;
+    for (unsigned long ui = 0; ui < key.getVM(); ++ui)
+      for (unsigned long uj = 0; uj < can.getVM(); ++uj)
+        if( key.getOFString( a, ui, OFTrue ).good() && can.getOFString( b, uj, OFTrue ).good() && matches( a, b, enableWildCardMatching ) )
+          return OFTrue;
+    return key.getVM() == 0;
+  }
+  return OFFalse;
+}
+
+
+OFBool DcmByteString::matches(const OFString& key,
+                              const OFString& candidate,
+                              const OFBool enableWildCardMatching) const
+{
+  OFstatic_cast(void,enableWildCardMatching);
+  // Universal Matching || Single Value Matching
+  return key.empty() || key == candidate;
+}

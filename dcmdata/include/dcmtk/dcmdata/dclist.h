@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: generic list class
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:41 $
- *  CVS/RCS Revision: $Revision: 1.22 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCLIST_H
@@ -34,9 +27,6 @@
 #include "dcmtk/ofstd/ofcast.h"
 #include "dcmtk/ofstd/oftypes.h"
 
-#define INCLUDE_CSTDDEF
-#define INCLUDE_CSTDLIB
-#include "dcmtk/ofstd/ofstdinc.h"
 #include "dcmtk/dcmdata/dcobject.h"
 
 /// index indicating "end of list"
@@ -44,7 +34,7 @@ const unsigned long DCM_EndOfListIndex = OFstatic_cast(unsigned long, -1L);
 
 /** helper class maintaining an entry in a DcmList double-linked list
  */
-class DcmListNode 
+class DCMTK_DCMDATA_EXPORT DcmListNode 
 {
 
 public:
@@ -102,7 +92,7 @@ typedef enum
  *  The remove operation does not delete the object pointed to, however,
  *  the destructor will delete all elements pointed to
  */
-class DcmList 
+class DCMTK_DCMDATA_EXPORT DcmList 
 {
 public:
     /// constructor
@@ -187,63 +177,10 @@ private:
     /// private undefined copy constructor 
     DcmList &operator=(const DcmList &);
 
-    /// private undefined copy assignment operator 
+    /** private undefined copy assignment operator
+     * @param newList documented to avoid doxygen warnings
+     */
     DcmList(const DcmList &newList);
 };
 
 #endif  // DCLIST_H
-
-
-/*
- * CVS/RCS Log:
- * $Log: dclist.h,v $
- * Revision 1.22  2010-10-14 13:15:41  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.21  2010-03-24 11:52:55  onken
- * Introduced new function to delete all elements (including memory de-allocation)
- * from DcmList.
- *
- * Revision 1.20  2010-03-01 09:08:44  uli
- * Removed some unnecessary include directives in the headers.
- *
- * Revision 1.19  2010-02-22 11:39:53  uli
- * Remove some unneeded includes.
- *
- * Revision 1.18  2009-11-04 09:58:07  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.17  2007-11-29 14:30:35  meichel
- * Updated doxygen API documentation
- *
- * Revision 1.16  2005/12/08 16:28:20  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.15  2003/08/08 13:32:45  joergr
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- *
- * Revision 1.14  2003/08/08 12:30:38  joergr
- * Made DcmListNode::value() inline.
- * Renamed member variable "actualNode" to "currentNode".
- *
- * Revision 1.13  2002/11/27 12:07:22  meichel
- * Adapted module dcmdata to use of new header file ofstdinc.h
- *
- * Revision 1.12  2001/06/01 15:48:41  meichel
- * Updated copyright header
- *
- * Revision 1.11  2000/03/08 16:26:15  meichel
- * Updated copyright header.
- *
- * Revision 1.10  2000/02/23 15:11:38  meichel
- * Corrected macro for Borland C++ Builder 4 workaround.
- *
- * Revision 1.9  2000/02/01 10:12:02  meichel
- * Avoiding to include <stdlib.h> as extern "C" on Borland C++ Builder 4,
- *   workaround for bug in compiler header files.
- *
- * Revision 1.8  1999/03/31 09:24:41  meichel
- * Updated copyright header in module dcmdata
- *
- *
- */

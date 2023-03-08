@@ -6,13 +6,13 @@
 \page storescp storescp: DICOM storage (C-STORE) SCP
 \endif
 
-\section synopsis SYNOPSIS
+\section storescp_synopsis SYNOPSIS
 
 \verbatim
 storescp [options] [port]
 \endverbatim
 
-\section description DESCRIPTION
+\section storescp_description DESCRIPTION
 
 The \b storescp application implements a Service Class Provider (SCP) for the
 Storage Service Class.  It listens on a specific TCP/IP port for incoming
@@ -20,16 +20,16 @@ association requests from a Storage Service Class User (SCU) and can receive
 both DICOM images and other DICOM composite objects.  The \b storescp
 application also supports the Verification Service Class as an SCP.
 
-\section parameters PARAMETERS
+\section storescp_parameters PARAMETERS
 
 \verbatim
 port  tcp/ip port number to listen on
       (this parameter is required unless the --inetd option is specified)
 \endverbatim
 
-\section options OPTIONS
+\section storescp_options OPTIONS
 
-\subsection general_options general options
+\subsection storescp_general_options general options
 \verbatim
   -h    --help
           print this help text and exit
@@ -60,7 +60,7 @@ port  tcp/ip port number to listen on
           show presentation contexts in verbose mode
 \endverbatim
 
-\subsection multi_process_options multi-process options
+\subsection storescp_multi_process_options multi-process options
 \verbatim
         --single-process
           single process mode (default)
@@ -69,7 +69,7 @@ port  tcp/ip port number to listen on
           fork child process for each association
 \endverbatim
 
-\subsection network_options network options
+\subsection storescp_network_options network options
 \verbatim
 association negotiation profile from configuration file:
 
@@ -114,6 +114,27 @@ preferred network transfer syntaxes (not with --config-file):
   +xh   --prefer-mpeg2-high
           prefer MPEG2 Main Profile @ High Level TS
 
+  +xn   --prefer-mpeg4
+          prefer MPEG4 AVC/H.264 High Profile / Level 4.1 TS
+
+  +xl   --prefer-mpeg4-bd
+          prefer MPEG4 AVC/H.264 BD-compatible HP / Level 4.1 TS
+
+  +x2   --prefer-mpeg4-2-2d
+          prefer MPEG4 AVC/H.264 HP / Level 4.2 TS for 2D Videos
+
+  +x3   --prefer-mpeg4-2-3d
+          prefer MPEG4 AVC/H.264 HP / Level 4.2 TS for 3D Videos
+
+  +xo   --prefer-mpeg4-2-st
+          prefer MPEG4 AVC/H.264 Stereo HP / Level 4.2 TS
+
+  +x4   --prefer-hevc
+          prefer HEVC H.265 Main Profile / Level 5.1 TS
+
+  +x5   --prefer-hevc10
+          prefer HEVC H.265 Main 10 Profile / Level 5.1 TS
+
   +xr   --prefer-rle
           prefer RLE lossless TS
 
@@ -138,7 +159,11 @@ other network options:
 
   -id   --inetd
           run from inetd super server (not with --fork)
-          (this option is available only on Posix platforms)
+
+          # not available on all systems (e.g. not on Windows)
+
+  -ts   --socket-timeout  [s]econds: integer (default: 60)
+          timeout for network socket (0 for none)
 
   -ta   --acse-timeout  [s]econds: integer (default: 30)
           timeout for ACSE messages
@@ -185,8 +210,110 @@ other network options:
           silently correct space-padded UIDs
 \endverbatim
 
-\section output_options output options
+\subsection storescp_tls_options transport layer security (TLS) options
+\verbatim
+transport protocol stack:
 
+  -tls  --disable-tls
+          use normal TCP/IP connection (default)
+
+  +tls  --enable-tls  [p]rivate key file, [c]ertificate file: string
+          use authenticated secure TLS connection
+
+private key password (only with --enable-tls):
+
+  +ps   --std-passwd
+          prompt user to type password on stdin (default)
+
+  +pw   --use-passwd  [p]assword: string
+          use specified password
+
+  -pw   --null-passwd
+          use empty string as password
+
+key and certificate file format:
+
+  -pem  --pem-keys
+          read keys and certificates as PEM file (default)
+
+  -der  --der-keys
+          read keys and certificates as DER file
+
+certification authority:
+
+  +cf   --add-cert-file  [f]ilename: string
+          add certificate file to list of certificates
+
+  +cd   --add-cert-dir  [d]irectory: string
+          add certificates in d to list of certificates
+
+  +crl  --add-crl-file  [f]ilename: string
+          add certificate revocation list file
+          (implies --enable-crl-vfy)
+
+  +crv  --enable-crl-vfy
+          enable leaf CRL verification
+
+  +cra  --enable-crl-all
+          enable full chain CRL verification
+
+security profile:
+
+  +py   --profile-bcp195-nd
+          Non-downgrading BCP 195 TLS Profile (default)
+
+  +px   --profile-bcp195
+          BCP 195 TLS Profile
+
+  +pz   --profile-bcp195-ex
+          Extended BCP 195 TLS Profile
+
+  +pb   --profile-basic
+          Basic TLS Secure Transport Connection Profile (retired)
+
+  +pa   --profile-aes
+          AES TLS Secure Transport Connection Profile (retired)
+
+  +pn   --profile-null
+          Authenticated unencrypted communication
+          (retired, was used in IHE ATNA)
+
+ciphersuite:
+
+  +cc   --list-ciphers
+          show list of supported TLS ciphersuites and exit
+
+  +cs   --cipher  [c]iphersuite name: string
+          add ciphersuite to list of negotiated suites
+
+  +dp   --dhparam  [f]ilename: string
+          read DH parameters for DH/DSS ciphersuites
+
+pseudo random generator:
+
+  +rs   --seed  [f]ilename: string
+          seed random generator with contents of f
+
+  +ws   --write-seed
+          write back modified seed (only with --seed)
+
+  +wf   --write-seed-file  [f]ilename: string (only with --seed)
+          write modified seed to file f
+
+peer authentication:
+
+  -rc   --require-peer-cert
+          verify peer certificate, fail if absent (default)
+
+  -vc   --verify-peer-cert
+          verify peer certificate if present
+
+  -ic   --ignore-peer-cert
+          don't verify peer certificate
+\endverbatim
+
+
+\subsection storescp_output_options output options
 \verbatim
 general:
 
@@ -264,6 +391,14 @@ data set trailing padding
           align file on multiple of f bytes and items on
           multiple of i bytes
 
+handling of defined length UN elements:
+
+  -uc   --retain-un
+          retain elements as UN (default)
+
+  +uc   --convert-un
+          convert to real VR if known
+
 deflate compression level (only with --write-xfer-deflated/same):
 
   +cl   --compression-level  [l]evel: integer (default: 6)
@@ -295,7 +430,7 @@ filename generation:
           append e to all filenames
 \endverbatim
 
-\subsection event_options event options
+\subsection storescp_event_options event options
 \verbatim
   -xcr  --exec-on-reception  [c]ommand: string
           execute command c after having received and processed
@@ -318,75 +453,7 @@ filename generation:
           execute command synchronously in foreground
 \endverbatim
 
-\subsection tls_options transport layer security (TLS) options
-\verbatim
-transport protocol stack:
-
-  -tls  --disable-tls
-          use normal TCP/IP connection (default)
-
-  +tls  --enable-tls  [p]rivate key file, [c]ertificate file: string
-          use authenticated secure TLS connection
-
-private key password (only with --enable-tls):
-
-  +ps   --std-passwd
-          prompt user to type password on stdin (default)
-
-  +pw   --use-passwd  [p]assword: string
-          use specified password
-
-  -pw   --null-passwd
-          use empty string as password
-
-key and certificate file format:
-
-  -pem  --pem-keys
-          read keys and certificates as PEM file (default)
-
-  -der  --der-keys
-          read keys and certificates as DER file
-
-certification authority:
-
-  +cf   --add-cert-file  [c]ertificate filename: string
-          add certificate file to list of certificates
-
-  +cd   --add-cert-dir  [c]ertificate directory: string
-          add certificates in d to list of certificates
-
-ciphersuite:
-
-  +cs   --cipher  [c]iphersuite name: string
-          add ciphersuite to list of negotiated suites
-
-  +dp   --dhparam  [f]ilename: string
-          read DH parameters for DH/DSS ciphersuites
-
-pseudo random generator:
-
-  +rs   --seed  [f]ilename: string
-          seed random generator with contents of f
-
-  +ws   --write-seed
-          write back modified seed (only with --seed)
-
-  +wf   --write-seed-file  [f]ilename: string (only with --seed)
-          write modified seed to file f
-
-peer authentication:
-
-  -rc   --require-peer-cert
-          verify peer certificate, fail if absent (default)
-
-  -vc   --verify-peer-cert
-          verify peer certificate if present
-
-  -ic   --ignore-peer-cert
-          don't verify peer certificate
-\endverbatim
-
-\section notes NOTES
+\section storescp_notes NOTES
 
 The semantic impacts of the above mentioned options is clear for the majority
 of options.  Some particular options, however, are so specific that they need
@@ -428,10 +495,21 @@ and for option \e --sort-on-patientname
 \endverbatim
 
 where 'PatientName' is replaced by "ANONYMOUS" if the data element is empty or
-absent in the data set.  Please note, however, that for option
-\e --sort-on-study-uid the same subdirectory will be used for all DICOM objects
-that belong to the same study, i.e. in contrast to the other \e --sort-xxx
-options there is no guarantee that a study directory is ever completed.
+absent in the data set.  Any existing patient name is transformed in order to
+use only ASCII characters.  Please note that in this context only the DICOM
+default character set (ASCII, i.e. no entry in attribute Specific Character
+Set) and Latin-1 (Specific Character Set valued "ISO_IR 100") are supported.
+If another character set is found and the patient name contains non-ASCII
+characters, a warning is printed and the transformation is performed as if
+Latin-1 character set would be set in the file.  This may lead to unreadable
+or unexpected patient name directories and behaviour.  Thus, it is advisable
+to use \e --sort-on-patientname only if Latin-1 or ASCII patient names are
+expected to be received.
+
+For option \e --sort-on-study-uid the same subdirectory will be used for all
+DICOM objects that belong to the same study, i.e. in contrast to the other
+\e --sort-xxx options there is no guarantee that a study directory is ever
+completed.
 
 Option \e --timenames creates filenames from timestamps corresponding to the
 time, \b storescp writes a file to disk.  The format is
@@ -452,7 +530,7 @@ dot "." is not added automatically).  This suffix is not appended to the
 filenames created by \e --rename-on-eostudy to maintain the length of 8
 characters.
 
-Option \e --exec-on-reception allows to execute a certain command line after
+Option \e --exec-on-reception allows one to execute a certain command line after
 having received and processed one DICOM object (through a C-STORE-RQ message).
 The command line to be executed is passed to this option as a parameter.  The
 specified command line may contain a number of placeholders which will be
@@ -469,9 +547,10 @@ replaced at run time:
             peer Storage SCU
 
 The specified command line is executed as a separate process, so that the
-execution of \b storescp will not be held back.
+execution of \b storescp will not be held back.  This behavior can be influenced
+with the \e --exec-sync option.
 
-Option \e --exec-on-eostudy allows to execute a certain command line when all
+Option \e --exec-on-eostudy allows one to execute a certain command line when all
 DICOM objects that belong to one study have been received by \b storescp.
 The same placeholders as with \e --exec-on-reception may be used, except for
 '\#f', which is not supported.  A study is considered complete by \b storescp
@@ -508,12 +587,18 @@ options: \e --sort-xxx, \e --exec-on-eostudy and \e --rename-on-eostudy.
 If option \e --eostudy-timeout is specified, the end of a study is considered
 to have occurred not only if two consecutively received DICOM objects d_n and
 d_n+1 do not show the same values in attribute Study Instance UID, but also if
-whithin a time span of x seconds after the reception of a DICOM object d_n, no
+within a time span of x seconds after the reception of a DICOM object d_n, no
 other DICOM object was received over the network.  Note that the amount x of
 seconds (which determines the length of this time span) has to be passed to
 this option as a parameter.
 
-\subsection dicom_conformance DICOM Conformance
+Please note that two consecutive network connections can transfer objects for
+the same study.  The study will only be considered complete when an object of a
+different study is received or the \e --eostudy-timeout is reached.  For this
+reason, the options \e --fork and \e --inet are incompatible with
+\e --exec-on-eostudy, \e --rename-on-eostudy and \e --sort-conc-studies.
+
+\subsection storescp_dicom_conformance DICOM Conformance
 
 The \b storescp application supports the following SOP Classes as an SCP:
 
@@ -532,12 +617,14 @@ DigitalIntraOralXRayImageStorageForPresentation      1.2.840.10008.5.1.4.1.1.1.3
 DigitalIntraOralXRayImageStorageForProcessing        1.2.840.10008.5.1.4.1.1.1.3.1
 CTImageStorage                                       1.2.840.10008.5.1.4.1.1.2
 EnhancedCTImageStorage                               1.2.840.10008.5.1.4.1.1.2.1
+LegacyConvertedEnhancedCTImageStorage                1.2.840.10008.5.1.4.1.1.2.2
 RETIRED_UltrasoundMultiframeImageStorage             1.2.840.10008.5.1.4.1.1.3
 UltrasoundMultiframeImageStorage                     1.2.840.10008.5.1.4.1.1.3.1
 MRImageStorage                                       1.2.840.10008.5.1.4.1.1.4
 EnhancedMRImageStorage                               1.2.840.10008.5.1.4.1.1.4.1
 MRSpectroscopyStorage                                1.2.840.10008.5.1.4.1.1.4.2
 EnhancedMRColorImageStorage                          1.2.840.10008.5.1.4.1.1.4.3
+LegacyConvertedEnhancedMRImageStorage                1.2.840.10008.5.1.4.1.1.4.4
 RETIRED_NuclearMedicineImageStorage                  1.2.840.10008.5.1.4.1.1.5
 RETIRED_UltrasoundImageStorage                       1.2.840.10008.5.1.4.1.1.6
 UltrasoundImageStorage                               1.2.840.10008.5.1.4.1.1.6.1
@@ -559,6 +646,12 @@ BasicVoiceAudioWaveformStorage                       1.2.840.10008.5.1.4.1.1.9.4
 GeneralAudioWaveformStorage                          1.2.840.10008.5.1.4.1.1.9.4.2
 ArterialPulseWaveformStorage                         1.2.840.10008.5.1.4.1.1.9.5.1
 RespiratoryWaveformStorage                           1.2.840.10008.5.1.4.1.1.9.6.1
+MultichannelRespiratoryWaveformStorage               1.2.840.10008.5.1.4.1.1.9.6.2
+RoutineScalpElectroencephalogramWaveformStorage      1.2.840.10008.5.1.4.1.1.9.7.1
+ElectromyogramWaveformStorage                        1.2.840.10008.5.1.4.1.1.9.7.2
+ElectrooculogramWaveformStorage                      1.2.840.10008.5.1.4.1.1.9.7.3
+SleepElectroencephalogramWaveformStorage             1.2.840.10008.5.1.4.1.1.9.7.4
+BodyPositionWaveformStorage                          1.2.840.10008.5.1.4.1.1.9.8.1
 RETIRED_StandaloneModalityLUTStorage                 1.2.840.10008.5.1.4.1.1.10
 RETIRED_StandaloneVOILUTStorage                      1.2.840.10008.5.1.4.1.1.11
 GrayscaleSoftcopyPresentationStateStorage            1.2.840.10008.5.1.4.1.1.11.1
@@ -566,22 +659,36 @@ ColorSoftcopyPresentationStateStorage                1.2.840.10008.5.1.4.1.1.11.
 PseudoColorSoftcopyPresentationStateStorage          1.2.840.10008.5.1.4.1.1.11.3
 BlendingSoftcopyPresentationStateStorage             1.2.840.10008.5.1.4.1.1.11.4
 XAXRFGrayscaleSoftcopyPresentationStateStorage       1.2.840.10008.5.1.4.1.1.11.5
+GrayscalePlanarMPRVolumetricPresentationStateStorage 1.2.840.10008.5.1.4.1.1.11.6
+CompositingPlanarMPRVolumetricPresent.StateStorage   1.2.840.10008.5.1.4.1.1.11.7
+AdvancedBlendingPresentationStateStorage             1.2.840.10008.5.1.4.1.1.11.8
+VolumeRenderingVolumetricPresentationStateStorage    1.2.840.10008.5.1.4.1.1.11.9
+SegmentedVolumeRenderingVolumetricPres.StateStorage  1.2.840.10008.5.1.4.1.1.11.10
+MultipleVolumeRenderingVolumetricPres.StateStorage   1.2.840.10008.5.1.4.1.1.11.11
 XRayAngiographicImageStorage                         1.2.840.10008.5.1.4.1.1.12.1
 EnhancedXAImageStorage                               1.2.840.10008.5.1.4.1.1.12.1.1
 XRayRadiofluoroscopicImageStorage                    1.2.840.10008.5.1.4.1.1.12.2
 EnhancedXRFImageStorage                              1.2.840.10008.5.1.4.1.1.12.2.1
+RETIRED_XRayAngiographicBiPlaneImageStorage          1.2.840.10008.5.1.4.1.1.12.3
 XRay3DAngiographicImageStorage                       1.2.840.10008.5.1.4.1.1.13.1.1
 XRay3DCraniofacialImageStorage                       1.2.840.10008.5.1.4.1.1.13.1.2
 BreastTomosynthesisImageStorage                      1.2.840.10008.5.1.4.1.1.13.1.3
-RETIRED_XRayAngiographicBiPlaneImageStorage          1.2.840.10008.5.1.4.1.1.12.3
+BreastProjectionXRayImageStorageForPresentation      1.2.840.10008.5.1.4.1.1.13.1.4
+BreastProjectionXRayImageStorageForProcessing        1.2.840.10008.5.1.4.1.1.13.1.5
+IntravascularOpt.Coh.Tom.ImageStorageForPresentation 1.2.840.10008.5.1.4.1.1.14.1
+IntravascularOpt.Coh.Tom.ImageStorageForProcessing   1.2.840.10008.5.1.4.1.1.14.2
 NuclearMedicineImageStorage                          1.2.840.10008.5.1.4.1.1.20
+ParametricMapStorage                                 1.2.840.10008.5.1.4.1.1.30
 RawDataStorage                                       1.2.840.10008.5.1.4.1.1.66
 SpatialRegistrationStorage                           1.2.840.10008.5.1.4.1.1.66.1
 SpatialFiducialsStorage                              1.2.840.10008.5.1.4.1.1.66.2
 DeformableSpatialRegistrationStorage                 1.2.840.10008.5.1.4.1.1.66.3
 SegmentationStorage                                  1.2.840.10008.5.1.4.1.1.66.4
 SurfaceSegmentationStorage                           1.2.840.10008.5.1.4.1.1.66.5
+TractographyResultsStorage                           1.2.840.10008.5.1.4.1.1.66.6
 RealWorldValueMappingStorage                         1.2.840.10008.5.1.4.1.1.67
+SurfaceScanMeshStorage                               1.2.840.10008.5.1.4.1.1.68.1
+SurfaceScanPointCloudStorage                         1.2.840.10008.5.1.4.1.1.68.2
 RETIRED_VLImageStorage                               1.2.840.10008.5.1.4.1.1.77.1
 VLEndoscopicImageStorage                             1.2.840.10008.5.1.4.1.1.77.1.1
 VideoEndoscopicImageStorage                          1.2.840.10008.5.1.4.1.1.77.1.1.1
@@ -594,8 +701,13 @@ OphthalmicPhotography8BitImageStorage                1.2.840.10008.5.1.4.1.1.77.
 OphthalmicPhotography16BitImageStorage               1.2.840.10008.5.1.4.1.1.77.1.5.2
 StereometricRelationshipStorage                      1.2.840.10008.5.1.4.1.1.77.1.5.3
 OphthalmicTomographyImageStorage                     1.2.840.10008.5.1.4.1.1.77.1.5.4
+WideFieldOphthalmicPhoto.Stereogr.Proj.ImageStorage  1.2.840.10008.5.1.4.1.1.77.1.5.5
+WideFieldOphthalmicPhotogr.3DCoordinatesImageStorage 1.2.840.10008.5.1.4.1.1.77.1.5.6
+OphthalmicOpticalCoherenceTomogr.EnFaceImageStorage  1.2.840.10008.5.1.4.1.1.77.1.5.7
+OphthalmicOpticalCoh.Tomogr.BscanVolumeAnalysisStor. 1.2.840.10008.5.1.4.1.1.77.1.5.8
 VLWholeSlideMicroscopyImageStorage                   1.2.840.10008.5.1.4.1.1.77.1.6
-RETIRED_VLMultiFrameImageStorage                     1.2.840.10008.5.1.4.1.1.77.2
+DermoscopicPhotographyImageStorage                   1.2.840.10008.5.1.4.1.1.77.1.7
+RETIRED_VLMultiframeImageStorage                     1.2.840.10008.5.1.4.1.1.77.2
 LensometryMeasurementsStorage                        1.2.840.10008.5.1.4.1.1.78.1
 AutorefractionMeasurementsStorage                    1.2.840.10008.5.1.4.1.1.78.2
 KeratometryMeasurementsStorage                       1.2.840.10008.5.1.4.1.1.78.3
@@ -606,6 +718,8 @@ OphthalmicAxialMeasurementsStorage                   1.2.840.10008.5.1.4.1.1.78.
 IntraocularLensCalculationsStorage                   1.2.840.10008.5.1.4.1.1.78.8
 MacularGridThicknessAndVolumeReportStorage           1.2.840.10008.5.1.4.1.1.79.1
 OphthalmicVisualFieldStaticPerimetryMeasurementsSt.  1.2.840.10008.5.1.4.1.1.80.1
+OphthalmicThicknessMapStorage                        1.2.840.10008.5.1.4.1.1.81.1
+CornealTopographyMapStorage                          1.2.840.10008.5.1.4.1.1.82.1
 DRAFT_SRTextStorage                                  1.2.840.10008.5.1.4.1.1.88.1
 DRAFT_SRAudioStorage                                 1.2.840.10008.5.1.4.1.1.88.2
 DRAFT_SRDetailStorage                                1.2.840.10008.5.1.4.1.1.88.3
@@ -613,19 +727,36 @@ DRAFT_SRComprehensiveStorage                         1.2.840.10008.5.1.4.1.1.88.
 BasicTextSRStorage                                   1.2.840.10008.5.1.4.1.1.88.11
 EnhancedSRStorage                                    1.2.840.10008.5.1.4.1.1.88.22
 ComprehensiveSRStorage                               1.2.840.10008.5.1.4.1.1.88.33
+Comprehensive3DSRStorage                             1.2.840.10008.5.1.4.1.1.88.34
+ExtensibleSRStorage                                  1.2.840.10008.5.1.4.1.1.88.35
 ProcedureLogStorage                                  1.2.840.10008.5.1.4.1.1.88.40
 MammographyCADSRStorage                              1.2.840.10008.5.1.4.1.1.88.50
 KeyObjectSelectionDocumentStorage                    1.2.840.10008.5.1.4.1.1.88.59
 ChestCADSRStorage                                    1.2.840.10008.5.1.4.1.1.88.65
 XRayRadiationDoseSRStorage                           1.2.840.10008.5.1.4.1.1.88.67
+RadiopharmaceuticalRadiationDoseSRStorage            1.2.840.10008.5.1.4.1.1.88.68
 ColonCADSRStorage                                    1.2.840.10008.5.1.4.1.1.88.69
 ImplantationPlanSRDocumentStorage                    1.2.840.10008.5.1.4.1.1.88.70
+AcquisitionContextSRStorage                          1.2.840.10008.5.1.4.1.1.88.71
+SimplifiedAdultEchoSRStorage                         1.2.840.10008.5.1.4.1.1.88.72
+PatientRadiationDoseSRStorage                        1.2.840.10008.5.1.4.1.1.88.73
+PlannedImagingAgentAdministrationSRStorage           1.2.840.10008.5.1.4.1.1.88.74
+PerformedImagingAgentAdministrationSRStorage         1.2.840.10008.5.1.4.1.1.88.75
+EnhancedXRayRadiationDoseSRStorage                   1.2.840.10008.5.1.4.1.1.88.76
+ContentAssessmentResultsStorage                      1.2.840.10008.5.1.4.1.1.90.1
+MicroscopyBulkSimpleAnnotationsStorage               1.2.840.10008.5.1.4.1.1.91.1
 EncapsulatedPDFStorage                               1.2.840.10008.5.1.4.1.1.104.1
 EncapsulatedCDAStorage                               1.2.840.10008.5.1.4.1.1.104.2
+EncapsulatedSTLStorage                               1.2.840.10008.5.1.4.1.1.104.3
+EncapsulatedOBJStorage                               1.2.840.10008.5.1.4.1.1.104.4
+EncapsulatedMTLStorage                               1.2.840.10008.5.1.4.1.1.104.5
 PositronEmissionTomographyImageStorage               1.2.840.10008.5.1.4.1.1.128
+LegacyConvertedEnhancedPETImageStorage               1.2.840.10008.5.1.4.1.1.128.1
 RETIRED_StandalonePETCurveStorage                    1.2.840.10008.5.1.4.1.1.129
 EnhancedPETImageStorage                              1.2.840.10008.5.1.4.1.1.130
 BasicStructuredDisplayStorage                        1.2.840.10008.5.1.4.1.1.131
+CTPerformedProcedureProtocolStorage                  1.2.840.10008.5.1.4.1.1.200.2
+XAPerformedProcedureProtocolStorage                  1.2.840.10008.5.1.4.1.1.200.8
 RTImageStorage                                       1.2.840.10008.5.1.4.1.1.481.1
 RTDoseStorage                                        1.2.840.10008.5.1.4.1.1.481.2
 RTStructureSetStorage                                1.2.840.10008.5.1.4.1.1.481.3
@@ -635,10 +766,31 @@ RTBrachyTreatmentRecordStorage                       1.2.840.10008.5.1.4.1.1.481
 RTTreatmentSummaryRecordStorage                      1.2.840.10008.5.1.4.1.1.481.7
 RTIonPlanStorage                                     1.2.840.10008.5.1.4.1.1.481.8
 RTIonBeamsTreatmentRecordStorage                     1.2.840.10008.5.1.4.1.1.481.9
+RTPhysicianIntentStorage                             1.2.840.10008.5.1.4.1.1.481.10
+RTSegmentAnnotationStorage                           1.2.840.10008.5.1.4.1.1.481.11
+RTRadiationSetStorage                                1.2.840.10008.5.1.4.1.1.481.12
+CArmPhotonElectronRadiationStorage                   1.2.840.10008.5.1.4.1.1.481.13
+TomotherapeuticRadiationStorage                      1.2.840.10008.5.1.4.1.1.481.14
+RoboticArmRadiationStorage                           1.2.840.10008.5.1.4.1.1.481.15
+RTRadiationRecordSetStorage                          1.2.840.10008.5.1.4.1.1.481.16
+RTRadiationSalvageRecordStorage                      1.2.840.10008.5.1.4.1.1.481.17
+TomotherapeuticRadiationRecordStorage                1.2.840.10008.5.1.4.1.1.481.18
+CArmPhotonElectronRadiationRecordStorage             1.2.840.10008.5.1.4.1.1.481.19
+RoboticRadiationRecordStorage                        1.2.840.10008.5.1.4.1.1.481.20
+RTRadiationSetDeliveryInstructionStorage             1.2.840.10008.5.1.4.1.1.481.21
+RTTreatmentPreparationStorage                        1.2.840.10008.5.1.4.1.1.481.22
+DICOS_CTImageStorage                                 1.2.840.10008.5.1.4.1.1.501.1
+DICOS_DigitalXRayImageStorageForPresentation         1.2.840.10008.5.1.4.1.1.501.2.1
+DICOS_DigitalXRayImageStorageForProcessing           1.2.840.10008.5.1.4.1.1.501.2.2
+DICOS_ThreatDetectionReportStorage                   1.2.840.10008.5.1.4.1.1.501.3
+DICOS_2DAITStorage                                   1.2.840.10008.5.1.4.1.1.501.4
+DICOS_3DAITStorage                                   1.2.840.10008.5.1.4.1.1.501.5
+DICOS_QuadrupoleResonanceStorage                     1.2.840.10008.5.1.4.1.1.501.6
+DICONDE_EddyCurrentImageStorage                      1.2.840.10008.5.1.4.1.1.601.1
+DICONDE_EddyCurrentMultiframeImageStorage            1.2.840.10008.5.1.4.1.1.601.2
 DRAFT_RTBeamsDeliveryInstructionStorage              1.2.840.10008.5.1.4.34.1
-GenericImplantTemplateStorage                        1.2.840.10008.5.1.4.43.1
-ImplantAssemblyTemplateStorage                       1.2.840.10008.5.1.4.44.1
-ImplantTemplateGroupStorage                          1.2.840.10008.5.1.4.45.1
+RTBeamsDeliveryInstructionStorage                    1.2.840.10008.5.1.4.34.7
+RTBrachyApplicationSetupDeliveryInstructionStorage   1.2.840.10008.5.1.4.34.10
 \endverbatim
 
 The \b storescp application will accept presentation contexts for all of the
@@ -651,11 +803,11 @@ LittleEndianExplicitTransferSyntax                   1.2.840.10008.1.2.1
 BigEndianExplicitTransferSyntax                      1.2.840.10008.1.2.2
 \endverbatim
 
-The default behaviour of the \b storescp application is to prefer transfer
+The default behavior of the \b storescp application is to prefer transfer
 syntaxes having an explicit encoding over the default implicit transfer syntax.
 If \b storescp is running on big-endian hardware it will prefer
 BigEndianExplicit to LittleEndianExplicit transfer syntax (and vice versa).
-This behaviour can be changed with the \e --prefer options (see above).  Using
+This behavior can be changed with the \e --prefer options (see above).  Using
 option \e --accept-all any of the following transfer syntaxes is supported:
 
 \verbatim
@@ -672,6 +824,13 @@ JPEG2000LosslessOnlyTransferSyntax                   1.2.840.10008.1.2.4.90
 JPEG2000TransferSyntax                               1.2.840.10008.1.2.4.91
 MPEG2MainProfileAtMainLevelTransferSyntax            1.2.840.10008.1.2.4.100
 MPEG2MainProfileAtHighLevelTransferSyntax            1.2.840.10008.1.2.4.101
+MPEG4HighProfileLevel4_1TransferSyntax               1.2.840.10008.1.2.4.102
+MPEG4BDcompatibleHighProfileLevel4_1TransferSyntax   1.2.840.10008.1.2.4.103
+MPEG4HighProfileLevel4_2_For2DVideoTransferSyntax    1.2.840.10008.1.2.4.104
+MPEG4HighProfileLevel4_2_For3DVideoTransferSyntax    1.2.840.10008.1.2.4.105
+MPEG4StereoHighProfileLevel4_2TransferSyntax         1.2.840.10008.1.2.4.106
+HEVCMainProfileLevel5_1TransferSyntax                1.2.840.10008.1.2.4.107
+HEVCMain10ProfileLevel5_1TransferSyntax              1.2.840.10008.1.2.4.108
 RLELosslessTransferSyntax                            1.2.840.10008.1.2.5
 \endverbatim
 
@@ -683,7 +842,7 @@ However, using an appropriate association negotiation profile (see below)
 the optional support for extended negotiation can be added to particular SOP
 classes.
 
-\subsection access_control Access Control
+\subsection storescp_access_control Access Control
 
 When compiled on Unix platforms with TCP wrapper support, host-based access
 control can be enabled with the \e --access-control command line option.  In
@@ -692,7 +851,7 @@ tables for \b storescp are enforced.  The default locations of the host access
 control tables are <em>/etc/hosts.allow</em> and <em>/etc/hosts.deny</em>.
 Further details are described in <b>hosts_access</b>(5).
 
-\subsection running_from_inetd Running storescp from inetd
+\subsection storescp_running_from_inetd Running storescp from inetd
 
 On Posix platforms, \b storescp can be initiated through the inetd(8) super
 server.  This requires that \b storescp be configured in the
@@ -710,21 +869,21 @@ described above and \e -od (\e --output-directory) defines the directory in
 which \b storescp stores incoming DICOM objects.  Note that the service name
 ("acr-nema" in this example) determines the port number on which DICOM
 associations are accepted and must be defined in <em>/etc/services</em>.
-When runnning from inetd, the stdout and stderr streams are redirected to
-files in the <em>/tmp</em> filesystem which can be identified by the
-filename starting with the prefix "storescp_".
+When running from inetd, the stdout and stderr streams are discarded.
+However, you can still configure logging via the \e --log-config
+option (see below).
 
 Please note that when run through inetd, \b storescp is executed with root
 privileges, which may be a security risk.
 
-\subsection profiles Association Negotiation Profiles and Configuration Files
+\subsection storescp_profiles Association Negotiation Profiles and Configuration Files
 
 \b storescp supports a flexible mechanism for specifying the DICOM network
-association negotiation behaviour, based on so-called "association negotiation
+association negotiation behavior, based on so-called "association negotiation
 profiles" which may be read from a configuration file.  The format and
 semantics of this configuration file are documented in \e asconfig.txt.
 
-\section logging LOGGING
+\section storescp_logging LOGGING
 
 The level of logging output of the various command line tools and underlying
 libraries can be specified by the user.  By default, only errors and warnings
@@ -741,9 +900,9 @@ rotation), to syslog (Unix) or the event log (Windows) option \e --log-config
 can be used.  This configuration file also allows for directing only certain
 messages to a particular output stream and for filtering certain messages
 based on the module or application where they are generated.  An example
-configuration file is provided in <em>\<etcdir\>/logger.cfg</em>).
+configuration file is provided in <em>\<etcdir\>/logger.cfg</em>.
 
-\section command_line COMMAND LINE
+\section storescp_command_line COMMAND LINE
 
 All command line tools use the following notation for parameters: square
 brackets enclose optional values (0-1), three trailing dots indicate that
@@ -752,7 +911,7 @@ multiple values are allowed (1-n), a combination of both means 0 to n values.
 Command line options are distinguished from parameters by a leading '+' or '-'
 sign, respectively.  Usually, order and position of command line options are
 arbitrary (i.e. they can appear anywhere).  However, if options are mutually
-exclusive the rightmost appearance is used.  This behaviour conforms to the
+exclusive the rightmost appearance is used.  This behavior conforms to the
 standard evaluation rules of common Unix shells.
 
 In addition, one or more command files can be specified using an '@' sign as a
@@ -761,11 +920,11 @@ is replaced by the content of the corresponding text file (multiple
 whitespaces are treated as a single separator unless they appear between two
 quotation marks) prior to any further evaluation.  Please note that a command
 file cannot contain another command file.  This simple but effective approach
-allows to summarize common combinations of options/parameters and avoids
+allows one to summarize common combinations of options/parameters and avoids
 longish and confusing command lines (an example is provided in file
 <em>\<datadir\>/dumppat.txt</em>).
 
-\section environment ENVIRONMENT
+\section storescp_environment ENVIRONMENT
 
 The \b storescp utility will attempt to load DICOM data dictionaries specified
 in the \e DCMDICTPATH environment variable.  By default, i.e. if the
@@ -773,7 +932,7 @@ in the \e DCMDICTPATH environment variable.  By default, i.e. if the
 <em>\<datadir\>/dicom.dic</em> will be loaded unless the dictionary is built
 into the application (default for Windows).
 
-The default behaviour should be preferred and the \e DCMDICTPATH environment
+The default behavior should be preferred and the \e DCMDICTPATH environment
 variable only used when alternative data dictionaries are required.  The
 \e DCMDICTPATH environment variable has the same format as the Unix shell
 \e PATH variable in that a colon (":") separates entries.  On Windows systems,
@@ -781,17 +940,17 @@ a semicolon (";") is used as a separator.  The data dictionary code will
 attempt to load each file specified in the \e DCMDICTPATH environment variable.
 It is an error if no data dictionary can be loaded.
 
-\section files FILES
+\section storescp_files FILES
 
 <em>\<docdir\>/asconfig.txt</em> - configuration file documentation
 \n<em>\<etcdir\>/storescp.cfg</em> - example association negotiation profile
 
-\section see_also SEE ALSO
+\section storescp_see_also SEE ALSO
 
 <b>storescu</b>(1)
 
-\section copyright COPYRIGHT
+\section storescp_copyright COPYRIGHT
 
-Copyright (C) 1996-2010 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany.
+Copyright (C) 1996-2022 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany.
 
 */

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were partly developed by
@@ -73,12 +73,6 @@
 **
 ** Module Prefix: DIMSE_
 **
-** Last Update:         $Author: joergr $
-** Update Date:         $Date: 2010-12-01 08:26:36 $
-** CVS/RCS Revision:    $Revision: 1.15 $
-** Status:              $State: Exp $
-**
-** CVS/RCS Log at end of file
 */
 
 /*
@@ -86,12 +80,6 @@
 */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
-
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CSTDIO
-#define INCLUDE_CSTRING
-#define INCLUDE_CSTDARG
-#include "dcmtk/ofstd/ofstdinc.h"
 
 #ifdef HAVE_FCNTL_H
 #include <fcntl.h>
@@ -111,6 +99,7 @@ DIMSE_findUser(
         T_ASC_Association *assoc,
         T_ASC_PresentationContextID presID,
         T_DIMSE_C_FindRQ *request, DcmDataset *requestIdentifiers,
+        int &responseCount,
         DIMSE_FindUserCallback callback, void *callbackData,
         T_DIMSE_BlockingMode blockMode, int timeout,
         T_DIMSE_C_FindRSP *response, DcmDataset **statusDetail)
@@ -148,16 +137,15 @@ DIMSE_findUser(
 {
     T_DIMSE_Message req, rsp;
     DIC_US msgId;
-    int responseCount = 0;
     DcmDataset *rspIds = NULL;
-    DIC_US status = STATUS_Pending;
+    DIC_US status = STATUS_FIND_Pending_MatchesAreContinuing;
 
     /* if there is no search mask, nothing can be searched for */
     if (requestIdentifiers == NULL) return DIMSE_NULLKEY;
 
     /* initialize the variables which represent DIMSE C-FIND-RQ and DIMSE C-FIND-RSP messages */
-    bzero((char*)&req, sizeof(req));
-    bzero((char*)&rsp, sizeof(rsp));
+    memset((char*)&req, 0, sizeof(req));
+    memset((char*)&rsp, 0, sizeof(rsp));
 
     /* set corresponding values in the request message variable */
     req.CommandField = DIMSE_C_FIND_RQ;
@@ -174,11 +162,11 @@ DIMSE_findUser(
     if (cond.bad()) return cond;
 
     /* try to receive (one or more) C-STORE-RSP messages, continue loop as long */
-    /* as no error occured and not all result information has been received. */
+    /* as no error occurred and not all result information has been received. */
     while (cond == EC_Normal && DICOM_PENDING_STATUS(status))
     {
 	/* initialize the response to collect */
-        bzero((char*)&rsp, sizeof(rsp));
+        memset((char*)&rsp, 0, sizeof(rsp));
         if (rspIds != NULL) {
             delete rspIds;
             rspIds = NULL;
@@ -217,7 +205,7 @@ DIMSE_findUser(
 
         /* depending on the status which was returned in the current C-FIND-RSP, we need to do something */
         switch (status) {
-        case STATUS_Pending:
+        case STATUS_FIND_Pending_MatchesAreContinuing:
         case STATUS_FIND_Pending_WarningUnsupportedOptionalKeys:
             /* in these cases we received a C-FIND-RSP which indicates that a result data set was */
             /* found and will be sent over the network. We need to receive this result data set. */
@@ -249,7 +237,7 @@ DIMSE_findUser(
                     response, rspIds);
             }
             break;
-        case STATUS_Success:
+        case STATUS_FIND_Success:
             /* in this case the current C-FIND-RSP indicates that */
             /* there are no more records that match the search mask */
 
@@ -280,7 +268,7 @@ DIMSE_findUser(
 OFCondition
 DIMSE_sendFindResponse(T_ASC_Association * assoc,
         T_ASC_PresentationContextID presID,
-        T_DIMSE_C_FindRQ *request,
+        const T_DIMSE_C_FindRQ *request,
         T_DIMSE_C_FindRSP *response, DcmDataset *rspIds,
         DcmDataset *statusDetail)
     /*
@@ -303,12 +291,12 @@ DIMSE_sendFindResponse(T_ASC_Association * assoc,
     T_DIMSE_Message rsp;
 
     /* create response message */
-    bzero((char*)&rsp, sizeof(rsp));
+    memset((char*)&rsp, 0, sizeof(rsp));
     rsp.CommandField = DIMSE_C_FIND_RSP;
     rsp.msg.CFindRSP = *response;
     rsp.msg.CFindRSP.MessageIDBeingRespondedTo = request->MessageID;
-    strcpy(rsp.msg.CFindRSP.AffectedSOPClassUID,
-            request->AffectedSOPClassUID);
+    OFStandard::strlcpy(rsp.msg.CFindRSP.AffectedSOPClassUID,
+            request->AffectedSOPClassUID, sizeof(rsp.msg.CFindRSP.AffectedSOPClassUID));
     rsp.msg.CFindRSP.opts = O_FIND_AFFECTEDSOPCLASSUID;
 
     /* specify if the response message will contain a search result or if it will not contain one, */
@@ -339,7 +327,7 @@ DIMSE_findProvider(
     /*
      * This function receives a data set which represents the search mask over the network and
      * stores this data in memory. Then, it tries to select corresponding records which match the
-     * search mask from some database (done whithin the callback function) and sends corresponding
+     * search mask from some database (done within the callback function) and sends corresponding
      * C-FIND-RSP messages to the other DICOM application this application is connected with.
      * The selection of each matching record and the sending of a corresponding C-FIND-RSP message
      * is conducted in a loop since there can be more than one search result. In the end, also the
@@ -368,7 +356,7 @@ DIMSE_findProvider(
     /* receive data (i.e. the search mask) and store it in memory */
     OFCondition cond = DIMSE_receiveDataSetInMemory(assoc, blockMode, timeout, &presIdData, &reqIds, NULL, NULL);
 
-    /* if no error occured while receiving data */
+    /* if no error occurred while receiving data */
     if (cond.good())
     {
         /* check if the presentation context IDs of the C-FIND-RQ and */
@@ -381,12 +369,12 @@ DIMSE_findProvider(
         {
             /* if the IDs are the same go ahead */
             /* initialize the C-FIND-RSP message variable */
-            bzero((char*)&rsp, sizeof(rsp));
-            rsp.DimseStatus = STATUS_Pending;
+            memset((char*)&rsp, 0, sizeof(rsp));
+            rsp.DimseStatus = STATUS_FIND_Pending_MatchesAreContinuing;
 
-            /* as long as no error occured and the status of the C-FIND-RSP message which will */
+            /* as long as no error occurred and the status of the C-FIND-RSP message which will */
             /* be/was sent is pending, perform this loop in which records that match the search */
-            /* mask are selected (whithin the execution of the callback function) and sent over */
+            /* mask are selected (within the execution of the callback function) and sent over */
             /* the network to the other DICOM application using C-FIND-RSP messages. */
             while (cond.good() && DICOM_PENDING_STATUS(rsp.DimseStatus) && normal)
             {
@@ -406,7 +394,7 @@ DIMSE_findProvider(
                 }
                 else
                 {
-                    /* some execption condition occured, bail out */
+                    /* some exception condition occurred, bail out */
                     normal = OFFalse;
                 }
 
@@ -462,64 +450,3 @@ DIMSE_findProvider(
     /* return result value */
     return cond;
 }
-
-/*
-** CVS Log
-** $Log: dimfind.cc,v $
-** Revision 1.15  2010-12-01 08:26:36  joergr
-** Added OFFIS copyright header (beginning with the year 1994).
-**
-** Revision 1.14  2010-10-14 13:14:28  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.13  2009-11-18 11:53:59  uli
-** Switched to logging mechanism provided by the "new" oflog module.
-**
-** Revision 1.12  2005-12-08 15:44:42  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.11  2002/11/27 13:04:40  meichel
-** Adapted module dcmnet to use of new header file ofstdinc.h
-**
-** Revision 1.10  2001/11/01 13:49:05  wilkens
-** Added lots of comments.
-**
-** Revision 1.9  2001/10/12 10:18:34  meichel
-** Replaced the CONDITION types, constants and functions in the dcmnet module
-**   by an OFCondition based implementation which eliminates the global condition
-**   stack.  This is a major change, caveat emptor!
-**
-** Revision 1.8  2000/02/23 15:12:34  meichel
-** Corrected macro for Borland C++ Builder 4 workaround.
-**
-** Revision 1.7  2000/02/01 10:24:09  meichel
-** Avoiding to include <stdlib.h> as extern "C" on Borland C++ Builder 4,
-**   workaround for bug in compiler header files.
-**
-** Revision 1.6  1998/08/10 08:53:44  meichel
-** renamed member variable in DIMSE structures from "Status" to
-**   "DimseStatus". This is required if dcmnet is used together with
-**   <X11/Xlib.h> where Status is #define'd as int.
-**
-** Revision 1.5  1998/01/27 10:51:44  meichel
-** Removed some unused variables, meaningless const modifiers
-**   and unreached statements.
-**
-** Revision 1.4  1997/07/21 08:47:18  andreas
-** - Replace all boolean types (BOOLEAN, CTNBOOLEAN, DICOM_BOOL, BOOL)
-**   with one unique boolean type OFBool.
-**
-** Revision 1.3  1996/04/25 16:11:15  hewett
-** Added parameter casts to char* for bzero calls.  Replaced some declarations
-** of DIC_UL with unsigned long (reduces mismatch problems with 32 & 64 bit
-** architectures).  Added some protection to inclusion of sys/socket.h (due
-** to MIPS/Ultrix).
-**
-** Revision 1.2  1996/04/22 10:02:59  hewett
-** Corrected memory leak whereby response ids where not being deleted.
-**
-** Revision 1.1.1.1  1996/03/26 18:38:46  hewett
-** Initial Release.
-**
-**
-*/

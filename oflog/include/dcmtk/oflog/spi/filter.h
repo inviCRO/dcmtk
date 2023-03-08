@@ -1,10 +1,11 @@
+// -*- C++ -*-
 // Module:  Log4CPLUS
 // File:    filter.h
 // Created: 5/2003
 // Author:  Tad E. Smith
 //
 //
-// Copyright 1999-2009 Tad E. Smith
+// Copyright 1999-2010 Tad E. Smith
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,41 +22,56 @@
 /** @file
  * This header defines Filter and all of it's subclasses. */
 
-#ifndef LOG4CPLUS_SPI_FILTER_HEADER_
-#define LOG4CPLUS_SPI_FILTER_HEADER_
+#ifndef DCMTK_LOG4CPLUS_SPI_FILTER_HEADER_
+#define DCMTK_LOG4CPLUS_SPI_FILTER_HEADER_
 
 #include "dcmtk/oflog/config.h"
+
+#if defined (DCMTK_LOG4CPLUS_HAVE_PRAGMA_ONCE)
+#pragma once
+#endif
+
 #include "dcmtk/oflog/helpers/pointer.h"
-#include "dcmtk/oflog/helpers/property.h"
-#include "dcmtk/oflog/spi/logevent.h"
+#include "dcmtk/oflog/loglevel.h"
 
 
+namespace dcmtk {
 namespace log4cplus {
+
+    namespace helpers
+    {
+
+        class Properties;
+
+    }
+
     namespace spi {
 
 
-        enum FilterResult { DENY, /**< The log event must be dropped immediately
+        /*! The possible results a filter can give */
+        enum FilterResult { DENY, /*!< The log event must be dropped immediately
                                    *  without consulting with the remaining
                                    *  filters, if any, in the chain. */
-                            NEUTRAL, /**< This filter is neutral with respect to
+                            NEUTRAL, /*!< This filter is neutral with respect to
                                       *  the log event; the remaining filters, if
                                       *  if any, should be consulted for a final
                                       *  decision. */
-                            ACCEPT /**< The log event must be logged immediately
+                            ACCEPT /*!< The log event must be logged immediately
                                     *  without consulting with the remaining
                                     *  filters, if any, in the chain. */
                           };
 
         // Forward Declarations
         class Filter;
+        class InternalLoggingEvent;
 
 
-        /**
-         * This method is used to filter an InternalLoggingEvent.
-         *
-         * Note: <code>filter</code> can be NULL.
+        /** This method is used to filter an InternalLoggingEvent.
+         * @param filter the filter to be applied to the event
+         * @param event the event where the filter is applied on
+         * @remark <code>filter</code> can be NULL.
          */
-        LOG4CPLUS_EXPORT FilterResult checkFilter(const Filter* filter,
+        DCMTK_LOG4CPLUS_EXPORT FilterResult checkFilter(const Filter* filter,
                                                   const InternalLoggingEvent& event);
 
         typedef helpers::SharedObjectPtr<Filter> FilterPtr;
@@ -88,7 +104,7 @@ namespace log4cplus {
          * The philosophy of log4cplus filters is largely inspired from the
          * Linux ipchains.
          */
-        class LOG4CPLUS_EXPORT Filter
+        class DCMTK_LOG4CPLUS_EXPORT Filter
             : public virtual log4cplus::helpers::SharedObject
         {
         public:
@@ -131,10 +147,10 @@ namespace log4cplus {
          * filtering behaviour to a "deny all unless instructed otherwise"
          * behaviour.
          */
-        class LOG4CPLUS_EXPORT DenyAllFilter : public Filter {
+        class DCMTK_LOG4CPLUS_EXPORT DenyAllFilter : public Filter {
         public:
             DenyAllFilter ();
-            DenyAllFilter (const log4cplus::helpers::Properties&, log4cplus::tstring& error);
+            DenyAllFilter (const log4cplus::helpers::Properties&);
 
             /**
              * Always returns the {@link #DENY} regardless of the
@@ -155,10 +171,10 @@ namespace log4cplus {
          * to <code>true</code>, if it is <code>false</code> then {@link #DENY}
          * is returned. If there is no match, {@link #NEUTRAL} is returned.
          */
-        class LOG4CPLUS_EXPORT LogLevelMatchFilter : public Filter {
+        class DCMTK_LOG4CPLUS_EXPORT LogLevelMatchFilter : public Filter {
         public:
             LogLevelMatchFilter();
-            LogLevelMatchFilter(const log4cplus::helpers::Properties& p, log4cplus::tstring&);
+            LogLevelMatchFilter(const log4cplus::helpers::Properties& p);
 
             /**
              * Return the decision of this filter.
@@ -174,7 +190,7 @@ namespace log4cplus {
 
         private:
           // Methods
-            void init();
+            DCMTK_LOG4CPLUS_PRIVATE void init();
 
           // Data
             /** Do we return ACCEPT when a match occurs. Default is <code>true</code>. */
@@ -209,11 +225,11 @@ namespace log4cplus {
          * available to <code>all</code> appenders for a more convenient way to
          * filter out events by LogLevel.
          */
-        class LOG4CPLUS_EXPORT LogLevelRangeFilter : public Filter {
+        class DCMTK_LOG4CPLUS_EXPORT LogLevelRangeFilter : public Filter {
         public:
           // ctors
             LogLevelRangeFilter();
-            LogLevelRangeFilter(const log4cplus::helpers::Properties& p, log4cplus::tstring& error);
+            LogLevelRangeFilter(const log4cplus::helpers::Properties& p);
 
             /**
              * Return the decision of this filter.
@@ -222,7 +238,7 @@ namespace log4cplus {
 
         private:
           // Methods
-            void init();
+            DCMTK_LOG4CPLUS_PRIVATE void init();
 
           // Data
             /** Do we return ACCEPT when a match occurs. Default is <code>true</code>. */
@@ -244,11 +260,11 @@ namespace log4cplus {
          * {@link #DENY} is returned. If there is no match, {@link #NEUTRAL}
          * is returned.
          */
-        class LOG4CPLUS_EXPORT StringMatchFilter : public Filter {
+        class DCMTK_LOG4CPLUS_EXPORT StringMatchFilter : public Filter {
         public:
           // ctors
             StringMatchFilter();
-            StringMatchFilter(const log4cplus::helpers::Properties& p, log4cplus::tstring& error);
+            StringMatchFilter(const log4cplus::helpers::Properties& p);
 
             /**
              * Returns {@link #NEUTRAL} is there is no string match.
@@ -257,7 +273,7 @@ namespace log4cplus {
 
         private:
           // Methods
-            void init();
+            DCMTK_LOG4CPLUS_PRIVATE void init();
 
           // Data
             /** Do we return ACCEPT when a match occurs. Default is <code>true</code>. */
@@ -267,7 +283,8 @@ namespace log4cplus {
 
     } // end namespace spi
 } // end namespace log4cplus
+} // end namespace dcmtk
 
-#endif /* LOG4CPLUS_SPI_FILTER_HEADER_ */
+#endif /* DCMTK_LOG4CPLUS_SPI_FILTER_HEADER_ */
 
 

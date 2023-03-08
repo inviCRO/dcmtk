@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1993-2010, OFFIS e.V.
+ *  Copyright (C) 1993-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: enums and structures used for the database index file
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:41 $
- *  CVS/RCS Revision: $Revision: 1.6 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DATAPRIV_H
@@ -31,10 +24,12 @@
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 
+#include "dcmtk/ofstd/ofoption.h"
 #include "dcmtk/dcmnet/dicom.h"
 #include "dcmtk/dcmdata/dcdatset.h"
 #include "dcmtk/dcmdata/dcuid.h"
 #include "dcmtk/dcmdata/dcdeftag.h"
+#include "dcmtk/dcmdata/dcspchrs.h"
 #include "dcmtk/dcmqrdb/dcmqrdbi.h"
 
 BEGIN_EXTERN_C
@@ -44,6 +39,12 @@ BEGIN_EXTERN_C
 #undef access
 #endif
 END_EXTERN_C
+
+// include this file in doxygen documentation
+
+/** @file dcmqridx.h
+ *  @brief type definitions and constants for the database index file
+ */
 
 /** types of query keys
  */
@@ -69,23 +70,6 @@ enum DB_QUERY_CLASS
     PATIENT_STUDY
 };
 
-/** types of database keys
- */
-enum DB_KEY_CLASS
-{
-    /// a date entry
-    DATE_CLASS,
-    /// a time entry
-    TIME_CLASS,
-    /// a UID entry
-    UID_CLASS,
-    /// a string entry
-    STRING_CLASS,
-    /// an entry not belonging to any other class
-    OTHER_CLASS
-};
-
-
 /** Level Strings
  */
 
@@ -109,13 +93,13 @@ enum DB_KEY_CLASS
 #define FL_MAX_LENGTH   32      /* FLoating point single */
 #define FD_MAX_LENGTH   64      /* Floating point Double */
 #define IS_MAX_LENGTH   96      /* Integer String        */
-#define LO_MAX_LENGTH   64      /* Long String           */
-#define LT_MAX_LENGTH   10240   /* Long Text             */
-#define PN_MAX_LENGTH   64      /* Person Name           */
-#define SH_MAX_LENGTH   16      /* Short String          */
+#define LO_MAX_LENGTH   256     /* Long String           */
+#define LT_MAX_LENGTH   40960   /* Long Text             */
+#define PN_MAX_LENGTH   256     /* Person Name           */
+#define SH_MAX_LENGTH   64      /* Short String          */
 #define SL_MAX_LENGTH   32      /* Signed Long           */
 #define SS_MAX_LENGTH   16      /* Signed Short          */
-#define ST_MAX_LENGTH   1024    /* Short Text            */
+#define ST_MAX_LENGTH   4096    /* Short Text            */
 #define TM_MAX_LENGTH   128     /* Time                  */
 #define UI_MAX_LENGTH   64      /* Unique Identifier     */
 #define UL_MAX_LENGTH   32      /* Unsigned Long         */
@@ -130,38 +114,72 @@ enum DB_KEY_CLASS
 #define SIZEOF_IDXRECORD        (sizeof (IdxRecord))
 #define SIZEOF_STUDYDESC        (sizeof (StudyDescRecord) * MAX_MAX_STUDIES)
 
+/* ENSURE THAT DBVERSION IS INCREMENTED WHENEVER ONE OF THESE STRUCTS IS MODIFIED */
+
+struct DCMTK_DCMQRDB_EXPORT DB_SerializedTagKey
+{
+    inline DB_SerializedTagKey() {}
+    inline DB_SerializedTagKey(const DcmTagKey& rhs) { *this = rhs; }
+    inline DB_SerializedTagKey& operator=(const DcmTagKey& tk) { key[0] = tk.getGroup(); key[1] = tk.getElement(); return *this; }
+    inline operator DcmTagKey() const { return DcmTagKey( key[0], key[1] ); }
+    inline bool operator==(const DB_SerializedTagKey& rhs) const { return key[0] == rhs.key[0] && key[1] == rhs.key[1]; }
+    Uint16 key[2];
+};
+
+/* ENSURE THAT DBVERSION IS INCREMENTED WHENEVER ONE OF THESE STRUCTS IS MODIFIED */
+
+struct DCMTK_DCMQRDB_EXPORT DB_SerializedCharPtr
+{
+    inline DB_SerializedCharPtr(char* p) { ptr.p = p; }
+    inline DB_SerializedCharPtr& operator=(char* p) { ptr.p = p; return *this; }
+    inline operator char*() const { return ptr.p; }
+    union
+    {
+        char* p;
+        Uint64 placeholder;
+    } ptr ;
+};
+
+/* ENSURE THAT DBVERSION IS INCREMENTED WHENEVER ONE OF THESE STRUCTS IS MODIFIED */
+
 /** this class provides a primitive interface for handling a flat DICOM element,
  *  similar to DcmElement, but only for use within the database module
  */
-struct DB_SmallDcmElmt
+struct DCMTK_DCMQRDB_EXPORT DB_SmallDcmElmt
 {
 public:
     /// default constructor
     DB_SmallDcmElmt();
 
     /// pointer to the value field
-    char* PValueField ;
+    DB_SerializedCharPtr PValueField ;
 
     /// value length in bytes
     Uint32 ValueLength ;
 
     /// attribute tag
-    DcmTagKey XTag ;
+    DB_SerializedTagKey XTag ;
 
 private:
-    /// private undefined copy constructor
+    /** private undefined copy constructor
+     * @param copy documented to avoid doxygen warning
+     */
     DB_SmallDcmElmt(const DB_SmallDcmElmt& copy);
-    /// private undefined copy assignment operator
+    /** private undefined copy assignment operator
+     * @param copy documented to avoid doxygen warning
+     */
     DB_SmallDcmElmt& operator=(const DB_SmallDcmElmt& copy);
 };
+
+/* ENSURE THAT DBVERSION IS INCREMENTED WHENEVER ONE OF THESE STRUCTS IS MODIFIED */
 
 /** this class provides a primitive interface for handling a list of flat DICOM elements,
  *  similar to DcmItem, but only for use within the database module
  */
-struct DB_ElementList
+struct DCMTK_DCMQRDB_EXPORT DB_ElementList
 {
     /// default constructor
-    DB_ElementList(): elem(), next(NULL) {}
+    DB_ElementList(): elem(), next(NULL), utf8Value() {}
 
     /// current list element
     DB_SmallDcmElmt elem ;
@@ -169,14 +187,23 @@ struct DB_ElementList
     /// pointer to next in list
     struct DB_ElementList *next ;
 
+    /// UTF-8 cache
+    OFoptional<OFString> utf8Value ;
+
 private:
-    /// private undefined copy constructor
+    /** private undefined copy constructor
+     * @param copy documented to avoid doxygen warning
+     */
     DB_ElementList(const DB_ElementList& copy);
-    /// private undefined copy assignment operator
+    /** private undefined copy assignment operator
+     * @param copy documented to avoid doxygen warning
+     */
     DB_ElementList& operator=(const DB_ElementList& copy);
 };
 
-struct DB_UidList
+/* ENSURE THAT DBVERSION IS INCREMENTED WHENEVER ONE OF THESE STRUCTS IS MODIFIED */
+
+struct DCMTK_DCMQRDB_EXPORT DB_UidList
 {
     char *patient ;
     char *study ;
@@ -185,27 +212,34 @@ struct DB_UidList
     struct DB_UidList *next ;
 };
 
-struct DB_CounterList
+/* ENSURE THAT DBVERSION IS INCREMENTED WHENEVER ONE OF THESE STRUCTS IS MODIFIED */
+
+struct DCMTK_DCMQRDB_EXPORT DB_CounterList
 {
     int idxCounter ;
     struct DB_CounterList *next ;
 };
 
-struct DB_FindAttr
+/* ENSURE THAT DBVERSION IS INCREMENTED WHENEVER ONE OF THESE STRUCTS IS MODIFIED */
+
+struct DCMTK_DCMQRDB_EXPORT DB_FindAttr
 {
     DcmTagKey tag ;
     DB_LEVEL level ;
     DB_KEY_TYPE keyAttr ;
-    DB_KEY_CLASS keyClass ;
 
     /* to passify some C++ compilers */
-    DB_FindAttr(const DcmTagKey& t, DB_LEVEL l, DB_KEY_TYPE kt, DB_KEY_CLASS kc)
-        : tag(t), level(l), keyAttr(kt), keyClass(kc) { }
+    DB_FindAttr(const DcmTagKey& t, DB_LEVEL l, DB_KEY_TYPE kt)
+        : tag(t), level(l), keyAttr(kt) { }
 };
 
-struct DB_Private_Handle
+/* ENSURE THAT DBVERSION IS INCREMENTED WHENEVER ONE OF THESE STRUCTS IS MODIFIED */
+
+struct DCMTK_DCMQRDB_EXPORT DB_Private_Handle
 {
     int pidx ;
+    OFString findRequestCharacterSet ;
+    DcmSpecificCharacterSet findRequestConverter ;
     DB_ElementList *findRequestList ;
     DB_ElementList *findResponseList ;
     DB_LEVEL queryLevel ;
@@ -221,6 +255,8 @@ struct DB_Private_Handle
 
     DB_Private_Handle()
     : pidx(0)
+    , findRequestCharacterSet()
+    , findRequestConverter()
     , findRequestList(NULL)
     , findResponseList(NULL)
     , queryLevel(STUDY_LEVEL)
@@ -237,30 +273,34 @@ struct DB_Private_Handle
     }
 };
 
+/* ENSURE THAT DBVERSION IS INCREMENTED WHENEVER ONE OF THESE STRUCTS IS MODIFIED */
+
 /** this struct defines the structure of each "Study Record" in the index.dat
  *  file maintained by this module. A Study Record is a direct binary copy
  *  of an instance of this struct.
  */
-struct StudyDescRecord
+struct DCMTK_DCMQRDB_EXPORT StudyDescRecord
 {
     /// Study Instance UID of the study described by this record
-    char StudyInstanceUID [UI_MAX_LENGTH] ;
+    char StudyInstanceUID [UI_MAX_LENGTH+1] ;
 
     /// combined size (in bytes) of all images of this study in the database
-    long StudySize ;
+    Uint32 StudySize ;
 
     /// timestamp for last update of this study. Format: output of time(2) converted to double.
     double LastRecordedDate ;
 
     /// number of images of this study in the database
-    int NumberofRegistratedImages ;
+    Uint32 NumberofRegistratedImages ;
 };
 
-struct ImagesofStudyArray
+/* ENSURE THAT DBVERSION IS INCREMENTED WHENEVER ONE OF THESE STRUCTS IS MODIFIED */
+
+struct DCMTK_DCMQRDB_EXPORT ImagesofStudyArray
 {
-    int idxCounter ;
+    Uint32 idxCounter ;
     double RecordedDate ;
-    long ImageSize ;
+    Uint32 ImageSize ;
 };
 
 
@@ -282,48 +322,46 @@ struct ImagesofStudyArray
 #define RECORDIDX_OtherPatientIDs                 5
 #define RECORDIDX_OtherPatientNames               6
 #define RECORDIDX_EthnicGroup                     7
-#define RECORDIDX_NumberofPatientRelatedStudies   8
-#define RECORDIDX_NumberofPatientRelatedSeries    9
-#define RECORDIDX_NumberofPatientRelatedInstances 10
-#define RECORDIDX_StudyDate                      11
-#define RECORDIDX_StudyTime                      12
-#define RECORDIDX_StudyID                        13
-#define RECORDIDX_StudyDescription               14
-#define RECORDIDX_NameOfPhysiciansReadingStudy   15
-#define RECORDIDX_AccessionNumber                16
-#define RECORDIDX_ReferringPhysicianName         17
-#define RECORDIDX_ProcedureDescription           18
-#define RECORDIDX_AttendingPhysiciansName        19
-#define RECORDIDX_StudyInstanceUID               20
-#define RECORDIDX_OtherStudyNumbers              21
-#define RECORDIDX_AdmittingDiagnosesDescription  22
-#define RECORDIDX_PatientAge                     23
-#define RECORDIDX_PatientSize                    24
-#define RECORDIDX_PatientWeight                  25
-#define RECORDIDX_Occupation                     26
-#define RECORDIDX_NumberofStudyRelatedSeries     27
-#define RECORDIDX_NumberofStudyRelatedInstances  28
-#define RECORDIDX_SeriesNumber                   29
-#define RECORDIDX_SeriesInstanceUID              30
-#define RECORDIDX_Modality                       31
-#define RECORDIDX_ImageNumber                    32
-#define RECORDIDX_SOPInstanceUID                 33
-#define RECORDIDX_SeriesDate                     34
-#define RECORDIDX_SeriesTime                     35
-#define RECORDIDX_SeriesDescription              36
-#define RECORDIDX_ProtocolName                   37
-#define RECORDIDX_OperatorsName                  38
-#define RECORDIDX_PerformingPhysicianName        39
-#define RECORDIDX_PresentationLabel              40
+#define RECORDIDX_StudyDate                       8
+#define RECORDIDX_StudyTime                       9
+#define RECORDIDX_StudyID                        10
+#define RECORDIDX_StudyDescription               11
+#define RECORDIDX_NameOfPhysiciansReadingStudy   12
+#define RECORDIDX_AccessionNumber                13
+#define RECORDIDX_ReferringPhysicianName         14
+#define RECORDIDX_ProcedureDescription           15
+#define RECORDIDX_AttendingPhysiciansName        16
+#define RECORDIDX_StudyInstanceUID               17
+#define RECORDIDX_OtherStudyNumbers              18
+#define RECORDIDX_AdmittingDiagnosesDescription  19
+#define RECORDIDX_PatientAge                     20
+#define RECORDIDX_PatientSize                    21
+#define RECORDIDX_PatientWeight                  22
+#define RECORDIDX_Occupation                     23
+#define RECORDIDX_SeriesNumber                   24
+#define RECORDIDX_SeriesInstanceUID              25
+#define RECORDIDX_Modality                       26
+#define RECORDIDX_ImageNumber                    27
+#define RECORDIDX_SOPInstanceUID                 28
+#define RECORDIDX_SeriesDate                     29
+#define RECORDIDX_SeriesTime                     30
+#define RECORDIDX_SeriesDescription              31
+#define RECORDIDX_ProtocolName                   32
+#define RECORDIDX_OperatorsName                  33
+#define RECORDIDX_PerformingPhysicianName        34
+#define RECORDIDX_PresentationLabel              35
+#define RECORDIDX_IssuerOfPatientID              36
+#define RECORDIDX_SpecificCharacterSet           37
 
-#define NBPARAMETERS                             41
+#define NBPARAMETERS                             38
 
+/* ENSURE THAT DBVERSION IS INCREMENTED WHENEVER ONE OF THESE STRUCTS IS MODIFIED */
 
 /** this class manages an instance entry of the index file.
  *  Each instance/image record within the index.dat file is
  *  a direct (binary) copy of this structure.
  */
-struct IdxRecord
+struct DCMTK_DCMQRDB_EXPORT IdxRecord
 {
     /// default constructor
     IdxRecord();
@@ -331,7 +369,7 @@ struct IdxRecord
     char    filename                        [DBC_MAXSTRING+1] ;
     char    SOPClassUID                     [UI_MAX_LENGTH+1] ;
     double  RecordedDate ;
-    int     ImageSize ;
+    Uint32  ImageSize ;
 
     DB_SmallDcmElmt param                   [NBPARAMETERS] ;
 
@@ -343,9 +381,6 @@ struct IdxRecord
     char    OtherPatientIDs                 [LO_MAX_LENGTH+1] ;
     char    OtherPatientNames               [PN_MAX_LENGTH+1] ;
     char    EthnicGroup                     [SH_MAX_LENGTH+1] ;
-    char    NumberofPatientRelatedStudies   [IS_MAX_LENGTH+1] ;
-    char    NumberofPatientRelatedSeries    [IS_MAX_LENGTH+1] ;
-    char    NumberofPatientRelatedInstances [IS_MAX_LENGTH+1] ;
 
     char    StudyDate                       [DA_MAX_LENGTH+1] ;
     char    StudyTime                       [TM_MAX_LENGTH+1] ;
@@ -364,8 +399,6 @@ struct IdxRecord
     char    PatientSize                     [DS_MAX_LENGTH+1] ;
     char    PatientWeight                   [DS_MAX_LENGTH+1] ;
     char    Occupation                      [SH_MAX_LENGTH+1] ;
-    char    NumberofStudyRelatedSeries      [IS_MAX_LENGTH+1] ;
-    char    NumberofStudyRelatedInstances   [IS_MAX_LENGTH+1] ;
 
     char    SeriesNumber                    [IS_MAX_LENGTH+1] ;
     char    SeriesInstanceUID               [UI_MAX_LENGTH+1] ;
@@ -381,11 +414,16 @@ struct IdxRecord
     char    OperatorsName                   [PN_MAX_LENGTH+1] ;
     char    PerformingPhysicianName         [PN_MAX_LENGTH+1] ;
     char    PresentationLabel               [CS_LABEL_MAX_LENGTH+1] ;
+    char    IssuerOfPatientID               [LO_MAX_LENGTH+1] ;
 
-    DVIFhierarchyStatus hstat;
+    char    hstat;
 
     // Not related to any particular DICOM attribute !
     char    InstanceDescription             [DESCRIPTION_MAX_LENGTH+1] ;
+
+    // Specific Character Set, support for VM ~ 8 (depending on the
+    // actual length of the used DTs)
+    char    SpecificCharacterSet            [CS_MAX_LENGTH*8+1] ;
 
 private:
     /* undefined */ IdxRecord(const IdxRecord& copy);
@@ -394,34 +432,3 @@ private:
 
 
 #endif
-
-/*
- * CVS Log
- * $Log: dcmqridx.h,v $
- * Revision 1.6  2010-10-14 13:16:41  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.5  2010-08-09 13:23:00  joergr
- * Updated data dictionary to 2009 edition of the DICOM standard. From now on,
- * the official "keyword" is used for the attribute name which results in a
- * number of minor changes (e.g. "PatientsName" is now called "PatientName").
- *
- * Revision 1.4  2009-01-30 14:45:02  joergr
- * Uncommented initialization of array variables in order to avoid compiler
- * warnings reported by VisualStudio 2005.
- *
- * Revision 1.3  2008-04-15 15:43:37  meichel
- * Fixed endless recursion bug in the index file handling code when
- *   the index file does not exist
- *
- * Revision 1.2  2005/12/08 16:04:24  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.1  2005/03/30 13:34:50  meichel
- * Initial release of module dcmqrdb that will replace module imagectn.
- *   It provides a clear interface between the Q/R DICOM front-end and the
- *   database back-end. The imagectn code has been re-factored into a minimal
- *   class structure.
- *
- *
- */

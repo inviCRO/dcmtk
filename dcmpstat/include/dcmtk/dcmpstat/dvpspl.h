@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2012, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose:
  *    classes: DVPSPresentationLUT
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:36 $
- *  CVS/RCS Revision: $Revision: 1.16 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DVPSPL_H
@@ -32,6 +25,7 @@
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 #include "dcmtk/dcmpstat/dvpstyp.h"     /* for enum types */
+#include "dcmtk/dcmpstat/dpdefine.h"
 #include "dcmtk/dcmdata/dcvrus.h"
 #include "dcmtk/dcmdata/dcvrui.h"
 #include "dcmtk/dcmdata/dcvrlo.h"
@@ -45,7 +39,7 @@ class DcmDataset;
 /** the representation of a Presentation LUT Content SQ item for Stored Print
  */  
 
-class DVPSPresentationLUT
+class DCMTK_DCMPSTAT_EXPORT DVPSPresentationLUT
 {
 public:
   /// default constructor
@@ -252,60 +246,3 @@ private:
 };
 
 #endif
-
-/*
- *  $Log: dvpspl.h,v $
- *  Revision 1.16  2010-10-14 13:16:36  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.15  2010-10-07 14:31:36  joergr
- *  Removed leading underscore characters from preprocessor symbols (reserved).
- *
- *  Revision 1.14  2009-11-24 14:12:57  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.13  2009-09-30 10:42:38  uli
- *  Make dcmpstat's include headers self-sufficient by including all
- *  needed headers directly and stop using dctk.h
- *
- *  Revision 1.12  2005-12-08 16:03:55  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.11  2003/08/27 14:59:09  meichel
- *  Moved all methods of class DVPSPresentationLUT that depend on module dcmimgle
- *    into a separate implementation file
- *
- *  Revision 1.10  2001/09/26 15:36:14  meichel
- *  Adapted dcmpstat to class OFCondition
- *
- *  Revision 1.9  2001/06/01 15:50:19  meichel
- *  Updated copyright header
- *
- *  Revision 1.8  2000/06/09 10:14:11  joergr
- *  Added support for rendering inverse presentation LUT into print bitmaps.
- *
- *  Revision 1.7  2000/06/07 14:20:18  joergr
- *  Added support for rendering "hardcopy" and "softcopy" presentation LUTs.
- *
- *  Revision 1.6  2000/06/02 16:00:49  meichel
- *  Adapted all dcmpstat classes to use OFConsole for log and error output
- *
- *  Revision 1.5  2000/05/31 12:56:39  meichel
- *  Added initial Print SCP support
- *
- *  Revision 1.4  2000/03/08 16:28:54  meichel
- *  Updated copyright header.
- *
- *  Revision 1.3  1999/10/07 17:21:49  meichel
- *  Reworked management of Presentation LUTs in order to create tighter
- *    coupling between Softcopy and Print.
- *
- *  Revision 1.2  1999/09/24 15:23:46  meichel
- *  Print spooler (dcmprtsv) now logs diagnostic messages in log files
- *    when operating in spool mode.
- *
- *  Revision 1.1  1999/07/30 13:34:49  meichel
- *  Added new classes managing Stored Print objects
- *
- *
- */

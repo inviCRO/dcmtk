@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1996-2010, OFFIS e.V.
+ *  Copyright (C) 1996-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: DiCurveFitting (header/implementation)
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:25 $
- *  CVS/RCS Revision: $Revision: 1.19 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -34,10 +27,7 @@
 #include "dcmtk/ofstd/oftypes.h"
 #include "dcmtk/ofstd/ofcast.h"
 
-#define INCLUDE_CMATH
-#define INCLUDE_CSTDDEF               /* For NULL */
-#include "dcmtk/ofstd/ofstdinc.h"
-
+#include <cmath>
 
 /*---------------------*
  *  macro definitions  *
@@ -88,9 +78,9 @@ class DiCurveFitting
             T3_ *beta = new T3_[order];
             if ((basis != NULL) && (alpha != NULL) && (beta != NULL))
             {
-                register unsigned int i;
-                register unsigned int j;
-                register unsigned int k;
+                unsigned int i;
+                unsigned int j;
+                unsigned int k;
                 for (i = 0; i < order; ++i)
                 {
                     for (j = 0; j < n; ++j)
@@ -163,8 +153,8 @@ class DiCurveFitting
         int result = 0;
         if ((y != NULL) && (c != NULL) && (n > 0) && (xe > xs))
         {
-            register unsigned int i;
-            register unsigned int j;
+            unsigned int i;
+            unsigned int j;
             T3_ x;
             T3_ x2;
             T3_ w;
@@ -266,9 +256,9 @@ class DiCurveFitting
         int result = 0;
         if ((a != NULL) && (b != NULL) && (n > 0))
         {
-            register unsigned int i;
-            register unsigned int j;
-            register unsigned int k;
+            unsigned int i;
+            unsigned int j;
+            unsigned int k;
             signed int pivot;
             T3_ mag;
             T3_ mag2;
@@ -330,75 +320,3 @@ class DiCurveFitting
 
 
 #endif
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: dicrvfit.h,v $
- * Revision 1.19  2010-10-14 13:16:25  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.18  2010-03-01 09:08:46  uli
- * Removed some unnecessary include directives in the headers.
- *
- * Revision 1.17  2005-12-08 16:47:35  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.16  2003/12/23 15:53:22  joergr
- * Replaced post-increment/decrement operators by pre-increment/decrement
- * operators where appropriate (e.g. 'i++' by '++i').
- *
- * Revision 1.15  2003/12/08 18:54:16  joergr
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- * Removed leading underscore characters from preprocessor symbols (reserved
- * symbols). Updated copyright header.
- *
- * Revision 1.14  2002/11/27 14:08:03  meichel
- * Adapted module dcmimgle to use of new header file ofstdinc.h
- *
- * Revision 1.13  2002/11/26 18:18:35  joergr
- * Replaced include for "math.h" with <math.h> to avoid inclusion of math.h in
- * the makefile dependencies.
- *
- * Revision 1.12  2002/10/31 10:10:45  meichel
- * Added workaround for a bug in the Sparc optimizer in gcc 3.2
- *
- * Revision 1.11  2002/07/19 08:23:12  joergr
- * Added missing doc++ comments.
- *
- * Revision 1.10  2002/07/18 12:28:11  joergr
- * Added explicit type casts to keep Sun CC 2.0.1 quiet.
- *
- * Revision 1.9  2001/06/01 15:49:40  meichel
- * Updated copyright header
- *
- * Revision 1.8  2000/03/08 16:24:14  meichel
- * Updated copyright header.
- *
- * Revision 1.7  2000/03/06 15:58:39  meichel
- * Changed static template functions to methods. Required for xlC 1.0 on AIX 3.2.
- *
- * Revision 1.6  1999/10/21 08:29:41  joergr
- * Renamed template type definition from 'T3' to 'T3_' to avoid naming
- * conflicts.
- *
- * Revision 1.5  1999/10/20 18:38:49  joergr
- * Eliminated default values for template types since this features is not
- * supported by SunCC 4.x (temporarily introduced '#define' instead).
- *
- * Revision 1.4  1999/10/20 10:32:44  joergr
- * Added generic specification for template function convertValue to avoid
- * compiler warnings reported by MSVC (with additional options?).
- *
- * Revision 1.3  1999/10/18 10:15:15  joergr
- * Fixed typos.
- *
- * Revision 1.2  1999/10/15 09:38:31  joergr
- * Fixed typos.
- *
- * Revision 1.1  1999/10/14 19:04:09  joergr
- * Added new template class that supports polynomial curve fitting algorithm.
- *
- *
- */

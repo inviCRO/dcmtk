@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2011, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: base classes for output streams
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:41 $
- *  CVS/RCS Revision: $Revision: 1.5 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCOSTRMA_H
@@ -38,7 +31,7 @@
 /** pure virtual abstract base class for consumers, i.e. the final node
  *  of a filter chain in an output stream.
  */
-class DcmConsumer
+class DCMTK_DCMDATA_EXPORT DcmConsumer
 {
 public:
 
@@ -94,7 +87,7 @@ public:
 /** pure virtual abstract base class for output filters, i.e.
  *  intermediate nodes of a filter chain in an output stream.
  */
-class DcmOutputFilter: public DcmConsumer
+class DCMTK_DCMDATA_EXPORT DcmOutputFilter: public DcmConsumer
 {
 public:
 
@@ -116,7 +109,7 @@ public:
 /** base class for output streams.
  *  This class cannot be instantiated since the constructor is protected.
  */
-class DcmOutputStream
+class DCMTK_DCMDATA_EXPORT DcmOutputStream
 {
 public:
 
@@ -210,26 +203,3 @@ private:
 
 
 #endif
-
-/*
- * CVS/RCS Log:
- * $Log: dcostrma.h,v $
- * Revision 1.5  2010-10-14 13:15:41  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.4  2009-11-04 09:58:07  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.3  2007-02-19 16:06:09  meichel
- * Class DcmOutputStream and related classes are now safe for use with
- *   large files (2 GBytes or more) if supported by compiler and operating system.
- *
- * Revision 1.2  2005/12/08 16:28:24  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.1  2002/08/27 16:55:36  meichel
- * Initial release of new DICOM I/O stream classes that add support for stream
- *   compression (deflated little endian explicit VR transfer syntax)
- *
- *
- */

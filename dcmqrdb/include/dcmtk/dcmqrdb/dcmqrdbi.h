@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1993-2010, OFFIS e.V.
+ *  Copyright (C) 1993-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Andrew Hewett, Marco Eichelberg
  *
  *  Purpose: class DcmQueryRetrieveIndexDatabaseHandle
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:41 $
- *  CVS/RCS Revision: $Revision: 1.8 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -43,7 +36,16 @@ struct IdxRecord;
 struct DB_ElementList;
 class DcmQueryRetrieveConfig;
 
-#define DBINDEXFILE "index.dat"
+/* ENSURE THAT DBVERSION IS INCREMENTED WHENEVER ONE OF THE INDEX FILE STRUCTS IS MODIFIED */
+
+#define DBINDEXFILE  "index.dat"
+#define DBMAGIC      "QRDB"
+#define DBVERSION    5
+#define DBHEADERSIZE 6
+
+#if DBVERSION > 0xFF
+#error maximum database version reached, you have to invent a new mechanism
+#endif
 
 #ifndef _WIN32
 /* we lock image files on all platforms except Win32 where it does not work
@@ -94,8 +96,15 @@ enum DVIFhierarchyStatus
  *  A database handle maintains a connection to a database and encapsulates database support for
  *  store, find and move/get operations.
  */
-class DcmQueryRetrieveIndexDatabaseHandle: public DcmQueryRetrieveDatabaseHandle
+class DCMTK_DCMQRDB_EXPORT DcmQueryRetrieveIndexDatabaseHandle: public DcmQueryRetrieveDatabaseHandle
 {
+private:
+  /// private undefined copy constructor
+  DcmQueryRetrieveIndexDatabaseHandle(const DcmQueryRetrieveIndexDatabaseHandle& other);
+
+  /// private undefined assignment operator
+  DcmQueryRetrieveIndexDatabaseHandle& operator=(const DcmQueryRetrieveIndexDatabaseHandle& other);
+
 public:
 
   /** Constructor. Creates and initializes a index file handle for the given 
@@ -133,12 +142,14 @@ public:
    *  @param newImageFileName file name is returned in this parameter.
    *    Memory must be provided by the caller and should be at least MAXPATHLEN+1 
    *    characters. The file name generated should be an absolute file name.
+   *  @param newImageFileNameLen length of buffer pointed to by newImageFileName
    *  @return EC_Normal upon normal completion, or some other OFCondition code upon failure.
    */
   OFCondition makeNewStoreFileName(
       const char *SOPClassUID,
       const char *SOPInstanceUID,
-      char *newImageFileName);
+      char       *newImageFileName,
+      size_t      newImageFileNameLen);
   
   /** register the given DICOM object, which has been received through a C-STORE 
    *  operation and stored in a file, in the database.
@@ -157,40 +168,21 @@ public:
       const char *imageFileName,
       DcmQueryRetrieveDatabaseStatus  *status,
       OFBool     isNew = OFTrue );
-  
-  /** initiate FIND operation using the given SOP class UID (which identifies
-   *  the query model) and DICOM dataset containing find request identifiers. 
-   *  @param SOPClassUID SOP class UID of query service, identifies Q/R model
-   *  @param findRequestIdentifiers dataset containing request identifiers (i.e., the query)
-   *    The caller retains responsibility for destroying the 
-   *    findRequestIdentifiers when no longer needed.
-   *  @param status pointer to DB status object in which a DIMSE status code 
-   *    suitable for use with the C-FIND-RSP message is set. Status will be
-   *    PENDING if any FIND responses will be generated or SUCCESS if no FIND responses will
-   *    be generated (SUCCESS indicates the completion of a operation), or
-   *    another status code upon failure. 
-   *  @return EC_Normal upon normal completion, or some other OFCondition code upon failure.
+
+  /** @copydoc DcmQueryRetrieveDatabaseHandle::startFindRequest()
    */
   OFCondition startFindRequest(
       const char *SOPClassUID,
       DcmDataset *findRequestIdentifiers,
       DcmQueryRetrieveDatabaseStatus *status);     
-                
-  /** return the next available FIND response as a new DICOM dataset.
-   *  @param findResponseIdentifiers DICOM dataset returned in this parameter.
-   *    The caller is responsible for destroying the findResponseIdentifiers
-   *    when no longer needed.
-   *  @param status pointer to DB status object in which a DIMSE status code 
-   *    suitable for use with the C-FIND-RSP message is set. Status will be
-   *    PENDING if more FIND responses will be generated or SUCCESS if no more 
-   *    FIND responses will be generated (SUCCESS indicates the completion of 
-   *    a operation), or another status code upon failure. 
-   *  @return EC_Normal upon normal completion, or some other OFCondition code upon failure.
+
+  /** @copydoc DcmQueryRetrieveDatabaseHandle::nextFindResponse()
    */
   OFCondition nextFindResponse(
       DcmDataset **findResponseIdentifiers,
-      DcmQueryRetrieveDatabaseStatus *status);
-   
+      DcmQueryRetrieveDatabaseStatus *status,
+      const DcmQueryRetrieveCharacterSetOptions& characterSetOptions);
+
   /** cancel the ongoing FIND request, stop and reset every running operation
    *  associated with this request, delete existing temporary files.
    *  @param status pointer to DB status object in which a DIMSE status code 
@@ -222,10 +214,13 @@ public:
    *  imageFileName containing the requested data). 
    *  @param SOPClassUID pointer to string of at least 65 characters into 
    *    which the SOP class UID for the next DICOM object to be transferred is copied.
+   *  @param SOPClassUIDSize size of SOPClassUID element
    *  @param SOPInstanceUID pointer to string of at least 65 characters into 
    *    which the SOP instance UID for the next DICOM object to be transferred is copied.
+   *  @param SOPInstanceUIDSize size of SOPInstanceUID element
    *  @param imageFileName pointer to string of at least MAXPATHLEN+1 characters into 
    *    which the file path for the next DICOM object to be transferred is copied.
+   *  @param imageFileNameSize size of imageFileName element
    *  @param numberOfRemainingSubOperations On return, this parameter will contain
    *     the number of suboperations still remaining for the request
    *     (this number is needed by move responses with PENDING status).
@@ -238,11 +233,14 @@ public:
    */  
   OFCondition nextMoveResponse(
       char *SOPClassUID,
+      size_t SOPClassUIDSize,
       char *SOPInstanceUID,
+      size_t SOPInstanceUIDSize,
       char *imageFileName,
+      size_t imageFileNameSize,
       unsigned short *numberOfRemainingSubOperations,
       DcmQueryRetrieveDatabaseStatus *status);
-  
+
   /** cancel the ongoing MOVE request, stop and reset every running operation
    *  associated with this request, delete existing temporary files.
    *  @param status pointer to DB status object in which a DIMSE status code 
@@ -260,6 +258,7 @@ public:
 
   /** enable/disable the DB quota system (default: enabled) which causes images
    *  to be deleted if certain boundaries (number of studies, bytes per study) are exceeded.
+   *  @param enable weather to disable/enable
    */
   void enableQuotaSystem(OFBool enable);
 
@@ -267,6 +266,14 @@ public:
    *  @param storeArea name of storage area, must not be NULL
    */
   static void printIndexFile (char *storeArea);
+  
+  /** search for a SOP class and SOP instance UIDs in index file. 
+  *  @param storeArea name of storage area, must not be NULL
+  *  @param sopClassUID SOP Class UID to search for
+  *  @param sopInstanceUID SOP Instance UID to search for
+  *  @return OFTrue if SOP Class and SOP Instance UIDs are found. otherwise return OFFalse.
+  */
+  OFBool findSOPInstance(const char *storeArea, const OFString &sopClassUID,const OFString &sopInstanceUID);
     
   /** deletes the given file only if the quota mechanism is enabled.
    *  The image is not de-registered from the database by this routine.
@@ -338,17 +345,35 @@ public:
       
 private:
 
+  /** a private helper class that performs character set conversions on the fly
+   *  (if necessary) before matching.
+   */
+  class CharsetConsideringMatcher;
+
+  /** Determine if a character set is not compatible to UTF-8, i.e.\ if it is
+   *  not UTF-8 or ASCII.
+   *  @param characterSet the character set to inspect.
+   *  @return OFTrue if the character set is neither ASCII nor UTF-8, OFFalse
+   *    otherwise.
+   */
+  static OFBool isConversionToUTF8Necessary(const OFString& characterSet);
+
+  /** Determine if data in the source character set must be converted to
+   *  be compatible to the given destination character set.
+   *  @param sourceCharacterSet the character set the data is encoded in.
+   *  @param destinationCharacterSet the character set that is requested,
+   *    e.g. the character set that the SCU understands.
+   *  @return OFTrue if the source character set is not equal to and not a
+   *    subset of the destination character set, OFFalse otherwise.
+   */
+  static OFBool isConversionNecessary(const OFString& sourceCharacterSet,
+                                      const OFString& destinationCharacterSet);
+
   OFCondition removeDuplicateImage(
       const char *SOPInstanceUID, const char *StudyInstanceUID,
       StudyDescRecord *pStudyDesc, const char *newImageFileName);
   int deleteOldestStudy(StudyDescRecord *pStudyDesc);
   OFCondition deleteOldestImages(StudyDescRecord *pStudyDesc, int StudyNum, char *StudyUID, long RequiredSize);
-  int matchDate (DB_SmallDcmElmt *mod, DB_SmallDcmElmt *elt);
-  int matchTime (DB_SmallDcmElmt *mod, DB_SmallDcmElmt *elt);
-  int matchUID (DB_SmallDcmElmt *mod, DB_SmallDcmElmt *elt);
-  int matchStrings (DB_SmallDcmElmt *mod, DB_SmallDcmElmt *elt);
-  int matchOther (DB_SmallDcmElmt *mod, DB_SmallDcmElmt *elt);
-  int dbmatch (DB_SmallDcmElmt *mod, DB_SmallDcmElmt *elt);
   void makeResponseList(DB_Private_Handle *phandle, IdxRecord *idxRec);
   int matchStudyUIDInStudyDesc (StudyDescRecord *pStudyDesc, char *StudyUID, int maxStudiesAllowed);
   OFCondition checkupinStudyDesc(StudyDescRecord *pStudyDesc, char *StudyUID, long imageSize);
@@ -358,7 +383,8 @@ private:
       IdxRecord         *idxRec,
       DB_LEVEL          level,
       DB_LEVEL          infLevel,
-      int               *match);
+      int               *match,
+      CharsetConsideringMatcher& dbmatch);
 
   OFCondition testFindRequestList (
       DB_ElementList  *findRequestList,
@@ -393,8 +419,15 @@ private:
 /** Index database factory class. Instances of this class are able to create database
  *  handles for a given called application entity title.
  */
-class DcmQueryRetrieveIndexDatabaseHandleFactory: public DcmQueryRetrieveDatabaseHandleFactory
+class DCMTK_DCMQRDB_EXPORT DcmQueryRetrieveIndexDatabaseHandleFactory: public DcmQueryRetrieveDatabaseHandleFactory
 {
+private:
+  /// private undefined copy constructor
+  DcmQueryRetrieveIndexDatabaseHandleFactory(const DcmQueryRetrieveIndexDatabaseHandleFactory& other);
+
+  /// private undefined assignment operator
+  DcmQueryRetrieveIndexDatabaseHandleFactory& operator=(const DcmQueryRetrieveIndexDatabaseHandleFactory& other);
+
 public:
 
   /** constructor
@@ -425,39 +458,3 @@ private:
 };
 
 #endif
-
-/*
- * CVS Log
- * $Log: dcmqrdbi.h,v $
- * Revision 1.8  2010-10-14 13:16:41  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.7  2009-11-24 10:10:42  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.6  2009-08-21 09:50:07  joergr
- * Replaced tabs by spaces and updated copyright date.
- *
- * Revision 1.5  2008-04-15 15:43:37  meichel
- * Fixed endless recursion bug in the index file handling code when
- *   the index file does not exist
- *
- * Revision 1.4  2005/12/08 16:04:22  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.3  2005/04/22 15:36:34  meichel
- * Passing calling aetitle to DcmQueryRetrieveDatabaseHandleFactory::createDBHandle
- *   to allow configuration retrieval based on calling aetitle.
- *
- * Revision 1.2  2005/04/04 10:04:45  meichel
- * Added public declarations for index file functions that are
- *   used from module dcmpstat
- *
- * Revision 1.1  2005/03/30 13:34:50  meichel
- * Initial release of module dcmqrdb that will replace module imagectn.
- *   It provides a clear interface between the Q/R DICOM front-end and the
- *   database back-end. The imagectn code has been re-factored into a minimal
- *   class structure.
- *
- *
- */

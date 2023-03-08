@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2010, OFFIS e.V.
+ *  Copyright (C) 2002-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose: test program for the non-trivial fseek and ftell implementations
  *           in class OFFile
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-12-20 12:05:20 $
- *  CVS/RCS Revision: $Revision: 1.8 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
@@ -32,11 +25,13 @@
 #include "dcmtk/ofstd/ofstream.h"
 #include "dcmtk/ofstd/ofconsol.h"
 #include "dcmtk/ofstd/ofstd.h"
+#include "dcmtk/ofstd/ofrand.h"
+#include "dcmtk/ofstd/ofdiag.h"      /* for DCMTK_DIAGNOSTIC macros */
 
-#define INCLUDE_CTIME
-#define INCLUDE_CSTDLIB
-#define INCLUDE_IOSTREAM
-#include "dcmtk/ofstd/ofstdinc.h"
+#include DCMTK_DIAGNOSTIC_IGNORE_CONST_EXPRESSION_WARNING
+
+#define OFTEST_OFSTD_ONLY
+#include "dcmtk/ofstd/oftest.h"
 
 // size of block (Uint32 values, not bytes): 1 MByte
 #define BLOCKSIZE 0x40000
@@ -45,7 +40,7 @@
 
 #define FILENAME "testfile.$$$"
 
-OFBool fillFile(OFFile& file)
+static OFBool fillFile(OFFile& file)
 {
   Uint32 *buf = new Uint32[BLOCKSIZE];
   if (buf == NULL)
@@ -80,12 +75,14 @@ OFBool fillFile(OFFile& file)
   return OFTrue;
 }
 
-Uint32 myRand(Uint32 max)
+static Uint32 myRand(OFRandom& rnd, Uint32 max)
 {
-   return OFstatic_cast(Uint32, (OFstatic_cast(double, max) * rand() / RAND_MAX)); // 0.. max * RAND_MAX
+   Uint32 result = OFstatic_cast(Uint32, (OFstatic_cast(double, max) * rnd.getRND32() / OFstatic_cast(Uint32, -1))); 
+   if (result > max) result = max;
+   return result;
 }
 
-OFBool seekFile(OFFile &file)
+static OFBool seekFile(OFFile &file)
 {
   offile_off_t pos, lastpos;
   offile_off_t expected;
@@ -94,6 +91,7 @@ OFBool seekFile(OFFile &file)
   Uint32 v;
   Uint32 block;
   Uint32 offset;
+  OFRandom rnd;
 
   COUT << "Seeking to start of blocks using SEEK_SET\n"
        << "[0%------------25%-------------50%--------------75%----------100%]\n[" << STD_NAMESPACE flush;
@@ -142,8 +140,8 @@ OFBool seekFile(OFFile &file)
   // fseek to random blocks using SEEK_SET
   for (i = 0; i < 1024; ++i)
   {
-    block = myRand(FILESIZE - 1);
-    offset = myRand(BLOCKSIZE - 1);
+    block = myRand(rnd, FILESIZE - 1);
+    offset = myRand(rnd, BLOCKSIZE - 1);
     pos = block * BLOCKSIZE * sizeof(Uint32) + offset * sizeof(Uint32);
     result = file.fseek(pos, SEEK_SET);
     if (result)
@@ -220,8 +218,8 @@ OFBool seekFile(OFFile &file)
   // fseek to random blocks using SEEK_END
   for (i = 0; i < 1024; ++i)
   {
-    block = myRand(FILESIZE - 2); // this avoids that pos can ever be 0, which would cause us to read after the end of file.
-    offset = myRand(BLOCKSIZE - 1);
+    block = myRand(rnd, FILESIZE - 2); // this avoids that pos can ever be 0, which would cause us to read after the end of file.
+    offset = myRand(rnd, BLOCKSIZE - 1);
     pos = OFstatic_cast(offile_off_t, -1) * (FILESIZE - block - 1) * BLOCKSIZE * sizeof(Uint32) + offset * sizeof(Uint32);
     result = file.fseek(pos, SEEK_END);
     if (result)
@@ -232,7 +230,8 @@ OFBool seekFile(OFFile &file)
     if (1 == file.fread(&v, sizeof(Uint32), 1))
     {
       // successfully read value. Now check if the value is correct.
-      expected = (OFstatic_cast(offile_off_t, FILESIZE) * BLOCKSIZE * sizeof(Uint32) + pos) / sizeof(Uint32);
+      expected = OFstatic_cast(offile_off_t, FILESIZE);
+      expected = (expected * BLOCKSIZE * sizeof(Uint32) + pos) / sizeof(Uint32);
       if (v != OFstatic_cast(Uint32, expected))
       {
         COUT << "\nError: unexpected data read after fseek(SEEK_END) to block " << block
@@ -301,8 +300,8 @@ OFBool seekFile(OFFile &file)
   lastpos = 0;
   for (i = 0; i < 1024; ++i)
   {
-    block = myRand(FILESIZE - 1);
-    offset = myRand(BLOCKSIZE - 1);
+    block = myRand(rnd, FILESIZE - 1);
+    offset = myRand(rnd, BLOCKSIZE - 1);
     pos = block * BLOCKSIZE * sizeof(Uint32) + offset * sizeof(Uint32);
     result = file.fseek((pos-lastpos), SEEK_CUR);
     if (result)
@@ -334,12 +333,9 @@ OFBool seekFile(OFFile &file)
   return OFTrue;
 }
 
-int main()
+OFTEST_FLAGS(ofstd_OFFile, EF_Slow)
 {
   COUT << "Test program for LFS support in DCMTK class OFFile\n" << OFendl;
-
-  // initialize random generator
-  srand(OFstatic_cast(unsigned int, time(NULL)));
 
   // check if typedefs are large enough
   COUT << "Checking typedefs.\n"
@@ -347,10 +343,10 @@ int main()
   if (sizeof(offile_off_t) > 4) COUT << " - OK\n"; else COUT << " - too small, no LFS support\n";
   COUT << "- size of offile_fpos_t: " << sizeof(offile_fpos_t);
   if (sizeof(offile_fpos_t) > 4) COUT << " - OK\n"; else COUT << " - too small, no LFS support\n";
-  if ((sizeof(offile_off_t) <= 4 || sizeof(offile_fpos_t) <= 4))
+  if ((sizeof(offile_off_t) <= 4) || (sizeof(offile_fpos_t) <= 4))
   {
-    COUT << "No LFS support available. LFS test failed." << OFendl;
-    return 10;
+    OFCHECK_FAIL("No LFS support available. LFS test failed.");
+    return;
   }
 
   OFFile file;
@@ -364,20 +360,20 @@ int main()
     COUT << "\nCreating a 6 GByte data file." << OFendl << STD_NAMESPACE flush;
     if (!file.fopen(FILENAME, "w+b"))
     {
-      COUT << "Error: Unable to create file " << FILENAME << ". LFS test failed." << OFendl;
-      return 10;
+      OFCHECK_FAIL("Error: Unable to create file " << FILENAME << ". LFS test failed." << OFendl);
+      return;
     }
 
     if (! fillFile(file))
     {
-      COUT << "Error: Unable to write 6 GByte of data. LFS test failed." << OFendl;
-      return 10;
+      OFCHECK_FAIL("Error: Unable to write 6 GByte of data. LFS test failed.");
+      return;
     }
 
     if (! seekFile(file))
     {
-      COUT << "Error: fseek() tests unsuccessful. LFS test failed." << OFendl;
-      return 10;
+      OFCHECK_FAIL("Error: fseek() tests unsuccessful. LFS test failed.");
+      return;
     }
 
     COUT << "Closing file." << OFendl << STD_NAMESPACE flush;
@@ -389,48 +385,13 @@ int main()
 
   if (!file.fopen(FILENAME, "rb"))
   {
-    COUT << "Error: Unable to open file " << FILENAME << ". LFS test failed." << OFendl;
-    return 10;
+    OFCHECK_FAIL("Error: Unable to open file " << FILENAME << ". LFS test failed.");
+    return;
   }
 
   if (! seekFile(file))
   {
-    COUT << "Error: fseek() tests unsuccessful. LFS test failed." << OFendl;
-    return 10;
+    OFCHECK_FAIL("Error: fseek() tests unsuccessful. LFS test failed.");
+    return;
   }
-
-
-  return 0;
 }
-
-/*
- * CVS/RCS Log:
- * $Log: toffile.cc,v $
- * Revision 1.8  2010-12-20 12:05:20  joergr
- * Added explicit type casts in order to keep gcc 2.95.3 quiet.
- *
- * Revision 1.7  2010-12-13 13:08:37  uli
- * Fix toffile by moving some casts to the correct position.
- *
- * Revision 1.6  2010-12-06 13:10:27  joergr
- * Restructured calculation of seek position in order to avoid warning messages.
- *
- * Revision 1.5  2010-11-22 13:08:08  uli
- * Use a macro instead of repeating the filename of the test file.
- *
- * Revision 1.4  2010-10-14 13:15:15  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.3  2010-08-05 08:38:11  uli
- * Fixed some warnings from -Wold-style-cast.
- *
- * Revision 1.2  2009-08-07 16:18:48  meichel
- * Fixed some seek offset computations in SEEK_END tests
- *
- * Revision 1.1  2006/08/21 12:41:10  meichel
- * Added test application that checks whether class OFFile can correctly
- *   process large files (> 4 GBytes), including emulations of fseek and ftell,
- *   which are non-trivial on certain platforms such as Win32.
- *
- *
- */

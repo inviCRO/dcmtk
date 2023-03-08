@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2000-2010, OFFIS e.V.
+ *  Copyright (C) 2000-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -11,19 +11,12 @@
  *    D-26121 Oldenburg, Germany
  *
  *
- *  Module:  dcmsr
+ *  Module: dcmsr
  *
- *  Author:  Joerg Riesmeier
+ *  Author: Joerg Riesmeier
  *
  *  Purpose:
  *    classes: DSRContentItem
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:40 $
- *  CVS/RCS Revision: $Revision: 1.15 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -40,6 +33,7 @@
 #include "dcmtk/dcmsr/dsruidtn.h"
 #include "dcmtk/dcmsr/dsrpnmtn.h"
 #include "dcmtk/dcmsr/dsrscotn.h"
+#include "dcmtk/dcmsr/dsrsc3tn.h"
 #include "dcmtk/dcmsr/dsrtcotn.h"
 #include "dcmtk/dcmsr/dsrcomtn.h"
 #include "dcmtk/dcmsr/dsrimgtn.h"
@@ -49,24 +43,58 @@
 
 
 // definition of empty default objects
-const OFString DSRContentItem::EmptyString;
-const DSRCodedEntryValue DSRContentItem::EmptyCodedEntry;
-const DSRNumericMeasurementValue DSRContentItem::EmptyNumericMeasurement;
-const DSRSpatialCoordinatesValue DSRContentItem::EmptySpatialCoordinates;
-const DSRTemporalCoordinatesValue DSRContentItem::EmptyTemporalCoordinates;
-const DSRCompositeReferenceValue DSRContentItem::EmptyCompositeReference;
-const DSRImageReferenceValue DSRContentItem::EmptyImageReference;
-const DSRWaveformReferenceValue DSRContentItem::EmptyWaveformReference;
+const OFString                     DSRContentItem::EmptyString;
+const DSRCodedEntryValue           DSRContentItem::EmptyCodedEntry;
+const DSRSpatialCoordinatesValue   DSRContentItem::EmptySpatialCoordinates;
+const DSRSpatialCoordinates3DValue DSRContentItem::EmptySpatialCoordinates3D;
+const DSRTemporalCoordinatesValue  DSRContentItem::EmptyTemporalCoordinates;
+const DSRCompositeReferenceValue   DSRContentItem::EmptyCompositeReference;
+const DSRImageReferenceValue       DSRContentItem::EmptyImageReference;
+const DSRWaveformReferenceValue    DSRContentItem::EmptyWaveformReference;
 
 
 DSRContentItem::DSRContentItem()
-  : TreeNode(NULL)
+  : TreeNode(NULL),
+    DeleteTreeNode(OFFalse),
+    EmptyNumericMeasurement()
 {
+}
+
+
+DSRContentItem::DSRContentItem(const DSRContentItem &item)
+  : TreeNode(NULL),
+    DeleteTreeNode(OFTrue),
+    EmptyNumericMeasurement()
+{
+    if (item.TreeNode != NULL)
+        TreeNode = item.TreeNode->clone();
 }
 
 
 DSRContentItem::~DSRContentItem()
 {
+    if (DeleteTreeNode)
+        delete TreeNode;
+}
+
+
+OFBool DSRContentItem::operator==(const DSRContentItem &item) const
+{
+    OFBool result = (TreeNode == item.TreeNode);
+    /* call comparison operator (if referenced tree nodes are not the same) */
+    if (!result && (TreeNode != NULL) && (item.TreeNode != NULL))
+        result = TreeNode->operator==(*item.TreeNode);
+    return result;
+}
+
+
+OFBool DSRContentItem::operator!=(const DSRContentItem &item) const
+{
+    OFBool result = (TreeNode != item.TreeNode);
+    /* call comparison operator (if referenced tree nodes are not the same) */
+    if (result && (TreeNode != NULL) && (item.TreeNode != NULL))
+        result = TreeNode->operator!=(*item.TreeNode);
+    return result;
 }
 
 
@@ -151,7 +179,8 @@ const OFString &DSRContentItem::getStringValue() const
 }
 
 
-OFCondition DSRContentItem::setStringValue(const OFString &stringValue)
+OFCondition DSRContentItem::setStringValue(const OFString &stringValue,
+                                           const OFBool check)
 {
     OFCondition result = EC_IllegalCall;
     if (TreeNode != NULL)
@@ -159,22 +188,22 @@ OFCondition DSRContentItem::setStringValue(const OFString &stringValue)
         switch (TreeNode->getValueType())
         {
             case VT_Text:
-                result = OFstatic_cast(DSRTextTreeNode *, TreeNode)->setValue(stringValue);
+                result = OFstatic_cast(DSRTextTreeNode *, TreeNode)->setValue(stringValue, check);
                 break;
             case VT_DateTime:
-                result = OFstatic_cast(DSRDateTimeTreeNode *, TreeNode)->setValue(stringValue);
+                result = OFstatic_cast(DSRDateTimeTreeNode *, TreeNode)->setValue(stringValue, check);
                 break;
             case VT_Date:
-                result = OFstatic_cast(DSRDateTreeNode *, TreeNode)->setValue(stringValue);
+                result = OFstatic_cast(DSRDateTreeNode *, TreeNode)->setValue(stringValue, check);
                 break;
             case VT_Time:
-                result = OFstatic_cast(DSRTimeTreeNode *, TreeNode)->setValue(stringValue);
+                result = OFstatic_cast(DSRTimeTreeNode *, TreeNode)->setValue(stringValue, check);
                 break;
             case VT_UIDRef:
-                result = OFstatic_cast(DSRUIDRefTreeNode *, TreeNode)->setValue(stringValue);
+                result = OFstatic_cast(DSRUIDRefTreeNode *, TreeNode)->setValue(stringValue, check);
                 break;
             case VT_PName:
-                result = OFstatic_cast(DSRPNameTreeNode *, TreeNode)->setValue(stringValue);
+                result = OFstatic_cast(DSRPNameTreeNode *, TreeNode)->setValue(stringValue, check);
                 break;
             default:
                 break;
@@ -222,13 +251,14 @@ OFCondition DSRContentItem::getCodeValue(DSRCodedEntryValue &codeValue) const
 }
 
 
-OFCondition DSRContentItem::setCodeValue(const DSRCodedEntryValue &codeValue)
+OFCondition DSRContentItem::setCodeValue(const DSRCodedEntryValue &codeValue,
+                                         const OFBool check)
 {
     OFCondition result = EC_IllegalCall;
     if (TreeNode != NULL)
     {
         if (TreeNode->getValueType() == VT_Code)
-            result = OFstatic_cast(DSRCodeTreeNode *, TreeNode)->setValue(codeValue);
+            result = OFstatic_cast(DSRCodeTreeNode *, TreeNode)->setValue(codeValue, check);
     }
     return result;
 }
@@ -272,13 +302,14 @@ OFCondition DSRContentItem::getNumericValue(DSRNumericMeasurementValue &numericV
 }
 
 
-OFCondition DSRContentItem::setNumericValue(const DSRNumericMeasurementValue &numericValue)
+OFCondition DSRContentItem::setNumericValue(const DSRNumericMeasurementValue &numericValue,
+                                            const OFBool check)
 {
     OFCondition result = EC_IllegalCall;
     if (TreeNode != NULL)
     {
         if (TreeNode->getValueType() == VT_Num)
-            result = OFstatic_cast(DSRNumTreeNode *, TreeNode)->setValue(numericValue);
+            result = OFstatic_cast(DSRNumTreeNode *, TreeNode)->setValue(numericValue, check);
     }
     return result;
 }
@@ -322,13 +353,65 @@ OFCondition DSRContentItem::getSpatialCoordinates(DSRSpatialCoordinatesValue &co
 }
 
 
-OFCondition DSRContentItem::setSpatialCoordinates(const DSRSpatialCoordinatesValue &coordinatesValue)
+OFCondition DSRContentItem::setSpatialCoordinates(const DSRSpatialCoordinatesValue &coordinatesValue,
+                                                  const OFBool check)
 {
     OFCondition result = EC_IllegalCall;
     if (TreeNode != NULL)
     {
         if (TreeNode->getValueType() == VT_SCoord)
-            result = OFstatic_cast(DSRSCoordTreeNode *, TreeNode)->setValue(coordinatesValue);
+            result = OFstatic_cast(DSRSCoordTreeNode *, TreeNode)->setValue(coordinatesValue, check);
+    }
+    return result;
+}
+
+
+DSRSpatialCoordinates3DValue *DSRContentItem::getSpatialCoordinates3DPtr()
+{
+    DSRSpatialCoordinates3DValue *pointer = NULL;
+    if (TreeNode != NULL)
+    {
+        if (TreeNode->getValueType() == VT_SCoord3D)
+            pointer = OFstatic_cast(DSRSCoord3DTreeNode *, TreeNode)->getValuePtr();
+    }
+    return pointer;
+}
+
+
+const DSRSpatialCoordinates3DValue &DSRContentItem::getSpatialCoordinates3D() const
+{
+    if (TreeNode != NULL)
+    {
+        if (TreeNode->getValueType() == VT_SCoord3D)
+            return OFstatic_cast(DSRSCoord3DTreeNode *, TreeNode)->getValue();
+    }
+    return EmptySpatialCoordinates3D;
+}
+
+
+OFCondition DSRContentItem::getSpatialCoordinates3D(DSRSpatialCoordinates3DValue &coordinatesValue) const
+{
+    OFCondition result = EC_IllegalCall;
+    if (TreeNode != NULL)
+    {
+        if (TreeNode->getValueType() == VT_SCoord3D)
+            result= OFstatic_cast(DSRSCoord3DTreeNode *, TreeNode)->getValue(coordinatesValue);
+        else
+            coordinatesValue.clear();
+    } else
+        coordinatesValue.clear();
+    return result;
+}
+
+
+OFCondition DSRContentItem::setSpatialCoordinates3D(const DSRSpatialCoordinates3DValue &coordinatesValue,
+                                                    const OFBool check)
+{
+    OFCondition result = EC_IllegalCall;
+    if (TreeNode != NULL)
+    {
+        if (TreeNode->getValueType() == VT_SCoord3D)
+            result = OFstatic_cast(DSRSCoord3DTreeNode *, TreeNode)->setValue(coordinatesValue, check);
     }
     return result;
 }
@@ -372,13 +455,14 @@ OFCondition DSRContentItem::getTemporalCoordinates(DSRTemporalCoordinatesValue &
 }
 
 
-OFCondition DSRContentItem::setTemporalCoordinates(const DSRTemporalCoordinatesValue &coordinatesValue)
+OFCondition DSRContentItem::setTemporalCoordinates(const DSRTemporalCoordinatesValue &coordinatesValue,
+                                                   const OFBool check)
 {
     OFCondition result = EC_IllegalCall;
     if (TreeNode != NULL)
     {
         if (TreeNode->getValueType() == VT_TCoord)
-            result = OFstatic_cast(DSRTCoordTreeNode *, TreeNode)->setValue(coordinatesValue);
+            result = OFstatic_cast(DSRTCoordTreeNode *, TreeNode)->setValue(coordinatesValue, check);
     }
     return result;
 }
@@ -422,16 +506,14 @@ OFCondition DSRContentItem::getCompositeReference(DSRCompositeReferenceValue &re
 }
 
 
-OFCondition DSRContentItem::setCompositeReference(const DSRCompositeReferenceValue &referenceValue)
+OFCondition DSRContentItem::setCompositeReference(const DSRCompositeReferenceValue &referenceValue,
+                                                  const OFBool check)
 {
     OFCondition result = EC_IllegalCall;
     if (TreeNode != NULL)
     {
         if (TreeNode->getValueType() == VT_Composite)
-        {
-            OFstatic_cast(DSRCompositeTreeNode *, TreeNode)->setValue(referenceValue);
-            result = EC_Normal;
-        }
+            result = OFstatic_cast(DSRCompositeTreeNode *, TreeNode)->setValue(referenceValue, check);
     }
     return result;
 }
@@ -475,16 +557,14 @@ OFCondition DSRContentItem::getImageReference(DSRImageReferenceValue &referenceV
 }
 
 
-OFCondition DSRContentItem::setImageReference(const DSRImageReferenceValue &referenceValue)
+OFCondition DSRContentItem::setImageReference(const DSRImageReferenceValue &referenceValue,
+                                              const OFBool check)
 {
     OFCondition result = EC_IllegalCall;
     if (TreeNode != NULL)
     {
         if (TreeNode->getValueType() == VT_Image)
-        {
-            OFstatic_cast(DSRImageTreeNode *, TreeNode)->setValue(referenceValue);
-            result = EC_Normal;
-        }
+            result = OFstatic_cast(DSRImageTreeNode *, TreeNode)->setValue(referenceValue, check);
     }
     return result;
 }
@@ -528,16 +608,14 @@ OFCondition DSRContentItem::getWaveformReference(DSRWaveformReferenceValue &refe
 }
 
 
-OFCondition DSRContentItem::setWaveformReference(const DSRWaveformReferenceValue &referenceValue)
+OFCondition DSRContentItem::setWaveformReference(const DSRWaveformReferenceValue &referenceValue,
+                                                 const OFBool check)
 {
     OFCondition result = EC_IllegalCall;
     if (TreeNode != NULL)
     {
         if (TreeNode->getValueType() == VT_Waveform)
-        {
-            OFstatic_cast(DSRWaveformTreeNode *, TreeNode)->setValue(referenceValue);
-            result = EC_Normal;
-        }
+            result = OFstatic_cast(DSRWaveformTreeNode *, TreeNode)->setValue(referenceValue, check);
     }
     return result;
 }
@@ -555,13 +633,56 @@ DSRTypes::E_ContinuityOfContent DSRContentItem::getContinuityOfContent() const
 }
 
 
-OFCondition DSRContentItem::setContinuityOfContent(const E_ContinuityOfContent continuityOfContent)
+OFCondition DSRContentItem::setContinuityOfContent(const E_ContinuityOfContent continuityOfContent,
+                                                   const OFBool check)
 {
     OFCondition result = EC_IllegalCall;
     if (TreeNode != NULL)
     {
         if (TreeNode->getValueType() == VT_Container)
-            result = OFstatic_cast(DSRContainerTreeNode *, TreeNode)->setContinuityOfContent(continuityOfContent);
+            result = OFstatic_cast(DSRContainerTreeNode *, TreeNode)->setContinuityOfContent(continuityOfContent, check);
+    }
+    return result;
+}
+
+
+OFCondition DSRContentItem::getTemplateIdentification(OFString &templateIdentifier,
+                                                      OFString &mappingResource) const
+{
+    OFCondition result = EC_IllegalCall;
+    if (TreeNode != NULL)
+    {
+        if (TreeNode->getValueType() == VT_Container)
+            result = TreeNode->getTemplateIdentification(templateIdentifier, mappingResource);
+    }
+    return result;
+}
+
+
+OFCondition DSRContentItem::getTemplateIdentification(OFString &templateIdentifier,
+                                                      OFString &mappingResource,
+                                                      OFString &mappingResourceUID) const
+{
+    OFCondition result = EC_IllegalCall;
+    if (TreeNode != NULL)
+    {
+        if (TreeNode->getValueType() == VT_Container)
+            result = TreeNode->getTemplateIdentification(templateIdentifier, mappingResource, mappingResourceUID);
+    }
+    return result;
+}
+
+
+OFCondition DSRContentItem::setTemplateIdentification(const OFString &templateIdentifier,
+                                                      const OFString &mappingResource,
+                                                      const OFString &mappingResourceUID,
+                                                      const OFBool check)
+{
+    OFCondition result = EC_IllegalCall;
+    if (TreeNode != NULL)
+    {
+        if (TreeNode->getValueType() == VT_Container)
+            result = TreeNode->setTemplateIdentification(templateIdentifier, mappingResource, mappingResourceUID, check);
     }
     return result;
 }
@@ -595,11 +716,12 @@ OFCondition DSRContentItem::getConceptName(DSRCodedEntryValue &conceptName) cons
 }
 
 
-OFCondition DSRContentItem::setConceptName(const DSRCodedEntryValue &conceptName)
+OFCondition DSRContentItem::setConceptName(const DSRCodedEntryValue &conceptName,
+                                           const OFBool check)
 {
     OFCondition result = EC_IllegalCall;
     if (TreeNode != NULL)
-        result = TreeNode->setConceptName(conceptName);
+        result = TreeNode->setConceptName(conceptName, check);
     return result;
 }
 
@@ -612,86 +734,59 @@ const OFString &DSRContentItem::getObservationDateTime() const
 }
 
 
-OFCondition DSRContentItem::setObservationDateTime(const OFString &observationDateTime)
+OFCondition DSRContentItem::setObservationDateTime(const OFString &observationDateTime,
+                                                   const OFBool check)
 {
     OFCondition result = EC_IllegalCall;
     if (TreeNode != NULL)
-        result = TreeNode->setObservationDateTime(observationDateTime);
+        result = TreeNode->setObservationDateTime(observationDateTime, check);
     return result;
 }
 
 
-OFCondition DSRContentItem::getTemplateIdentification(OFString &templateIdentifier,
-                                                      OFString &mappingResource) const
+const OFString &DSRContentItem::getObservationUID() const
+{
+    if (TreeNode != NULL)
+        return TreeNode->getObservationUID();
+    return EmptyString;
+}
+
+
+OFCondition DSRContentItem::setObservationUID(const OFString &observationUID,
+                                              const OFBool check)
 {
     OFCondition result = EC_IllegalCall;
     if (TreeNode != NULL)
-        result = TreeNode->getTemplateIdentification(templateIdentifier, mappingResource);
+        result = TreeNode->setObservationUID(observationUID, check);
     return result;
 }
 
 
-OFCondition DSRContentItem::setTemplateIdentification(const OFString &templateIdentifier,
-                                                      const OFString &mappingResource)
+const OFString &DSRContentItem::getAnnotationText() const
+{
+    if (TreeNode != NULL)
+        return TreeNode->getAnnotation();
+    return EmptyString;
+}
+
+
+OFCondition DSRContentItem::setAnnotationText(const OFString &annotationText) const
 {
     OFCondition result = EC_IllegalCall;
     if (TreeNode != NULL)
-        result = TreeNode->setTemplateIdentification(templateIdentifier, mappingResource);
+    {
+        TreeNode->setAnnotation(annotationText);
+        result = EC_Normal;
+    }
     return result;
 }
 
 
-/*
- *  CVS/RCS Log:
- *  $Log: dsrcitem.cc,v $
- *  Revision 1.15  2010-10-14 13:14:40  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.14  2005-12-08 15:47:39  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.13  2003/10/30 17:59:37  joergr
- *  Added full support for the ContentTemplateSequence (read/write, get/set
- *  template identification). Template constraints are not checked yet.
- *
- *  Revision 1.12  2003/08/07 13:11:03  joergr
- *  Adapted type casts to new-style typecast operators defined in ofcast.h.
- *
- *  Revision 1.11  2001/09/26 13:04:17  meichel
- *  Adapted dcmsr to class OFCondition
- *
- *  Revision 1.10  2001/05/07 16:14:21  joergr
- *  Updated CVS header.
- *
- *  Revision 1.9  2001/01/18 15:54:12  joergr
- *  Added support for digital signatures.
- *
- *  Revision 1.8  2000/11/20 13:22:23  joergr
- *  Fixed minor bugs (string related memory problems when used with JNI).
- *
- *  Revision 1.7  2000/11/07 18:26:45  joergr
- *  Enhanced support for by-reference relationships.
- *
- *  Revision 1.6  2000/10/26 14:26:00  joergr
- *  Added support for "Comprehensive SR".
- *  Added support for TCOORD content item.
- *
- *  Revision 1.5  2000/10/20 10:14:57  joergr
- *  Renamed class DSRReferenceValue to DSRCompositeReferenceValue.
- *
- *  Revision 1.4  2000/10/18 17:12:06  joergr
- *  Added methods allowing direct access to certain content item values.
- *
- *  Revision 1.3  2000/10/17 12:35:41  joergr
- *  Added method checking content item for validity/completeness.
- *  Renamed methods for composite objects.
- *
- *  Revision 1.2  2000/10/16 12:01:03  joergr
- *  Added methods allowing direct access to certain content item values.
- *
- *  Revision 1.1  2000/10/13 07:52:16  joergr
- *  Added new module 'dcmsr' providing access to DICOM structured reporting
- *  documents (supplement 23).  Doc++ documentation not yet completed.
- *
- *
- */
+// protected methods
+
+void DSRContentItem::swap(DSRContentItem &item)
+{
+    /* swap members */
+    OFswap(TreeNode, item.TreeNode);
+    OFswap(DeleteTreeNode, item.DeleteTreeNode);
+}

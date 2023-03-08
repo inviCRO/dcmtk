@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2003-2010, OFFIS e.V.
+ *  Copyright (C) 2003-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose:
  *    class DcmRoleSelectionItem
  *    class DcmRoleSelectionMap
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:28 $
- *  CVS/RCS Revision: $Revision: 1.5 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -51,6 +44,13 @@ DcmRoleSelectionItem::~DcmRoleSelectionItem()
 {
 }
 
+DcmRoleSelectionItem& DcmRoleSelectionItem::operator=(const DcmRoleSelectionItem& arg)
+{
+  role_ = arg.role_;
+  uid_ = arg.uid_;
+  return *this;
+}
+
 /* ========================================================= */
 
 DcmRoleSelectionMap::DcmRoleSelectionMap()
@@ -58,15 +58,50 @@ DcmRoleSelectionMap::DcmRoleSelectionMap()
 {
 }
 
+void DcmRoleSelectionMap::clear()
+{
+  while (map_.size () != 0)
+  {
+    OFMap<OFString, DcmRoleSelectionList *>::iterator first = map_.begin();
+    delete (*first).second;
+    map_.erase(first);
+  }
+}
+
 DcmRoleSelectionMap::~DcmRoleSelectionMap()
 {
-  OFListIterator(DcmKeyValuePair<DcmRoleSelectionList *> *) first = map_.begin();
-  OFListIterator(DcmKeyValuePair<DcmRoleSelectionList *> *) last = map_.end();
+  clear();
+}
+
+/// Copy constructor, creates deep copy
+DcmRoleSelectionMap::DcmRoleSelectionMap(const DcmRoleSelectionMap& arg)
+{
+  /* Copy all map entries */
+  OFMap<OFString, DcmRoleSelectionList *>::const_iterator first = arg.map_.begin();
+  OFMap<OFString, DcmRoleSelectionList *>::const_iterator last = arg.map_.end();
   while (first != last)
   {
-    delete (*first)->value();
+    DcmRoleSelectionList* copy = new DcmRoleSelectionList( *(*first).second );
+    map_.insert(OFPair<const OFString, DcmRoleSelectionList*>( (*first).first, copy ) );
     ++first;
   }
+}
+
+/// Copy assignment operator, creates deep copy
+DcmRoleSelectionMap& DcmRoleSelectionMap::operator=(const DcmRoleSelectionMap& arg)
+{
+  if (this != &arg)
+  {
+    OFMap<OFString, DcmRoleSelectionList *>::const_iterator first = arg.map_.begin();
+    OFMap<OFString, DcmRoleSelectionList *>::const_iterator last = arg.map_.end();
+    while (first != last)
+    {
+      DcmRoleSelectionList* copy = new DcmRoleSelectionList( *(*first).second );
+      map_.insert( OFPair<const OFString, DcmRoleSelectionList*>( (*first).first, copy ) );
+      ++first;
+    }
+  }
+  return *this;
 }
 
 OFCondition DcmRoleSelectionMap::add(
@@ -85,16 +120,20 @@ OFCondition DcmRoleSelectionMap::add(
     return makeOFCondition(OFM_dcmnet, 1026, OF_error, s.c_str());
   }
 
+  DcmRoleSelectionList * const *value = NULL;
   OFString skey(key);
-  DcmRoleSelectionList * const *value = OFconst_cast(DcmRoleSelectionList * const *, map_.lookup(skey));
-  if (value == NULL)
+  OFMap<OFString, DcmRoleSelectionList*>::iterator it = map_.find(skey);
+  DcmRoleSelectionList *newentry = NULL;
+
+  if (it == map_.end())
   {
-    DcmRoleSelectionList *newentry = new DcmRoleSelectionList();
-    map_.add(skey, OFstatic_cast(DcmRoleSelectionList *, newentry));
+    newentry = new DcmRoleSelectionList();
+    map_.insert(OFPair<OFString, DcmRoleSelectionList*>(skey, newentry));
     value = &newentry;
   }
   else
   {
+    value = & ((*it).second);
     // check if abstract syntax is already in list
     OFListIterator(DcmRoleSelectionItem) first = (*value)->begin();
     OFListIterator(DcmRoleSelectionItem) last = (*value)->end();
@@ -116,10 +155,25 @@ OFCondition DcmRoleSelectionMap::add(
   return EC_Normal;
 }
 
+OFCondition DcmRoleSelectionMap::addEmpty(
+  const char *key)
+{
+  if (!key) return EC_IllegalCall;
+  OFString skey(key);
+  OFMap<OFString, DcmRoleSelectionList*>::iterator it = map_.find(skey);
+
+  if (it == map_.end())
+  {
+    DcmRoleSelectionList *newentry = new DcmRoleSelectionList();
+    map_.insert(OFPair<OFString, DcmRoleSelectionList*>(skey, newentry));
+  }
+  return EC_Normal;
+}
+
 OFBool DcmRoleSelectionMap::isKnownKey(const char *key) const
 {
   if (!key) return OFFalse;
-  if (map_.lookup(OFString(key))) return OFTrue;
+  if (map_.find(OFString(key)) != map_.end()) return OFTrue;
   return OFFalse;
 }
 
@@ -130,8 +184,9 @@ OFCondition DcmRoleSelectionMap::checkConsistency(
 {
   if ((!key)||(!pckey)) return EC_IllegalCall;
 
-  DcmRoleSelectionList * const *entry = OFconst_cast(DcmRoleSelectionList * const *, map_.lookup(OFString(key)));
-  if (!entry)
+  DcmRoleSelectionList * const *entry = NULL;
+  OFMap<OFString, DcmRoleSelectionList*>::const_iterator it = map_.find(OFString(key));
+  if (it == map_.end())
   {
     // error: key undefined
     OFString s("role selection key undefined: ");
@@ -143,6 +198,16 @@ OFCondition DcmRoleSelectionMap::checkConsistency(
   {
     // error: key undefined
     OFString s("presentation context key undefined: ");
+    s += pckey;
+    return makeOFCondition(OFM_dcmnet, 1037, OF_error, s.c_str());
+  }
+
+  // continue with existing entry
+  entry = & ((*it).second);
+  if (entry == NULL)
+  {
+    // error: key undefined
+    OFString s("presentation context NULL entry for key: ");
     s += pckey;
     return makeOFCondition(OFM_dcmnet, 1037, OF_error, s.c_str());
   }
@@ -173,33 +238,9 @@ const DcmRoleSelectionList *DcmRoleSelectionMap::getRoleSelectionList(const char
   const DcmRoleSelectionList *result = NULL;
   if (key)
   {
-    DcmRoleSelectionList * const *value = OFconst_cast(DcmRoleSelectionList * const *, map_.lookup(OFString(key)));
-    if (value) result = *value;
+    OFMap<OFString, DcmRoleSelectionList*>::const_iterator it = map_.find(OFString(key));
+    if (it != map_.end())
+      result = (*it).second;
   }
   return result;
 }
-
-
-/*
- * CVS/RCS Log
- * $Log: dccfrsmp.cc,v $
- * Revision 1.5  2010-10-14 13:14:28  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.4  2005/12/08 15:44:31  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.3  2004/05/06 16:36:30  joergr
- * Added typecasts to keep Sun CC 2.0.1 quiet.
- *
- * Revision 1.2  2004/05/05 12:57:58  meichel
- * Simplified template class DcmSimpleMap<T>, needed for Sun CC 2.0.1
- *
- * Revision 1.1  2003/06/10 14:30:15  meichel
- * Initial release of class DcmAssociationConfiguration and support
- *   classes. This class maintains a list of association negotiation
- *   profiles that can be addressed by symbolic keys. The profiles may
- *   be read from a configuration file.
- *
- *
- */

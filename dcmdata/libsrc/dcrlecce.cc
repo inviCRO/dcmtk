@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2010, OFFIS e.V.
+ *  Copyright (C) 2002-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: encoder codec class for RLE
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:09 $
- *  CVS/RCS Revision: $Revision: 1.16 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"
@@ -37,10 +30,6 @@
 #include "dcmtk/dcmdata/dcswap.h"    /* for swapIfNecessary */
 #include "dcmtk/dcmdata/dcitem.h"
 #include "dcmtk/ofstd/ofstd.h"
-
-#define INCLUDE_CSTDIO
-#include "dcmtk/ofstd/ofstdinc.h"
-
 
 typedef OFList<DcmRLEEncoder *> DcmRLEEncoderList;
 typedef OFListIterator(DcmRLEEncoder *) DcmRLEEncoderListIterator;
@@ -78,7 +67,8 @@ OFCondition DcmRLECodecEncoder::decode(
     DcmPixelSequence * /* pixSeq */,
     DcmPolymorphOBOW& /* uncompressedPixelData */,
     const DcmCodecParameter * /* cp */,
-    const DcmStack& /* objStack */) const
+    const DcmStack& /* objStack */,
+    OFBool& /* removeOldRep */ ) const
 {
   // we are an encoder only
   return EC_IllegalCall;
@@ -98,7 +88,7 @@ OFCondition DcmRLECodecEncoder::decodeFrame(
 {
   // we are an encoder only
   return EC_IllegalCall;
-}    
+}
 
 
 OFCondition DcmRLECodecEncoder::encode(
@@ -108,7 +98,8 @@ OFCondition DcmRLECodecEncoder::encode(
     const DcmRepresentationParameter * /* toRepParam */,
     DcmPixelSequence * & /* toPixSeq */,
     const DcmCodecParameter * /* cp */,
-    DcmStack & /* objStack */) const
+    DcmStack& /* objStack */,
+    OFBool& /* removeOldRep */ ) const
 {
   // we don't support re-coding for now.
   return EC_IllegalCall;
@@ -121,7 +112,8 @@ OFCondition DcmRLECodecEncoder::encode(
     const DcmRepresentationParameter * /* toRepParam */ ,
     DcmPixelSequence * & pixSeq,
     const DcmCodecParameter *cp,
-    DcmStack & objStack) const
+    DcmStack& objStack,
+    OFBool& /* removeOldRep */ ) const
 {
   OFCondition result = EC_Normal;
 
@@ -192,12 +184,12 @@ OFCondition DcmRLECodecEncoder::encode(
     // create initial pixel sequence
     if (result.good())
     {
-      pixelSequence = new DcmPixelSequence(DcmTag(DCM_PixelData,EVR_OB));
+      pixelSequence = new DcmPixelSequence(DCM_PixelSequenceTag);
       if (pixelSequence == NULL) result = EC_MemoryExhausted;
       else
       {
         // create empty offset table
-        offsetTable = new DcmPixelItem(DcmTag(DCM_Item,EVR_OB));
+        offsetTable = new DcmPixelItem(DCM_PixelItemTag);
         if (offsetTable == NULL) result = EC_MemoryExhausted;
         else pixelSequence->insert(offsetTable);
       }
@@ -206,7 +198,7 @@ OFCondition DcmRLECodecEncoder::encode(
     // byte swap pixel data to little endian
     if (gLocalByteOrder == EBO_BigEndian)
     {
-       swapIfNecessary(EBO_LittleEndian, gLocalByteOrder, OFstatic_cast(void *, OFconst_cast(Uint16 *, pixelData)), length, sizeof(Uint16));
+      swapIfNecessary(EBO_LittleEndian, gLocalByteOrder, OFstatic_cast(void *, OFconst_cast(Uint16 *, pixelData)), length, sizeof(Uint16));
     }
 
     // create RLE stripe sets
@@ -219,13 +211,17 @@ OFCondition DcmRLECodecEncoder::encode(
       Uint32 offsetBetweenSamples = 0;
       Uint32 sample = 0;
       Uint32 byte = 0;
-      register Uint32 pixel = 0;
-      register Uint32 columnCounter = 0;
+      Uint32 pixel = 0;
+      Uint32 columnCounter = 0;
 
       DcmRLEEncoder *rleEncoder = NULL;
       Uint32 rleSize = 0;
       Uint8 *rleData = NULL;
       Uint8 *rleData2 = NULL;
+
+      // warn about (possibly) non-standard fragmentation
+      if (djcp->getFragmentSize() > 0)
+         DCMDATA_WARN("DcmRLECodecEncoder: limiting the fragment size may result in non-standard conformant encoding");
 
       // compute byte offset between samples
       if (planarConfiguration == 0)
@@ -286,14 +282,14 @@ OFCondition DcmRLECodecEncoder::encode(
           // compute size of compressed frame including RLE header
           // and populate RLE header
           for (i=0; i<16; i++) rleHeader[i] = 0;
-          rleHeader[0] = rleEncoderList.size();
+          rleHeader[0] = OFstatic_cast(Uint32, rleEncoderList.size());
           rleSize = 64;
           i = 1;
           first = rleEncoderList.begin();
           while (first != last)
           {
             rleHeader[i++] = rleSize;
-            rleSize += (*first)->size();
+            rleSize += OFstatic_cast(Uint32, (*first)->size());
             ++first;
           }
 
@@ -303,7 +299,7 @@ OFCondition DcmRLECodecEncoder::encode(
           if (rleData)
           {
             // copy RLE header to compressed frame buffer
-            swapIfNecessary(EBO_LittleEndian, gLocalByteOrder, rleHeader, 16*sizeof(Uint32), sizeof(Uint32));
+            swapIfNecessary(EBO_LittleEndian, gLocalByteOrder, rleHeader, OFstatic_cast(Uint32, 16*sizeof(Uint32)), sizeof(Uint32));
             memcpy(rleData, rleHeader, 64);
 
             // store RLE stripe sets in compressed frame buffer
@@ -367,7 +363,7 @@ OFCondition DcmRLECodecEncoder::encode(
             if (djcp->getConvertToSC() || djcp->getUIDCreation())
             {
                 result = DcmCodec::newInstance(OFstatic_cast(DcmItem *, dataset), "DCM", "121320", "Uncompressed predecessor");
-                
+
                 // set image type to DERIVED
                 if (result.good()) result = updateImageType(OFstatic_cast(DcmItem *, dataset));
 
@@ -437,70 +433,3 @@ OFCondition DcmRLECodecEncoder::determineDecompressedColorModel(
 {
     return EC_IllegalCall;
 }
-
-
-/*
- * CVS/RCS Log
- * $Log: dcrlecce.cc,v $
- * Revision 1.16  2010-10-14 13:14:09  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.15  2010-03-01 09:08:45  uli
- * Removed some unnecessary include directives in the headers.
- *
- * Revision 1.14  2009-11-17 16:41:26  joergr
- * Added new method that allows for determining the color model of the
- * decompressed image.
- *
- * Revision 1.13  2009-11-04 09:58:10  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.12  2008-05-29 10:46:16  meichel
- * Implemented new method DcmPixelData::getUncompressedFrame
- *   that permits frame-wise access to compressed and uncompressed
- *   objects without ever loading the complete object into main memory.
- *   For this new method to work with compressed images, all classes derived from
- *   DcmCodec need to implement a new method decodeFrame(). For now, only
- *   dummy implementations returning an error code have been defined.
- *
- * Revision 1.11  2005/12/08 15:41:30  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.10  2004/08/24 14:54:20  meichel
- *  Updated compression helper methods. Image type is not set to SECONDARY
- *   any more, support for the purpose of reference code sequence added.
- *
- * Revision 1.9  2004/02/04 16:43:42  joergr
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- * Removed acknowledgements with e-mail addresses from CVS log.
- *
- * Revision 1.8  2003/08/14 09:01:06  meichel
- * Adapted type casts to new-style typecast operators defined in ofcast.h
- *
- * Revision 1.7  2003/03/21 13:08:04  meichel
- * Minor code purifications for warnings reported by MSVC in Level 4
- *
- * Revision 1.6  2002/12/04 10:41:01  meichel
- * Changed toolkit to use OFStandard::ftoa instead of sprintf for all
- *   double to string conversions that are supposed to be locale independent
- *
- * Revision 1.5  2002/11/27 12:06:51  meichel
- * Adapted module dcmdata to use of new header file ofstdinc.h
- *
- * Revision 1.4  2002/08/27 16:55:56  meichel
- * Initial release of new DICOM I/O stream classes that add support for stream
- *   compression (deflated little endian explicit VR transfer syntax)
- *
- * Revision 1.3  2002/07/18 12:15:40  joergr
- * Added explicit type casts to keep Sun CC 2.0.1 quiet.
- *
- * Revision 1.2  2002/06/27 15:15:43  meichel
- * Modified RLE encoder to make it usable for other purposes than
- *   DICOM encoding as well (e.g. PostScript, TIFF)
- *
- * Revision 1.1  2002/06/06 14:52:41  meichel
- * Initial release of the new RLE codec classes
- *   and the dcmcrle/dcmdrle tools in module dcmdata
- *
- *
- */

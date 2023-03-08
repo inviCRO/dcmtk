@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2000-2010, OFFIS e.V.
+ *  Copyright (C) 2000-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose:
  *    classes: DSRImageTreeNode
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:32 $
- *  CVS/RCS Revision: $Revision: 1.14 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -43,7 +36,7 @@
 
 /** Class for content item IMAGE
  */
-class DSRImageTreeNode
+class DCMTK_DCMSR_EXPORT DSRImageTreeNode
   : public DSRDocumentTreeNode,
     public DSRImageReferenceValue
 {
@@ -51,14 +44,44 @@ class DSRImageTreeNode
   public:
 
     /** constructor
-     ** @param  relationshipType  type of relationship to the parent tree node.
-     *                            Should not be RT_invalid or RT_isRoot.
+     ** @param  relationshipType  type of relationship to the parent tree node.  Should
+     *                            not be DSRTypes::RT_invalid or DSRTypes::RT_isRoot.
      */
     DSRImageTreeNode(const E_RelationshipType relationshipType);
+
+    /** copy constructor.
+     *  Please note that the comments on the copy constructor of the base class
+     *  DSRDocumentTreeNode apply.
+     ** @param node tree node to be copied
+     */
+    DSRImageTreeNode(const DSRImageTreeNode &node);
 
     /** destructor
      */
     virtual ~DSRImageTreeNode();
+
+    /** comparison operator "equal".
+     *  Two tree nodes are equal if the comparison operator of the base class DSRDocumentTreeNode
+     *  regards them as "equal" (same types and concept names) and the stored values are equal.
+     ** @param  node  tree node that should be compared to the current one
+     ** @return OFTrue if both tree nodes are equal, OFFalse otherwise
+     */
+    virtual OFBool operator==(const DSRDocumentTreeNode &node) const;
+
+    /** comparison operator "not equal".
+     *  Two tree nodes are not equal if either the comparison operator of the base class
+     *  DSRDocumentTreeNode regards them as "not equal" (different types or concept names) or
+     *  the stored values are not equal.
+     ** @param  node  tree node that should be compared to the current one
+     ** @return OFTrue if both tree nodes are not equal, OFFalse otherwise
+     */
+    virtual OFBool operator!=(const DSRDocumentTreeNode &node) const;
+
+    /** clone this tree node.
+     *  Internally, the copy constructor is used, so the corresponding comments apply.
+     ** @return copy of this tree node
+     */
+    virtual DSRImageTreeNode *clone() const;
 
     /** clear all member variables.
      *  Please note that the content item might become invalid afterwards.
@@ -66,10 +89,16 @@ class DSRImageTreeNode
     virtual void clear();
 
     /** check whether the content item is valid.
-     *  The content item is valid if the two base classes are valid.
+     *  The content item is valid if the two base classes are valid.  This check includes the value
+     *  of the content item, which can also be checked separately with hasValidValue().
      ** @return OFTrue if tree node is valid, OFFalse otherwise
      */
     virtual OFBool isValid() const;
+
+    /** check whether the value of the content item, i.e.\ the image reference value, is valid
+     ** @return OFTrue if the value is valid, OFFalse otherwise
+     */
+    virtual OFBool hasValidValue() const;
 
     /** check whether the content is short.
      *  The method isShort() from the base class DSRImageReferenceValue is called.
@@ -81,6 +110,9 @@ class DSRImageTreeNode
     /** print content item.
      *  A typical output looks like this: contains IMAGE:=(CT image,"1.2.3") or
      *  (CT image,"1.2.3"),(GSPS,"1.2.3.4") if a presentation state is present.
+     *  If the SOP class UID is unknown, the UID is printed instead of the related name.
+     *  Also, the list of referenced frame numbers is shown, but not the UIDs of the
+     *  real world value mapping object (if referenced).
      ** @param  stream  output stream to which the content item should be printed
      *  @param  flags   flag used to customize the output (see DSRTypes::PF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
@@ -89,8 +121,8 @@ class DSRImageTreeNode
                               const size_t flags) const;
 
     /** write content item in XML format
-     ** @param  stream     output stream to which the XML document is written
-     *  @param  flags      flag used to customize the output (see DSRTypes::XF_xxx)
+     ** @param  stream  output stream to which the XML document is written
+     *  @param  flags   flag used to customize the output (see DSRTypes::XF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
     virtual OFCondition writeXML(STD_NAMESPACE ostream &stream,
@@ -100,13 +132,15 @@ class DSRImageTreeNode
   protected:
 
     /** read content item (value) from dataset
-     ** @param  dataset    DICOM dataset from which the content item should be read
+     ** @param  dataset  DICOM dataset from which the content item should be read
+     *  @param  flags    flag used to customize the reading process (see DSRTypes::RF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
-    virtual OFCondition readContentItem(DcmItem &dataset);
+    virtual OFCondition readContentItem(DcmItem &dataset,
+                                        const size_t flags);
 
     /** write content item (value) to dataset
-     ** @param  dataset    DICOM dataset to which the content item should be written
+     ** @param  dataset  DICOM dataset to which the content item should be written
      ** @return status, EC_Normal if successful, an error code otherwise
      */
     virtual OFCondition writeContentItem(DcmItem &dataset) const;
@@ -114,10 +148,12 @@ class DSRImageTreeNode
     /** read content item specific XML data
      ** @param  doc     document containing the XML file content
      *  @param  cursor  cursor pointing to the starting node
+     *  @param  flags   flag used to customize the reading process (see DSRTypes::XF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
     virtual OFCondition readXMLContentItem(const DSRXMLDocument &doc,
-                                           DSRXMLCursor cursor);
+                                           DSRXMLCursor cursor,
+                                           const size_t flags);
 
     /** render content item (value) in HTML/XHTML format
      ** @param  docStream     output stream to which the main HTML/XHTML document is written
@@ -137,64 +173,11 @@ class DSRImageTreeNode
 
   private:
 
- // --- declaration of default/copy constructor and assignment operator
+ // --- declaration of default constructor and assignment operator
 
     DSRImageTreeNode();
-    DSRImageTreeNode(const DSRImageTreeNode &);
     DSRImageTreeNode &operator=(const DSRImageTreeNode &);
 };
 
 
 #endif
-
-
-/*
- *  CVS/RCS Log:
- *  $Log: dsrimgtn.h,v $
- *  Revision 1.14  2010-10-14 13:16:32  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.13  2009-10-13 14:57:50  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.12  2007-11-15 16:33:30  joergr
- *  Added support for output in XHTML 1.1 format.
- *
- *  Revision 1.11  2006/08/15 16:40:03  meichel
- *  Updated the code in module dcmsr to correctly compile when
- *    all standard C++ classes remain in namespace std.
- *
- *  Revision 1.10  2005/12/08 16:05:05  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.9  2003/09/15 14:18:54  joergr
- *  Introduced new class to facilitate checking of SR IOD relationship content
- *  constraints. Replaced old implementation distributed over numerous classes.
- *
- *  Revision 1.8  2003/08/07 12:40:41  joergr
- *  Added readXML functionality. Added support for Chest CAD SR.
- *
- *  Revision 1.7  2001/11/09 16:10:50  joergr
- *  Added preliminary support for Mammography CAD SR.
- *
- *  Revision 1.6  2001/09/26 13:04:08  meichel
- *  Adapted dcmsr to class OFCondition
- *
- *  Revision 1.5  2001/06/01 15:51:01  meichel
- *  Updated copyright header
- *
- *  Revision 1.4  2000/11/07 18:14:29  joergr
- *  Enhanced support for by-reference relationships.
- *
- *  Revision 1.3  2000/11/01 16:23:21  joergr
- *  Added support for conversion to XML.
- *
- *  Revision 1.2  2000/10/23 15:11:19  joergr
- *  Added/updated doc++ comments.
- *
- *  Revision 1.1  2000/10/13 07:49:28  joergr
- *  Added new module 'dcmsr' providing access to DICOM structured reporting
- *  documents (supplement 23).  Doc++ documentation not yet completed.
- *
- *
- */

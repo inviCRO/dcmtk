@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: base classes for input streams
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:41 $
- *  CVS/RCS Revision: $Revision: 1.5 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCISTRMA_H
@@ -37,10 +30,10 @@
 
 class DcmInputStream;
 
-/** pure virtual abstract base class for producers, i.e. the initial node 
+/** pure virtual abstract base class for producers, i.e. the initial node
  *  of a filter chain in an input stream.
  */
-class DcmProducer
+class DCMTK_DCMDATA_EXPORT DcmProducer
 {
 public:
 
@@ -78,29 +71,29 @@ public:
   /** reads as many bytes as possible into the given block.
    *  @param buf pointer to memory block, must not be NULL
    *  @param buflen length of memory block
-   *  @return number of bytes actually read. 
+   *  @return number of bytes actually read.
    */
   virtual offile_off_t read(void *buf, offile_off_t buflen) = 0;
 
   /** skips over the given number of bytes (or less)
    *  @param skiplen number of bytes to skip
-   *  @return number of bytes actually skipped. 
+   *  @return number of bytes actually skipped.
    */
   virtual offile_off_t skip(offile_off_t skiplen) = 0;
 
   /** resets the stream to the position by the given number of bytes.
    *  @param num number of bytes to putback. If the putback operation
-   *    fails, the producer status becomes bad. 
+   *    fails, the producer status becomes bad.
    */
   virtual void putback(offile_off_t num) = 0;
 
 };
 
 
-/** pure virtual abstract base class for input filters, i.e. 
+/** pure virtual abstract base class for input filters, i.e.
  *  intermediate nodes of a filter chain in an input stream.
  */
-class DcmInputFilter: public DcmProducer
+class DCMTK_DCMDATA_EXPORT DcmInputFilter: public DcmProducer
 {
 public:
 
@@ -110,7 +103,7 @@ public:
   }
 
   /** determines the producer from which the filter is supposed
-   *  to read it's input. Once a producer for the input filter has 
+   *  to read it's input. Once a producer for the input filter has
    *  been defined, it cannot be changed anymore during the lifetime
    *  of the object.
    *  @param producer reference to producer, must not be circular chain
@@ -118,11 +111,21 @@ public:
   virtual void append(DcmProducer& producer) = 0;
 };
 
+/** this enum identifies subclasses of class DcmInputStreamFactory.
+ */
+enum DcmInputStreamFactoryType
+{
+  /// class DcmInputFileStreamFactory
+  DFT_DcmInputFileStreamFactory,
+
+  /// class DcmInputTempFileStreamFactory
+  DFT_DcmInputTempFileStreamFactory
+};
 
 /** pure virtual abstract base class for input stream factories,
  *  i.e. objects that can create a new input stream
  */
-class DcmInputStreamFactory
+class DCMTK_DCMDATA_EXPORT DcmInputStreamFactory
 {
 public:
 
@@ -137,14 +140,20 @@ public:
   virtual DcmInputStream *create() const = 0;
 
   /** returns a pointer to a copy of this object
+   *  @return pointer to a copy of this object
    */
   virtual DcmInputStreamFactory *clone() const = 0;
+
+  /** returns an enum describing the class to which this instance belongs
+   *  @return class to which this instance belongs
+   */
+  virtual DcmInputStreamFactoryType ident() const = 0;
 };
 
 
 /** abstract base class for input streams.
  */
-class DcmInputStream
+class DCMTK_DCMDATA_EXPORT DcmInputStream
 {
 public:
 
@@ -180,13 +189,13 @@ public:
   /** reads as many bytes as possible into the given block.
    *  @param buf pointer to memory block, must not be NULL
    *  @param buflen length of memory block
-   *  @return number of bytes actually read. 
+   *  @return number of bytes actually read.
    */
   virtual offile_off_t read(void *buf, offile_off_t buflen);
 
   /** skips over the given number of bytes (or less)
    *  @param skiplen number of bytes to skip
-   *  @return number of bytes actually skipped. 
+   *  @return number of bytes actually skipped.
    */
   virtual offile_off_t skip(offile_off_t skiplen);
 
@@ -225,7 +234,7 @@ public:
   virtual void mark();
 
   /** resets the stream to the position previously marked with
-   *  setPutbackMark(). If the putback operation fails (no putback mark 
+   *  setPutbackMark(). If the putback operation fails (no putback mark
    *  set or putback buffer exceeded), status of the producer switches to bad.
    */
   virtual void putback();
@@ -268,27 +277,3 @@ private:
 
 
 #endif
-
-/*
- * CVS/RCS Log:
- * $Log: dcistrma.h,v $
- * Revision 1.5  2010-10-14 13:15:41  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.4  2009-11-04 09:58:07  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.3  2007-02-19 15:45:41  meichel
- * Class DcmInputStream and related classes are now safe for use with
- *   large files (2 GBytes or more) if supported by compiler and operating system.
- *
- * Revision 1.2  2005/12/08 16:28:15  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.1  2002/08/27 16:55:32  meichel
- * Initial release of new DICOM I/O stream classes that add support for stream
- *   compression (deflated little endian explicit VR transfer syntax)
- *
- *
- */
-

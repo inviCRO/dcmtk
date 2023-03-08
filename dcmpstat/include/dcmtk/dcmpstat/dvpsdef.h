@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose:
  *    definitions of constants and macros for pstat module
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:36 $
- *  CVS/RCS Revision: $Revision: 1.12 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DVPSDEF_H
@@ -32,21 +25,22 @@
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 
+#include "dcmtk/dcmpstat/dpdefine.h"
 #include "dcmtk/oflog/oflog.h"
 
-OFLogger DCM_dcmpstatGetLogger();
-OFLogger DCM_dcmpstatDumpGetLogger();
-OFLogger DCM_dcmpstatLogfileGetLogger();
+extern DCMTK_DCMPSTAT_EXPORT OFLogger DCM_dcmpstatLogger;
+extern DCMTK_DCMPSTAT_EXPORT OFLogger DCM_dcmpstatDumpLogger;
+extern DCMTK_DCMPSTAT_EXPORT OFLogger DCM_dcmpstatLogfileLogger;
 
-#define DCMPSTAT_TRACE(msg) OFLOG_TRACE(DCM_dcmpstatGetLogger(), msg)
-#define DCMPSTAT_DEBUG(msg) OFLOG_DEBUG(DCM_dcmpstatGetLogger(), msg)
-#define DCMPSTAT_INFO(msg)  OFLOG_INFO(DCM_dcmpstatGetLogger(), msg)
-#define DCMPSTAT_WARN(msg)  OFLOG_WARN(DCM_dcmpstatGetLogger(), msg)
-#define DCMPSTAT_ERROR(msg) OFLOG_ERROR(DCM_dcmpstatGetLogger(), msg)
-#define DCMPSTAT_FATAL(msg) OFLOG_FATAL(DCM_dcmpstatGetLogger(), msg)
+#define DCMPSTAT_TRACE(msg) OFLOG_TRACE(DCM_dcmpstatLogger, msg)
+#define DCMPSTAT_DEBUG(msg) OFLOG_DEBUG(DCM_dcmpstatLogger, msg)
+#define DCMPSTAT_INFO(msg)  OFLOG_INFO(DCM_dcmpstatLogger, msg)
+#define DCMPSTAT_WARN(msg)  OFLOG_WARN(DCM_dcmpstatLogger, msg)
+#define DCMPSTAT_ERROR(msg) OFLOG_ERROR(DCM_dcmpstatLogger, msg)
+#define DCMPSTAT_FATAL(msg) OFLOG_FATAL(DCM_dcmpstatLogger, msg)
 
-#define DCMPSTAT_DUMP(msg) OFLOG_DEBUG(DCM_dcmpstatDumpGetLogger(), msg)
-#define DCMPSTAT_LOGFILE(msg) OFLOG_DEBUG(DCM_dcmpstatLogfileGetLogger(), msg)
+#define DCMPSTAT_DUMP(msg) OFLOG_DEBUG(DCM_dcmpstatDumpLogger, msg)
+#define DCMPSTAT_LOGFILE(msg) OFLOG_DEBUG(DCM_dcmpstatLogfileLogger, msg)
 
 /* default for max PDU size */
 #define DEFAULT_MAXPDU 16384
@@ -159,25 +153,25 @@ if (result==EC_Normal)                                              \
 }
 
 // reads a dicom element from a dataset if present
-#define READ_FROM_DATASET(a_type, a_name)                           \
+#define READ_FROM_DATASET(a_type, an_ident, a_name)                 \
 stack.clear();                                                      \
-if (EC_Normal == dset.search((DcmTagKey &)a_name.getTag(), stack, ESM_fromHere, OFFalse)) \
+if ((EC_Normal == dset.search((DcmTagKey &)a_name.getTag(), stack, ESM_fromHere, OFFalse)) && (stack.top()->ident() == an_ident)) \
 {                                                                   \
   a_name = *((a_type *)(stack.top()));                              \
 }
 
 // reads a dicom element from an item if present
-#define READ_FROM_DATASET2(a_type, a_name)                          \
+#define READ_FROM_DATASET2(a_type, an_ident, a_name)                \
 stack.clear();                                                      \
-if (EC_Normal == item->search((DcmTagKey &)a_name.getTag(), stack, ESM_fromHere, OFFalse)) \
+if ((EC_Normal == item->search((DcmTagKey &)a_name.getTag(), stack, ESM_fromHere, OFFalse)) && (stack.top()->ident() == an_ident)) \
 {                                                                   \
   a_name = *((a_type *)(stack.top()));                              \
 }
 
 // reads a dicom element from an item if present
-#define READ_FROM_PDATASET(a_type, a_name)                          \
+#define READ_FROM_PDATASET(a_type, an_ident, a_name)                \
 stack.clear();                                                      \
-if (rqDataset && (EC_Normal == rqDataset->search((DcmTagKey &)a_name.getTag(), stack, ESM_fromHere, OFFalse))) \
+if (rqDataset && (EC_Normal == rqDataset->search((DcmTagKey &)a_name.getTag(), stack, ESM_fromHere, OFFalse)) && (stack.top()->ident() == an_ident)) \
 {                                                                   \
   a_name = *((a_type *)(stack.top()));                              \
 }
@@ -190,45 +184,3 @@ if (result==EC_Normal)                                              \
 }
 
 #endif
-
-/*
- *  $Log: dvpsdef.h,v $
- *  Revision 1.12  2010-10-14 13:16:36  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.11  2010-10-07 14:31:35  joergr
- *  Removed leading underscore characters from preprocessor symbols (reserved).
- *
- *  Revision 1.10  2009-12-15 14:50:49  uli
- *  Fixes some issues with --logfile and the config's log options.
- *
- *  Revision 1.9  2009-11-24 14:12:57  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.8  2005-12-08 16:03:41  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.7  2002/01/08 10:32:12  joergr
- *  Corrected spelling of function dcmGenerateUniqueIdentifier().
- *
- *  Revision 1.6  2001/11/28 13:59:31  joergr
- *  Check return value of DcmItem::insert() statements where appropriate to
- *  avoid memory leaks when insert procedure fails.
- *
- *  Revision 1.5  2001/06/01 15:50:15  meichel
- *  Updated copyright header
- *
- *  Revision 1.4  2000/11/13 10:42:40  joergr
- *  Added support for Structured Reporting "templates".
- *
- *  Revision 1.3  2000/06/07 13:16:37  meichel
- *  now using DIMSE status constants and log facilities defined in dcmnet
- *
- *  Revision 1.2  2000/06/02 16:00:45  meichel
- *  Adapted all dcmpstat classes to use OFConsole for log and error output
- *
- *  Revision 1.1  2000/05/31 12:56:59  meichel
- *  Moved dcmpstat macros and constants into a common header file
- *
- *
- */

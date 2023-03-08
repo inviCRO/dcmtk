@@ -1,10 +1,11 @@
+// -*- C++ -*-
 // Module:  Log4CPLUS
 // File:    streams.h
 // Created: 4/2003
 // Author:  Tad E. Smith
 //
 //
-// Copyright 2003-2009 Tad E. Smith
+// Copyright 2003-2010 Tad E. Smith
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,20 +21,39 @@
 
 /** @file */
 
-#ifndef LOG4CPLUS_STREAMS_HEADER_
-#define LOG4CPLUS_STREAMS_HEADER_
+#ifndef DCMTK_LOG4CPLUS_STREAMS_HEADER_
+#define DCMTK_LOG4CPLUS_STREAMS_HEADER_
 
 #include "dcmtk/oflog/config.h"
-#include "dcmtk/oflog/tstring.h"
+
+#if defined (DCMTK_LOG4CPLUS_HAVE_PRAGMA_ONCE)
+#pragma once
+#endif
+
+#include "dcmtk/oflog/tchar.h"
 #include "dcmtk/ofstd/ofstream.h"
 
-#define LOG4CPLUS_STREAM_NAMESPACE std
+#include <iosfwd>
 
-namespace log4cplus {
-    typedef STD_NAMESPACE ostream tostream;
-    typedef STD_NAMESPACE istream tistream;
-    typedef OFOStringStream        tostringstream;
+
+namespace dcmtk
+{
+namespace log4cplus
+{
+    typedef STD_NAMESPACE basic_ostream<tchar> tostream;
+    typedef STD_NAMESPACE basic_istream<tchar> tistream;
+    typedef OFOStringStream tostringstream;
+    typedef OFIStringStream tistringstream;
+    extern DCMTK_LOG4CPLUS_EXPORT tostream & tcout;
+    extern DCMTK_LOG4CPLUS_EXPORT tostream & tcerr;
+}
 }
 
-#endif // LOG4CPLUS_STREAMS_HEADER_
+#if defined (DCMTK_OFLOG_UNICODE) && defined (DCMTK_LOG4CPLUS_ENABLE_GLOBAL_C_STRING_STREAM_INSERTER)
+
+DCMTK_LOG4CPLUS_EXPORT log4cplus::tostream& operator <<(log4cplus::tostream&, const char* psz );
+
+#endif
+
+#endif // DCMTK_LOG4CPLUS_STREAMS_HEADER_
 

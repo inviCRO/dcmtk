@@ -1,10 +1,11 @@
+// -*- C++ -*-
 // Module:  Log4CPLUS
 // File:    socket.h
 // Created: 4/2003
 // Author:  Tad E. Smith
 //
 //
-// Copyright 2003-2009 Tad E. Smith
+// Copyright 2003-2010 Tad E. Smith
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,16 +21,21 @@
 
 /** @file */
 
-#ifndef LOG4CPLUS_HELPERS_SOCKET_HEADER_
-#define LOG4CPLUS_HELPERS_SOCKET_HEADER_
+#ifndef DCMTK_LOG4CPLUS_HELPERS_SOCKET_HEADER_
+#define DCMTK_LOG4CPLUS_HELPERS_SOCKET_HEADER_
 
 #include "dcmtk/oflog/config.h"
-#include "dcmtk/oflog/tstring.h"
-#include "dcmtk/oflog/helpers/sockbuff.h"
-#if defined(_WIN32)
-#include <winsock.h>
+
+#if defined (DCMTK_LOG4CPLUS_HAVE_PRAGMA_ONCE)
+#pragma once
 #endif
 
+#include "dcmtk/oflog/tstring.h"
+#include "dcmtk/oflog/helpers/sockbuff.h"
+#include <cstddef> // ptrdiff_t
+
+
+namespace dcmtk {
 namespace log4cplus {
     namespace helpers {
 
@@ -37,19 +43,16 @@ namespace log4cplus {
                            not_opened,
                            bad_address,
                            connection_failed,
-                           broken_pipe,
+                           broken_pipe, 
                            invalid_access_mode,
                            message_truncated
                          };
 
-#if !defined(_WIN32)
-        typedef int SOCKET_TYPE;
-#define INVALID_SOCKET -1
-#else
-        typedef SOCKET SOCKET_TYPE;
-#endif
+        typedef ptrdiff_t SOCKET_TYPE;
 
-        class LOG4CPLUS_EXPORT AbstractSocket {
+        extern DCMTK_LOG4CPLUS_EXPORT SOCKET_TYPE const INVALID_SOCKET_VALUE;
+
+        class DCMTK_LOG4CPLUS_EXPORT AbstractSocket {
         public:
           // ctor and dtor
             AbstractSocket();
@@ -80,17 +83,18 @@ namespace log4cplus {
          * This class implements client sockets (also called just "sockets").
          * A socket is an endpoint for communication between two machines.
          */
-        class LOG4CPLUS_EXPORT Socket : public AbstractSocket {
+        class DCMTK_LOG4CPLUS_EXPORT Socket : public AbstractSocket {
         public:
           // ctor and dtor
             Socket();
             Socket(SOCKET_TYPE sock, SocketState state, int err);
-            Socket(const tstring& address, int port);
+            Socket(const tstring& address, unsigned short port, bool udp = false);
             virtual ~Socket();
 
           // methods
             virtual bool read(SocketBuffer& buffer);
             virtual bool write(const SocketBuffer& buffer);
+            virtual bool write(const STD_NAMESPACE string & buffer);
         };
 
 
@@ -101,28 +105,34 @@ namespace log4cplus {
          * based on that request, and then possibly returns a result to the
          * requester.
          */
-        class LOG4CPLUS_EXPORT ServerSocket : public AbstractSocket {
+        class DCMTK_LOG4CPLUS_EXPORT ServerSocket : public AbstractSocket {
         public:
           // ctor and dtor
-            ServerSocket(int port);
+            ServerSocket(unsigned short port);
             virtual ~ServerSocket();
 
             Socket accept();
         };
 
 
-        LOG4CPLUS_EXPORT SOCKET_TYPE openSocket(unsigned short port, SocketState& state);
-        LOG4CPLUS_EXPORT SOCKET_TYPE connectSocket(const log4cplus::tstring& hostn,
-                                                   unsigned short port, SocketState& state);
-        LOG4CPLUS_EXPORT SOCKET_TYPE acceptSocket(SOCKET_TYPE sock, SocketState& state);
-        LOG4CPLUS_EXPORT int closeSocket(SOCKET_TYPE sock);
+        DCMTK_LOG4CPLUS_EXPORT SOCKET_TYPE openSocket(unsigned short port, SocketState& state);
+        DCMTK_LOG4CPLUS_EXPORT SOCKET_TYPE connectSocket(const log4cplus::tstring& hostn,
+                                                   unsigned short port, bool udp,
+                                                   SocketState& state);
+        DCMTK_LOG4CPLUS_EXPORT SOCKET_TYPE acceptSocket(SOCKET_TYPE sock, SocketState& state);
+        DCMTK_LOG4CPLUS_EXPORT int closeSocket(SOCKET_TYPE sock);
 
-        LOG4CPLUS_EXPORT long read(SOCKET_TYPE sock, SocketBuffer& buffer);
-        LOG4CPLUS_EXPORT long write(SOCKET_TYPE sock, const SocketBuffer& buffer);
+        DCMTK_LOG4CPLUS_EXPORT long read(SOCKET_TYPE sock, SocketBuffer& buffer);
+        DCMTK_LOG4CPLUS_EXPORT long write(SOCKET_TYPE sock,
+            const SocketBuffer& buffer);
+        DCMTK_LOG4CPLUS_EXPORT long write(SOCKET_TYPE sock,
+            const STD_NAMESPACE string & buffer);
 
-        LOG4CPLUS_EXPORT tstring getHostname (bool fqdn);
+        DCMTK_LOG4CPLUS_EXPORT tstring getHostname (bool fqdn);
+        DCMTK_LOG4CPLUS_EXPORT int setTCPNoDelay (SOCKET_TYPE, bool);
 
     } // end namespace helpers
 } // end namespace log4cplus
+} // end namespace dcmtk
 
-#endif // LOG4CPLUS_HELPERS_SOCKET_HEADER_
+#endif // DCMTK_LOG4CPLUS_HELPERS_SOCKET_HEADER_

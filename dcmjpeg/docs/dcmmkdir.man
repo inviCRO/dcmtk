@@ -6,13 +6,13 @@
 \page dcmmkdir dcmmkdir: Create a DICOMDIR file
 \endif
 
-\section synopsis SYNOPSIS
+\section dcmmkdir_synopsis SYNOPSIS
 
 \verbatim
 dcmmkdir [options] [dcmfile-in...]
 \endverbatim
 
-\section description DESCRIPTION
+\section dcmmkdir_description DESCRIPTION
 
 The \b dcmmkdir utility creates a \e DICOMDIR file from the specified
 referenced DICOM files according to the DICOM Part 11 Media Storage Application
@@ -22,10 +22,27 @@ Currently the following profiles are supported (others might be added later):
 
 \li General Purpose CD-R Interchange (STD-GEN-CD)
 \li General Purpose Interchange on DVD-RAM Media (STD-GEN-DVD-RAM)
-\li General Purpose DVD with Compression Interchange (STD-GEN-DVD-JPEG/J2K)
+\li General Purpose DVD Interchange with JPEG (STD-GEN-DVD-JPEG)
+\li General Purpose DVD Interchange with JPEG 2000 (STD-GEN-DVD-J2K)
+\li General Purpose BD Interchange with JPEG (STD-GEN-BD-JPEG)
+\li General Purpose BD Interchange with JPEG 2000 (STD-GEN-BD-J2K)
+\li General Purpose BD Interchange with MPEG2 MP\@ML (STD-GEN-BD-MPEG2-MPML)
+\li General Purpose BD Interchange with MPEG2 MP\@HL (STD-GEN-BD-MPEG2-MPHL)
+\li General Purpose BD Interchange with MPEG-4 AVC/H.264 HiP\@Level4.1
+    (STD-GEN-BD-MPEG4-HPLV41)
+\li General Purpose BD Interchange with MPEG-4 AVC/H.264 BD-Compatible
+    HiP\@Level4.1 (STD-GEN-BD-MPEG4-HPLV41BD)
+\li General Purpose BD Interchange with MPEG-4 AVC/H.264 HiP\@Level4.2 for 2D
+    video (STD-GEN-BD-MPEG4-HPLV42-2D)
+\li General Purpose BD Interchange with MPEG-4 AVC/H.264 HiP\@Level4.2 for 3D
+    video (STD-GEN-BD-MPEG4-HPLV42-3D)
+\li General Purpose BD Interchange with MPEG-4 AVC/H.264 Stereo HiP\@Level4.2
+    (STD-GEN-BD-MPEG4-SHPLV42)
+\li General Purpose USB and Flash Memory Interchange with JPEG
+    (STD-GEN-USB/MMC/CF/SD-JPEG)
+\li General Purpose USB and Flash Memory Interchange with JPEG 2000
+    (STD-GEN-USB/MMC/CF/SD-J2K)
 \li General Purpose MIME Interchange (STD-GEN-MIME)
-\li General Purpose USB and Flash Memory with Compression Interchange
-    (STD-GEN-USB/MMC/CF/SD-JPEG/J2K)
 \li DVD Interchange with MPEG2 MP\@ML (STD-DVD-MPEG2-MPML)
 \li Basic Cardiac X-Ray Angiographic Studies on CD-R Media (STD-XABC-CD)
 \li 1024 X-Ray Angiographic Studies on CD-R Media (STD-XA1K-CD)
@@ -44,17 +61,17 @@ Currently the following profiles are supported (others might be added later):
 \li Hemodynamic Waveform Interchange on Diskette (STD-WVFM-HD-FD)
 
 This tool extends \b dcmgpdir which can only create General Purpose \e DICOMDIR
-files.  The default behaviour of \b dcmmkdir (with \e --general-purpose) is
+files.  The default behavior of \b dcmmkdir (with \e --general-purpose) is
 equivalent to that of \b dcmgpdir.
 
-\section parameters PARAMETERS
+\section dcmmkdir_parameters PARAMETERS
 
 \verbatim
-dcmfile-in  referenced DICOM file
+dcmfile-in  referenced DICOM file (or directory to be scanned)
 \endverbatim
 
-\section options OPTIONS
-\subsection general_options general options
+\section dcmmkdir_options OPTIONS
+\subsection dcmmkdir_general_options general options
 \verbatim
   -h    --help
           print this help text and exit
@@ -82,19 +99,16 @@ dcmfile-in  referenced DICOM file
           use config file f for the logger
 \endverbatim
 
-\subsection input_options input options
+\subsection dcmmkdir_input_options input options
 \verbatim
 DICOMDIR identifiers:
 
-  +D    --output-file  [f]ilename: string
-          generate specific DICOMDIR file
-          (default: DICOMDIR in current directory)
-
-  +F    --fileset-id  [i]d: string (default: DCMTK_MEDIA_DEMO)
-          use specific file set ID
+  +F    --fileset-id  [i]d: string
+          use specific file-set ID
+          (default: DCMTK_MEDIA_DEMO, "" for none)
 
   +R    --descriptor  [f]ilename: string
-          add a file set descriptor file ID
+          add a file-set descriptor file ID
           (e.g. README, default: no descriptor)
 
   +C    --char-set  [c]harset: string
@@ -126,7 +140,7 @@ reading:
           # possibly not available on all systems
 \endverbatim
 
-\subsection processing_options processing options
+\subsection dcmmkdir_processing_options processing options
 \verbatim
 consistency check:
 
@@ -189,32 +203,82 @@ icon images:
           created automatically (default: black image)
 \endverbatim
 
-\subsection output_options output options
+\subsection dcmmkdir_output_options output options
 \verbatim
+DICOMDIR file:
+
+  +D    --output-file  [f]ilename: string
+          generate specific DICOMDIR file
+          (default: DICOMDIR in current directory)
+
 profiles:
 
   -Pgp  --general-purpose
-          General Purpose Interchange on CD-R or
-          DVD-RAM Media (STD-GEN-CD/DVD-RAM, default)
+          General Purpose Interchange on CD-R or DVD-RAM Media
+          (STD-GEN-CD/DVD-RAM, default)
 
-  -Pdv  --general-purpose-dvd
-          General Purpose DVD with Compression Interchange
-          (STD-GEN-DVD-JPEG/J2K)
+  -Pdv  --general-dvd-jpeg
+          General Purpose DVD Interchange with JPEG
+          (STD-GEN-DVD-JPEG)
 
-  -Pmi  --general-purpose-mime
+  -Pd2  --general-dvd-j2k
+          General Purpose DVD Interchange with JPEG 2000
+          (STD-GEN-DVD-J2K)
+
+  -Pbd  --general-bd-jpeg
+          General Purpose BD Interchange with JPEG
+          (STD-GEN-BD-JPEG)
+
+  -Pb2  --general-bd-j2k
+          General Purpose BD Interchange with JPEG 2000
+          (STD-GEN-BD-J2K)
+
+  -Pbm  --general-bd-mpeg2-mpml
+          General Purpose BD Interchange with MPEG2 MP@ML
+          (STD-GEN-BD-MPEG2-MPML)
+
+  -Pbh  --general-bd-mpeg2-mphl
+          General Purpose BD Interchange with MPEG2 MP@HL
+          (STD-GEN-BD-MPEG2-MPHL)
+
+  -Pba  --general-bd-mpeg4-hp
+          General Purpose BD Interchange with MPEG-4 AVC/H.264
+          HiP@Level4.1 (STD-GEN-BD-MPEG4-HPLV41)
+
+  -Pbb  --general-bd-mpeg4-hpbd
+          General Purpose BD Interchange with MPEG-4 AVC/H.264
+          BD-Compatible HiP@Level4.1 (STD-GEN-BD-MPEG4-HPLV41BD)
+
+        --general-bd-mpeg4-hp2d
+          General Purpose BD Interchange with MPEG-4 AVC/H.264
+          HiP@Level4.2 for 2D video (STD-GEN-BD-MPEG4-HPLV42-2D)
+
+        --general-bd-mpeg4-hp3d
+          General Purpose BD Interchange with MPEG-4 AVC/H.264
+          HiP@Level4.2 for 3D video (STD-GEN-BD-MPEG4-HPLV42-3D)
+
+        --general-bd-mpeg4-hpst
+          General Purpose BD Interchange with MPEG-4 AVC/H.264
+          Stereo HiP@Level4.2 (STD-GEN-BD-MPEG4-SHPLV42)
+
+  -Pfl  --usb-and-flash-jpeg
+          General Purpose USB/Flash Memory Interchange with JPEG
+          (STD-GEN-USB/MMC/CF/SD-JPEG)
+
+  -Pf2  --usb-and-flash-j2k
+          General Purpose USB/Flash Memory Interchange with JPEG 2000
+          (STD-GEN-USB/MMC/CF/SD-J2K)
+
+  -Pmi  --general-mime
           General Purpose MIME Interchange (STD-GEN-MIME)
 
-  -Pfl  --usb-and-flash
-          General Purpose USB/Flash Memory with Compression
-          Interchange (STD-GEN-USB/MMC/CF/SD-JPEG/J2K)
-
   -Pmp  --mpeg2-mpml-dvd
-          DVD Interchange with MPEG2 Main Profile @ Main
-          Level (STD-DVD-MPEG2-MPML)
+          DVD Interchange with MPEG2 Main Profile @ Main Level
+          (STD-DVD-MPEG2-MPML)
 
   -Pbc  --basic-cardiac
-          Basic Cardiac X-Ray Angiographic Studies on
-          CD-R Media (STD-XABC-CD)
+          Basic Cardiac X-Ray Angiographic Studies on CD-R Media
+          (STD-XABC-CD)
 
   -Pxa  --xray-angiographic
           1024 X-Ray Angiographic Studies on CD-R Media
@@ -235,24 +299,24 @@ profiles:
           (STD-US-ID-SF-xxxx)
 
         --ultrasound-sc-sf
-          Ultrasound Single Frame with Spatial
-          Calibration (STD-US-SC-SF-xxxx)
+          Ultrasound Single Frame with Spatial Calibration
+          (STD-US-SC-SF-xxxx)
 
         --ultrasound-cc-sf
-          Ultrasound Single Frame with Combined
-          Calibration (STD-US-CC-SF-xxxx)
+          Ultrasound Single Frame with Combined Calibration
+          (STD-US-CC-SF-xxxx)
 
   -Pum  --ultrasound-id-mf
-          Ultrasound Single & Multi-Frame for Image
-          Display (STD-US-ID-MF-xxxx)
+          Ultrasound Single & Multi-Frame for Image Display
+          (STD-US-ID-MF-xxxx)
 
         --ultrasound-sc-mf
-          Ultrasound Single & Multi-Frame with Spatial
-          Calibration (STD-UD-SC-MF-xxxx)
+          Ultrasound Single & Multi-Frame with Spatial Calibration
+          (STD-UD-SC-MF-xxxx)
 
         --ultrasound-cc-mf
-          Ultrasound Single & Multi-Frame with Combined
-          Calibration (STD-UD-CC-MF-xxxx)
+          Ultrasound Single & Multi-Frame with Combined Calibration
+          (STD-UD-CC-MF-xxxx)
 
   -Pec  --12-lead-ecg
           12-lead ECG Interchange on Diskette
@@ -275,6 +339,11 @@ writing:
 
   -w    --discard
           do not write out DICOMDIR
+
+backup:
+
+        --create-backup
+          create a backup of existing DICOMDIR (default)
 
   -nb   --no-backup
           do not create a backup of existing DICOMDIR
@@ -304,20 +373,20 @@ length encoding in sequences and items:
           write with undefined lengths
 \endverbatim
 
-\section notes NOTES
+\section dcmmkdir_notes NOTES
 
-All files specified on the command line (or discovered by recursivly examining
+All files specified on the command line (or discovered by recursively examining
 the contents of directories with the \e +r option) are first evaluated for
 their compatibility with the specified Media Storage Application Profile (Part
 11).  Only appropriate files encoded using one of the allowed Transfer Syntaxes
 will be accepted.  Files having invalid filenames will be rejected (the rules
 can be relaxed via the \e +m option).  Files missing required attributes will
-be rejected (the \e +I option can relax this behaviour).
+be rejected (the \e +I option can relax this behavior).
 
 A \e DICOMDIR file will only be constructed if all files have passed initial
 tests.
 
-The \b dcmmkdir utility also allows to append new entries to and to update
+The \b dcmmkdir utility also allows one to append new entries to and to update
 existing entries in a \e DICOMDIR file.  Using option \e +A new entries are
 only appended to the DICOMDIR, i.e. existing records like the ones for PATIENT
 information are not updated.  Using option \e +U also existing records are
@@ -331,7 +400,21 @@ This might change in the future.  Till then, color images are automatically
 converted to grayscale mode.  The icon size is 128*128 pixels for the cardiac
 profiles (as required by the DICOM standard) and 64*64 for all others.
 
-\section logging LOGGING
+\subsection dcmmkdir_scanning_directories Scanning Directories
+
+Adding files from directories is possible by using option \e --recurse.  If no
+further command line parameters are given, the directory specified by option
+\e --input-directory (default: current directory) is scanned for files.  If
+parameters are given, they can either specify a file or directory name; the
+input directory is always prepended.  If the files in the provided directories
+should be selected according to a specific name pattern (e.g. using wildcard
+matching), option \e --pattern has to be used.  Please note that this file
+pattern only applies to the files within the scanned directories, and, if any
+other patterns are specified on the command line outside the
+\e --input-directory option (e.g. in order to select further files), these do
+not apply to the specified directories.
+
+\section dcmmkdir_logging LOGGING
 
 The level of logging output of the various command line tools and underlying
 libraries can be specified by the user.  By default, only errors and warnings
@@ -348,9 +431,9 @@ rotation), to syslog (Unix) or the event log (Windows) option \e --log-config
 can be used.  This configuration file also allows for directing only certain
 messages to a particular output stream and for filtering certain messages
 based on the module or application where they are generated.  An example
-configuration file is provided in <em>\<etcdir\>/logger.cfg</em>).
+configuration file is provided in <em>\<etcdir\>/logger.cfg</em>.
 
-\section command_line COMMAND LINE
+\section dcmmkdir_command_line COMMAND LINE
 
 All command line tools use the following notation for parameters: square
 brackets enclose optional values (0-1), three trailing dots indicate that
@@ -359,7 +442,7 @@ multiple values are allowed (1-n), a combination of both means 0 to n values.
 Command line options are distinguished from parameters by a leading '+' or '-'
 sign, respectively.  Usually, order and position of command line options are
 arbitrary (i.e. they can appear anywhere).  However, if options are mutually
-exclusive the rightmost appearance is used.  This behaviour conforms to the
+exclusive the rightmost appearance is used.  This behavior conforms to the
 standard evaluation rules of common Unix shells.
 
 In addition, one or more command files can be specified using an '@' sign as a
@@ -368,11 +451,11 @@ is replaced by the content of the corresponding text file (multiple
 whitespaces are treated as a single separator unless they appear between two
 quotation marks) prior to any further evaluation.  Please note that a command
 file cannot contain another command file.  This simple but effective approach
-allows to summarize common combinations of options/parameters and avoids
+allows one to summarize common combinations of options/parameters and avoids
 longish and confusing command lines (an example is provided in file
 <em>\<datadir\>/dumppat.txt</em>).
 
-\section environment ENVIRONMENT
+\section dcmmkdir_environment ENVIRONMENT
 
 The \b dcmmkdir utility will attempt to load DICOM data dictionaries specified
 in the \e DCMDICTPATH environment variable.  By default, i.e. if the
@@ -380,7 +463,7 @@ in the \e DCMDICTPATH environment variable.  By default, i.e. if the
 <em>\<datadir\>/dicom.dic</em> will be loaded unless the dictionary is built
 into the application (default for Windows).
 
-The default behaviour should be preferred and the \e DCMDICTPATH environment
+The default behavior should be preferred and the \e DCMDICTPATH environment
 variable only used when alternative data dictionaries are required.  The
 \e DCMDICTPATH environment variable has the same format as the Unix shell
 \e PATH variable in that a colon (":") separates entries.  On Windows systems,
@@ -388,12 +471,12 @@ a semicolon (";") is used as a separator.  The data dictionary code will
 attempt to load each file specified in the \e DCMDICTPATH environment variable.
 It is an error if no data dictionary can be loaded.
 
-\section see_also SEE ALSO
+\section dcmmkdir_see_also SEE ALSO
 
 <b>dcmgpdir</b>(1)
 
-\section copyright COPYRIGHT
+\section dcmmkdir_copyright COPYRIGHT
 
-Copyright (C) 2001-2010 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany.
+Copyright (C) 2001-2022 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany.
 
 */

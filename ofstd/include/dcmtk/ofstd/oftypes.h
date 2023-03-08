@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2010, OFFIS e.V.
+ *  Copyright (C) 1997-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,15 +16,8 @@
  *  Author:  Andreas Barth
  *
  *  Purpose:
- *      Defines some C++ standard types that are not consistently 
+ *      Defines some C++ standard types that are not consistently
  *      supported by all C++ Compilers
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:51 $
- *  CVS/RCS Revision: $Revision: 1.12 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -32,26 +25,83 @@
 #define OFTYPES_H
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
+#include "dcmtk/ofstd/ofdefine.h"
 
-#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>                /* Needed for int64_t */
+// some C++ implementations only define printf format macros like PRIu32
+// when this macro is defined before <inttypes.h> or <cinttypes> are included.
+#define __STDC_FORMAT_MACROS 1
+
+// include this file in doxygen documentation
+
+/** @file oftypes.h
+ *  @brief Definition of standard types used throughout the toolkit
+ */
+
+#include "dcmtk/ofstd/ofstdinc.h"
+
+// use native types if C++11 is supported
+#ifdef HAVE_CXX11
+#include <cstdint>
+#include <cstddef>
+#include <ostream>
+#include <cinttypes>
+
+#define OFTypename typename
+#define OFlonglong long long
+#define OFulonglong unsigned long long
+
+using Sint8 = std::int8_t;
+using Uint8 = std::uint8_t;
+using Sint16 = std::int16_t;
+using Uint16 = std::uint16_t;
+using Sint32 = std::int32_t;
+using Uint32 = std::uint32_t;
+using Sint64 = std::int64_t;
+using Uint64 = std::uint64_t;
+using Float32 = float; // single precision floating point type. Usually IEEE-754 32 bit floating point type
+using Float64 = double; // double precision floating point type. Usually IEEE-754 64 bit floating point type
+using OFintptr_t = std::intptr_t;
+using OFuintptr_t = std::uintptr_t;
+using OFnullptr_t = std::nullptr_t;
+using OFBool = bool;
+constexpr OFnullptr_t OFnullptr = nullptr;
+constexpr const OFBool OFTrue = true;
+constexpr const OFBool OFFalse = false;
+
+inline std::ostream& operator<<( std::ostream& o, OFnullptr_t /* unused */ )
+{
+    return o << "nullptr";
+}
+
+#else // fallback definitions
+
+#include <cstddef>
+BEGIN_EXTERN_C
+#ifdef HAVE_STDINT_H
+#include <stdint.h>
 #endif
+#ifdef HAVE_INTTYPES_H
+#include <inttypes.h>
+#endif
+END_EXTERN_C
 
-#ifdef __CHAR_UNSIGNED__
+#include "dcmtk/ofstd/ofstream.h"
+
 typedef signed char     Sint8;
-#else 
-typedef char            Sint8;
-#endif
-
 typedef unsigned char   Uint8;
 
+#ifdef PRIu32 /* if that macro exists, we also have int32_t et al */
+typedef int32_t         Sint32;
+typedef uint32_t        Uint32;
+#else /* defined(PRIu32) */
 #if SIZEOF_LONG == 8
 typedef signed int      Sint32;
 typedef unsigned int    Uint32;
-#else
+#else /* SIZEOF_LONG == 8 */
 typedef signed long     Sint32;
 typedef unsigned long   Uint32;
-#endif
+#endif /* SIZEOF_LONG == 8 */
+#endif /* defined(PRIu32) */
 
 typedef signed short    Sint16;
 typedef unsigned short  Uint16;
@@ -59,31 +109,76 @@ typedef unsigned short  Uint16;
 typedef float           Float32;    /* 32 Bit Floating Point Single */
 typedef double          Float64;    /* 64 Bit Floating Point Double */
 
+#ifdef HAVE_LONG_LONG
+#define OFlonglong long long
+#elif defined(_WIN32)
+#define OFlonglong __int64
+#elif defined(HAVE_LONGLONG)
+#define OFlonglong longlong
+#endif
+
+#ifdef HAVE_UNSIGNED_LONG_LONG
+#define OFulonglong unsigned long long
+#elif defined(_WIN32)
+#define OFulonglong unsigned __int64
+#elif defined(HAVE_ULONGLONG)
+#define OFulonglong ulonglong
+#endif
+
+#ifdef HAVE_INT64_T
+/* many platforms define int64_t in <cstdint> */
+typedef int64_t       Sint64;
+#elif SIZEOF_LONG == 8
+/* on some platforms, long is 64 bits */
+typedef long          Sint64;
+#elif defined(OFlonglong)
+/* assume OFlonglong is 64 bits */
+typedef OFlonglong    Sint64;
+#else
+/* we have not found any 64-bit signed integer type */
+#define OF_NO_SINT64 1
+#endif
+
+#ifdef HAVE_UINT64_T
+/* many platforms define uint64_t in <cstdint> */
+typedef uint64_t      Uint64;
+#elif SIZEOF_LONG == 8
+/* on some platforms, long is 64 bits */
+typedef unsigned long Uint64;
+#elif defined(OFulonglong)
+/* assume OFulonglong is 64 bits */
+typedef OFulonglong   Uint64;
+#else
+/* we have not found any 64-bit unsigned integer type */
+#define OF_NO_UINT64 1
+#endif
+
+#if SIZEOF_VOID_P == 2
+typedef Sint16 OFintptr_t;
+typedef Uint16 OFuintptr_t;
+#elif SIZEOF_VOID_P == 4
+typedef Sint32 OFintptr_t;
+typedef Uint32 OFuintptr_t;
+#elif SIZEOF_VOID_P == 8
+#ifndef OF_NO_SINT64
+typedef Sint64 OFintptr_t;
+#else
+#error unsupported platform (64-Bit pointers but no 64-Bit signed integer type)
+#endif
+#ifndef OF_NO_UINT64
+typedef Uint64 OFuintptr_t;
+#else
+#error unsupported platform (64-Bit pointers but no 64-Bit unsigned integer type)
+#endif
+#else
+#error Unsupported platform (invalid pointer size)
+#endif
+
 // Definition of type OFBool
 
-#ifdef HAVE_CXX_BOOL
-
-#define OFBool bool
+typedef bool OFBool;
 #define OFTrue true
 #define OFFalse false
-
-#else
-
-/** the boolean type used throughout the DCMTK project. Mapped to the 
- *  built-in type "bool" if the current C++ compiler supports it. Mapped 
- *  to int for old-fashioned compilers which do not yet support bool.
- */
-typedef int OFBool;
-
-#ifndef OFTrue 
-#define OFTrue (1)
-#endif
-
-#ifndef OFFalse 
-#define OFFalse (0)
-#endif
-
-#endif
 
 #if defined(HAVE_TYPENAME)
 #define OFTypename typename
@@ -91,54 +186,33 @@ typedef int OFBool;
 #define OFTypename
 #endif
 
-#endif
+#ifndef DOXYGEN
+struct DCMTK_OFSTD_EXPORT OFnullptr_t
+{
+    friend STD_NAMESPACE ostream& operator<<( STD_NAMESPACE ostream& o, OFnullptr_t /* unused */ )
+    {
+        return o << "nullptr";
+    }
 
-/*
- * CVS/RCS Log:
- * $Log: oftypes.h,v $
- * Revision 1.12  2010-10-14 13:15:51  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.11  2010-10-05 08:49:45  uli
- * Removed Sint64 and Uint64 since there is no 64bit int available everywhere.
- *
- * Revision 1.10  2010-05-25 10:02:36  uli
- * Added a missing include before the use of int64_t.
- *
- * Revision 1.9  2010-05-07 11:12:29  uli
- * Add new define OFTypename which only expands to "typename"
- * if "HAVE_TYPENAME" is defined.
- *
- * Revision 1.8  2010-03-09 12:14:20  uli
- * Added Sint64 and Uint64 typedefs.
- *
- * Revision 1.7  2005-12-08 16:06:11  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.6  2002/07/10 11:45:26  meichel
- * Moved definitions for Uint8, Sint8 ... Float64 from dcmdata to ofstd
- *   since these types are not DICOM specific
- *
- * Revision 1.5  2001/06/01 15:51:36  meichel
- * Updated copyright header
- *
- * Revision 1.4  2000/10/10 12:01:22  meichel
- * Created/updated doc++ comments
- *
- * Revision 1.3  2000/03/08 16:36:03  meichel
- * Updated copyright header.
- *
- * Revision 1.2  1998/11/27 12:42:53  joergr
- * Added copyright message to source files and changed CVS header.
- *
- * Revision 1.1  1997/07/02 11:51:16  andreas
- * - Preliminary release of the OFFIS Standard Library.
- *   In the future this library shall contain a subset of the
- *   ANSI C++ Library (Version 3) that works on a lot of different
- *   compilers. Additionally this library shall include classes and
- *   functions that are often used. All classes and functions begin
- *   with OF... This library is independent of the DICOM development and
- *   shall contain no DICOM specific stuff.
- *
- */
+    template<typename T>
+    operator T*()
+    {
+        return NULL;
+    }
 
+    template<typename C,typename T>
+    operator T C::*()
+    {
+        return NULL;
+    }
+};
+
+DCMTK_OFSTD_EXPORT extern OFnullptr_t OFnullptr;
+#else // DOXYGEN
+/// OFnullptr_t is the type of the null pointer literal, OFnullptr.
+typedef unspecified OFnullptr_t;
+#endif // DOXYGEN
+
+#endif // C++11
+
+#endif // OFTYPES_H

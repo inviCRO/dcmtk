@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -21,8 +21,19 @@
  *  - General Purpose CD-R Interchange (STD-GEN-CD)
  *  - General Purpose Interchange on DVD-RAM Media (STD-GEN-DVD-RAM)
  *  If build with 'BUILD_DCMGPDIR_AS_DCMMKDIR' it also supports:
- *  - General Purpose DVD with Compression Interchange (STD-GEN-DVD-JPEG/J2K)
- *  - General Purpose USB and Flash Memory with Compression Interchange (STD-GEN-USB/MMC/CF/SD-JPEG/J2K)
+ *  - General Purpose DVD Interchange with JPEG (STD-GEN-DVD-JPEG)
+ *  - General Purpose DVD Interchange with JPEG 2000 (STD-GEN-DVD-J2K)
+ *  - General Purpose BD Interchange with JPEG (STD-GEN-BD-JPEG)
+ *  - General Purpose BD Interchange with JPEG 2000 (STD-GEN-BD-J2K)
+ *  - General Purpose BD Interchange with MPEG2 MP@ML (STD-GEN-BD-MPEG2-MPML)
+ *  - General Purpose BD Interchange with MPEG2 MP@HL (STD-GEN-BD-MPEG2-MPHL)
+ *  - General Purpose BD Interchange with MPEG-4 AVC/H.264 HiP@Level4.1 (STD-GEN-BD-MPEG4-HPLV41)
+ *  - General Purpose BD Interchange with MPEG-4 AVC/H.264 BD-Compatible HiP@Level4.1 (STD-GEN-BD-MPEG4-HPLV41BD)
+ *  - General Purpose BD Interchange with MPEG-4 AVC/H.264 HiP\@Level4.2 for 2D video (STD-GEN-BD-MPEG4-HPLV42-2D)
+ *  - General Purpose BD Interchange with MPEG-4 AVC/H.264 HiP\@Level4.2 for 3D video (STD-GEN-BD-MPEG4-HPLV42-3D)
+ *  - General Purpose BD Interchange with MPEG-4 AVC/H.264 Stereo HiP\@Level4.2 (STD-GEN-BD-MPEG4-SHPLV42)
+ *  - General Purpose USB and Flash Memory Interchange with JPEG (STD-GEN-USB/MMC/CF/SD-JPEG)
+ *  - General Purpose USB and Flash Memory Interchange with JPEG 2000 (STD-GEN-USB/MMC/CF/SD-J2K)
  *  - General Purpose MIME Interchange (STD-GEN-MIME)
  *  - DVD Interchange with MPEG2 MP@ML (STD-DVD-MPEG2-MPML)
  *  - Basic Cardiac X-Ray Angiographic Studies on CD-R Media (STD-XABC-CD)
@@ -40,13 +51,6 @@
  *  - Hemodynamic Waveform Interchange on Diskette (STD-WVFM-HD-FD)
  *  There should be no need to set this compiler flag manually, just compile
  *  dcmjpeg/apps/dcmmkdir.cc.
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:13:30 $
- *  CVS/RCS Revision: $Revision: 1.95 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -95,7 +99,8 @@ static OFLogger dcmgpdirLogger = OFLog::getLogger("dcmtk.dcmdata." OFFIS_CONSOLE
 
 // ********************************************
 
-int main(int argc, char *argv[])
+// this macro either expands to main() or wmain()
+DCMTK_MAIN_FUNCTION
 {
     OFBool opt_write = OFTrue;
     OFBool opt_append = OFFalse;
@@ -103,12 +108,12 @@ int main(int argc, char *argv[])
     OFBool opt_recurse = OFFalse;
     E_EncodingType opt_enctype = EET_ExplicitLength;
     E_GrpLenEncoding opt_glenc = EGL_withoutGL;
-    const char *opt_output = DEFAULT_DICOMDIR_NAME;
+    OFFilename opt_output(DEFAULT_DICOMDIR_NAME);
     const char *opt_fileset = DEFAULT_FILESETID;
     const char *opt_descriptor = NULL;
     const char *opt_charset = DEFAULT_DESCRIPTOR_CHARSET;
-    const char *opt_directory = "";
-    const char *opt_pattern = "";
+    OFFilename opt_directory;
+    OFFilename opt_pattern;
     DicomDirInterface::E_ApplicationProfile opt_profile = DicomDirInterface::AP_GeneralPurpose;
 
 #ifdef BUILD_DCMGPDIR_AS_DCMMKDIR
@@ -131,7 +136,7 @@ int main(int argc, char *argv[])
     cmd.setOptionColumns(LONGCOL, SHORTCOL);
     cmd.setParamColumn(LONGCOL + SHORTCOL + 4);
 
-    cmd.addParam("dcmfile-in", "referenced DICOM file", OFCmdParam::PM_MultiOptional);
+    cmd.addParam("dcmfile-in", "ref. DICOM file (or directory to be scanned)", OFCmdParam::PM_MultiOptional);
 
     cmd.addGroup("general options:", LONGCOL, SHORTCOL + 2);
      cmd.addOption("--help",                     "-h",     "print this help text and exit", OFCommandLine::AF_Exclusive);
@@ -140,12 +145,10 @@ int main(int argc, char *argv[])
 
     cmd.addGroup("input options:");
       cmd.addSubGroup("DICOMDIR identifiers:");
-        cmd.addOption("--output-file",           "+D",  1, "[f]ilename: string",
-                                                           "generate specific DICOMDIR file\n(default: " DEFAULT_DICOMDIR_NAME " in current directory)");
-        cmd.addOption("--fileset-id",            "+F",  1, "[i]d: string (default: " DEFAULT_FILESETID ")",
-                                                           "use specific file set ID");
+        cmd.addOption("--fileset-id",            "+F",  1, "[i]d: string",
+                                                           "use specific file-set ID\n(default: " DEFAULT_FILESETID ", \"\" for none)");
         cmd.addOption("--descriptor",            "+R",  1, "[f]ilename: string",
-                                                           "add a file set descriptor file ID\n(e.g. README, default: no descriptor)");
+                                                           "add a file-set descriptor file ID\n(e.g. README, default: no descriptor)");
         cmd.addOption("--char-set",              "+C",  1, "[c]harset: string",
                                                            "add a specific character set for descriptor\n(default: \"" DEFAULT_DESCRIPTOR_CHARSET "\" if descriptor present)");
       cmd.addSubGroup("reading:");
@@ -184,12 +187,26 @@ int main(int argc, char *argv[])
                                                            "use specified PGM image if icon cannot be\ncreated automatically (default: black image)");
 #endif
     cmd.addGroup("output options:");
+      cmd.addSubGroup("DICOMDIR file:");
+        cmd.addOption("--output-file",           "+D",  1, "[f]ilename: string",
+                                                           "generate specific DICOMDIR file\n(default: " DEFAULT_DICOMDIR_NAME " in current directory)");
 #ifdef BUILD_DCMGPDIR_AS_DCMMKDIR
       cmd.addSubGroup("profiles:");
         cmd.addOption("--general-purpose",       "-Pgp",   "General Purpose Interchange on CD-R or\nDVD-RAM Media (STD-GEN-CD/DVD-RAM, default)");
-        cmd.addOption("--general-purpose-dvd",   "-Pdv",   "General Purpose DVD with Compression\nInterchange (STD-GEN-DVD-JPEG/J2K)");
-        cmd.addOption("--general-purpose-mime",  "-Pmi",   "General Purpose MIME Interchange\n(STD-GEN-MIME)");
-        cmd.addOption("--usb-and-flash",         "-Pfl",   "General Purpose USB/Flash Memory with Compr.\nInterchange (STD-GEN-USB/MMC/CF/SD-JPEG/J2K)");
+        cmd.addOption("--general-dvd-jpeg",      "-Pdv",   "General Purpose DVD Interchange with JPEG\n(STD-GEN-DVD-JPEG)");
+        cmd.addOption("--general-dvd-j2k",       "-Pd2",   "General Purpose DVD Interchange with JPEG\n2000 (STD-GEN-DVD-J2K)");
+        cmd.addOption("--general-bd-jpeg",       "-Pbd",   "General Purpose BD Interchange with JPEG\n(STD-GEN-BD-JPEG)");
+        cmd.addOption("--general-bd-j2k",        "-Pb2",   "General Purpose BD Interchange with JPEG\n2000 (STD-GEN-BD-J2K)");
+        cmd.addOption("--general-bd-mpeg2-mpml", "-Pbm",   "General Purpose BD Interchange with MPEG2\nMP@ML (STD-GEN-BD-MPEG2-MPML)");
+        cmd.addOption("--general-bd-mpeg2-mphl", "-Pbh",   "General Purpose BD Interchange with MPEG2\nMP@HL (STD-GEN-BD-MPEG2-MPHL)");
+        cmd.addOption("--general-bd-mpeg4-hp",   "-Pba",   "General Purpose BD Interchange with MPEG-4\nAVC/H.264 HiP@Level4.1\n(STD-GEN-BD-MPEG4-HPLV41)");
+        cmd.addOption("--general-bd-mpeg4-hpbd", "-Pbb",   "General Purpose BD Interchange with MPEG-4\nAVC/H.264 BD-Compatible HiP@Level4.1\n(STD-GEN-BD-MPEG4-HPLV41BD)");
+        cmd.addOption("--general-bd-mpeg4-hp2d",           "General Purpose BD Interchange with MPEG-4\nAVC/H.264 HiP@Level4.2 for 2D video\n(STD-GEN-BD-MPEG4-HPLV42-2D)");
+        cmd.addOption("--general-bd-mpeg4-hp3d",           "General Purpose BD Interchange with MPEG-4\nAVC/H.264 HiP@Level4.2 for 3D video\n(STD-GEN-BD-MPEG4-HPLV42-3D)");
+        cmd.addOption("--general-bd-mpeg4-hpst",           "General Purpose BD Interchange with MPEG-4\nAVC/H.264 Stereo HiP@Level4.2\n(STD-GEN-BD-MPEG4-SHPLV42)");
+        cmd.addOption("--usb-and-flash-jpeg",    "-Pfl",   "General Purpose USB/Flash Memory Interchange\nwith JPEG (STD-GEN-USB/MMC/CF/SD-JPEG)");
+        cmd.addOption("--usb-and-flash-j2k",     "-Pf2",   "General Purpose USB/Flash Memory Interchange\nwith JPEG 2000 (STD-GEN-USB/MMC/CF/SD-J2K)");
+        cmd.addOption("--general-mime",          "-Pmi",   "General Purpose MIME Interchange\n(STD-GEN-MIME)");
         cmd.addOption("--mpeg2-mpml-dvd",        "-Pmp",   "DVD Interchange with MPEG2 Main Profile @\nMain Level (STD-DVD-MPEG2-MPML)");
         cmd.addOption("--basic-cardiac",         "-Pbc",   "Basic Cardiac X-Ray Angiographic Studies on\nCD-R Media (STD-XABC-CD)");
         cmd.addOption("--xray-angiographic",     "-Pxa",   "1024 X-Ray Angiographic Studies on CD-R Media\n(STD-XA1K-CD)");
@@ -210,6 +227,8 @@ int main(int argc, char *argv[])
         cmd.addOption("--append",                "+A",     "append to existing DICOMDIR");
         cmd.addOption("--update",                "+U",     "update existing DICOMDIR");
         cmd.addOption("--discard",               "-w",     "do not write out DICOMDIR");
+      cmd.addSubGroup("backup:");
+        cmd.addOption("--create-backup",                   "create a backup of existing DICOMDIR (def.)");
         cmd.addOption("--no-backup",             "-nb",    "do not create a backup of existing DICOMDIR");
       cmd.addSubGroup("post-1993 value representations:");
         cmd.addOption("--enable-new-vr",         "+u",     "enable support for new VRs (UN/UT) (default)");
@@ -223,7 +242,7 @@ int main(int argc, char *argv[])
 
     /* evaluate command line */
     prepareCmdLineArgs(argc, argv, OFFIS_CONSOLE_APPLICATION);
-    if (app.parseCommandLine(cmd, argc, argv, OFCommandLine::PF_ExpandWildcards))
+    if (app.parseCommandLine(cmd, argc, argv))
     {
         /* print help text and exit */
         if (cmd.getArgCount() == 0)
@@ -255,8 +274,6 @@ int main(int argc, char *argv[])
         OFLog::configureFromCommandLine(cmd, app);
 
         /* input options */
-        if (cmd.findOption("--output-file"))
-            app.checkValue(cmd.getValue(opt_output));
         if (cmd.findOption("--fileset-id"))
             app.checkValue(cmd.getValue(opt_fileset));
         if (cmd.findOption("--descriptor"))
@@ -280,8 +297,8 @@ int main(int argc, char *argv[])
         if (cmd.findOption("--recurse"))
         {
             opt_recurse = OFTrue;
-            if ((opt_directory == NULL) || (strlen(opt_directory) == 0))
-                opt_directory = ".";
+            if (opt_directory.isEmpty())
+                opt_directory.set(".", OFTrue /*convert*/);
         }
         cmd.endOptionBlock();
 
@@ -333,29 +350,54 @@ int main(int argc, char *argv[])
         }
         if (cmd.findOption("--icon-file-prefix"))
         {
-            const char *iconPrefix = NULL;
+            OFFilename iconPrefix;
             app.checkValue(cmd.getValue(iconPrefix));
             ddir.setIconPrefix(iconPrefix);
         }
         if (cmd.findOption("--default-icon"))
         {
-            const char *defaultIcon = NULL;
+            OFFilename defaultIcon;
             app.checkValue(cmd.getValue(defaultIcon));
             ddir.setDefaultIcon(defaultIcon);
         }
 #endif
 
         /* output options */
+        if (cmd.findOption("--output-file"))
+            app.checkValue(cmd.getValue(opt_output));
+
 #ifdef BUILD_DCMGPDIR_AS_DCMMKDIR
         cmd.beginOptionBlock();
         if (cmd.findOption("--general-purpose"))
             opt_profile = DicomDirInterface::AP_GeneralPurpose;
-        if (cmd.findOption("--general-purpose-dvd"))
-            opt_profile = DicomDirInterface::AP_GeneralPurposeDVD;
-        if (cmd.findOption("--general-purpose-mime"))
+        if (cmd.findOption("--general-dvd-jpeg"))
+            opt_profile = DicomDirInterface::AP_GeneralPurposeDVDJPEG;
+        if (cmd.findOption("--general-dvd-j2k"))
+            opt_profile = DicomDirInterface::AP_GeneralPurposeDVDJPEG2000;
+        if (cmd.findOption("--general-bd-jpeg"))
+            opt_profile = DicomDirInterface::AP_GeneralPurposeBDJPEG;
+        if (cmd.findOption("--general-bd-j2k"))
+            opt_profile = DicomDirInterface::AP_GeneralPurposeBDJPEG2000;
+        if (cmd.findOption("--general-bd-mpeg2-mpml"))
+            opt_profile = DicomDirInterface::AP_GeneralPurposeBDMPEG2MPatML;
+        if (cmd.findOption("--general-bd-mpeg2-mphl"))
+            opt_profile = DicomDirInterface::AP_GeneralPurposeBDMPEG2MPatHL;
+        if (cmd.findOption("--general-bd-mpeg4-hp"))
+            opt_profile = DicomDirInterface::AP_GeneralPurposeBDMPEG4HPatLV41;
+        if (cmd.findOption("--general-bd-mpeg4-hpbd"))
+            opt_profile = DicomDirInterface::AP_GeneralPurposeBDMPEG4HPatLV41BD;
+        if (cmd.findOption("--general-bd-mpeg4-hp2d"))
+            opt_profile = DicomDirInterface::AP_GeneralPurposeBDMPEG4HPatLV42_2D;
+        if (cmd.findOption("--general-bd-mpeg4-hp3d"))
+            opt_profile = DicomDirInterface::AP_GeneralPurposeBDMPEG4HPatLV42_3D;
+        if (cmd.findOption("--general-bd-mpeg4-hpst"))
+            opt_profile = DicomDirInterface::AP_GeneralPurposeBDMPEG4StereoHPatLV42;
+        if (cmd.findOption("--usb-and-flash-jpeg"))
+            opt_profile = DicomDirInterface::AP_USBandFlashJPEG;
+        if (cmd.findOption("--usb-and-flash-j2k"))
+            opt_profile = DicomDirInterface::AP_USBandFlashJPEG2000;
+        if (cmd.findOption("--general-mime"))
             opt_profile = DicomDirInterface::AP_GeneralPurposeMIME;
-        if (cmd.findOption("--usb-and-flash"))
-            opt_profile = DicomDirInterface::AP_USBandFlash;
         if (cmd.findOption("--mpeg2-mpml-dvd"))
             opt_profile = DicomDirInterface::AP_MPEG2MPatMLDVD;
         if (cmd.findOption("--basic-cardiac"))
@@ -413,20 +455,19 @@ int main(int argc, char *argv[])
             opt_update = OFFalse;
         }
         cmd.endOptionBlock();
+
+        cmd.beginOptionBlock();
+        if (cmd.findOption("--create-backup"))
+            ddir.disableBackupMode(OFTrue);
         if (cmd.findOption("--no-backup"))
-            ddir.disableBackupMode();
+            ddir.disableBackupMode(OFFalse);
+        cmd.endOptionBlock();
 
         cmd.beginOptionBlock();
         if (cmd.findOption("--enable-new-vr"))
-        {
-            dcmEnableUnknownVRGeneration.set(OFTrue);
-            dcmEnableUnlimitedTextVRGeneration.set(OFTrue);
-        }
+            dcmEnableGenerationOfNewVRs();
         if (cmd.findOption("--disable-new-vr"))
-        {
-            dcmEnableUnknownVRGeneration.set(OFFalse);
-            dcmEnableUnlimitedTextVRGeneration.set(OFFalse);
-        }
+            dcmDisableGenerationOfNewVRs();
         cmd.endOptionBlock();
 
         cmd.beginOptionBlock();
@@ -463,10 +504,20 @@ int main(int argc, char *argv[])
         return 1;  /* DcmDicomDir class dumps core when no data dictionary present */
     }
 
+    /* make sure input directory exists (if specified) */
+    if (!opt_directory.isEmpty())
+    {
+        if (!OFStandard::dirExists(opt_directory))
+        {
+            OFLOG_FATAL(dcmgpdirLogger, OFFIS_CONSOLE_APPLICATION << ": specified input directory does not exist");
+            return 1;
+        }
+    }
+
     /* create list of input files */
-    OFList<OFString> fileNames;
-    OFString pathname;
-    const char *param = NULL;
+    OFFilename paramValue;
+    OFFilename pathName;
+    OFList<OFFilename> fileNames;
     const int count = cmd.getParamCount();
     if (opt_recurse)
         OFLOG_INFO(dcmgpdirLogger, "determining input files ...");
@@ -474,23 +525,25 @@ int main(int argc, char *argv[])
     if (count == 0)
     {
         if (opt_recurse)
-            OFStandard::searchDirectoryRecursively("", fileNames, opt_pattern, opt_directory);
-        else {
-            OFLOG_FATAL(dcmgpdirLogger, "missing parameter dcmfile-in");
-            return 1;
-        }
+            OFStandard::searchDirectoryRecursively(OFFilename(), fileNames, opt_pattern, opt_directory);
+        else
+            app.printError("Missing parameter dcmfile-in");
     } else {
         /* iterate over all input filenames */
         for (int i = 1; i <= count; i++)
         {
-            cmd.getParam(i, param);
+            cmd.getParam(i, paramValue);
             /* add input directory */
-            OFStandard::combineDirAndFilename(pathname, opt_directory, param, OFTrue /*allowEmptyDirName*/);
+            OFStandard::combineDirAndFilename(pathName, opt_directory, paramValue, OFTrue /*allowEmptyDirName*/);
             /* search directory recursively (if required) */
-            if (opt_recurse && OFStandard::dirExists(pathname))
-                OFStandard::searchDirectoryRecursively(param, fileNames, opt_pattern, opt_directory);
-            else
-                fileNames.push_back(param);
+            if (OFStandard::dirExists(pathName))
+            {
+                if (opt_recurse)
+                    OFStandard::searchDirectoryRecursively(paramValue, fileNames, opt_pattern, opt_directory);
+                else
+                    OFLOG_WARN(dcmgpdirLogger, "ignoring directory because option --recurse is not set: " << paramValue);
+            } else
+                fileNames.push_back(paramValue);
         }
     }
     /* check whether there are any input files */
@@ -507,13 +560,21 @@ int main(int argc, char *argv[])
 #endif
 
     OFCondition result;
+    const char *action = "";
     /* create new general purpose DICOMDIR, append to or update existing one */
     if (opt_append)
+    {
+        action = "appending";
         result = ddir.appendToDicomDir(opt_profile, opt_output);
+    }
     else if (opt_update)
+    {
+        action = "updating";
         result = ddir.updateDicomDir(opt_profile, opt_output);
-    else
+    } else {
+        action = "creating";
         result = ddir.createNewDicomDir(opt_profile, opt_output, opt_fileset);
+    }
     if (result.good())
     {
         /* set fileset descriptor and character set */
@@ -521,15 +582,15 @@ int main(int argc, char *argv[])
         if (result.good())
         {
             /* collect 'bad' files */
-            OFList<OFString> badFiles;
+            OFList<OFFilename> badFiles;
             unsigned int goodFiles = 0;
-            OFListIterator(OFString) iter = fileNames.begin();
-            OFListIterator(OFString) last = fileNames.end();
+            OFListIterator(OFFilename) iter = fileNames.begin();
+            OFListIterator(OFFilename) last = fileNames.end();
             /* iterate over all input filenames */
             while ((iter != last) && result.good())
             {
                 /* add files to the DICOMDIR */
-                result = ddir.addDicomFile((*iter).c_str(), opt_directory);
+                result = ddir.addDicomFile((*iter), opt_directory);
                 if (result.bad())
                 {
                     badFiles.push_back(*iter);
@@ -566,8 +627,18 @@ int main(int argc, char *argv[])
             }
             /* write DICOMDIR file */
             if (result.good() && opt_write)
+            {
+                action = "writing";
                 result = ddir.writeDicomDir(opt_enctype, opt_glenc);
+            }
         }
+    }
+
+    /* some final error reporting */
+    if (result.bad() && (result != EC_IllegalCall))
+    {
+        OFLOG_FATAL(dcmgpdirLogger, OFFIS_CONSOLE_APPLICATION << ": error ("
+            << result.text() << ") " << action << " file: " << opt_output);
     }
 
 #ifdef BUILD_DCMGPDIR_AS_DCMMKDIR
@@ -587,172 +658,3 @@ int main(int argc, char *argv[])
 
     return result.status();
 }
-
-
-/*
- * CVS/RCS Log:
- * $Log: dcmgpdir.cc,v $
- * Revision 1.95  2010-10-14 13:13:30  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.94  2010-08-09 13:04:19  joergr
- * Updated data dictionary to 2009 edition of the DICOM standard. From now on,
- * the official "keyword" is used for the attribute name which results in a
- * number of minor changes (e.g. "PatientsName" is now called "PatientName").
- *
- * Revision 1.93  2010-07-21 14:28:19  joergr
- * Enhanced check of input directory variable (also check for empty string).
- *
- * Revision 1.92  2010-07-21 13:29:48  joergr
- * Made sure that no NULL pointer is passed to the OFString constructor. This
- * occurred when option --recurse was used without --pattern, or option
- * --no-recurse was used without --input-directory.
- *
- * Revision 1.91  2010-03-23 15:17:24  joergr
- * Use printError() method for command line parsing errors only. After the
- * resource identifier has been printed to the log stream use "oflog" instead.
- *
- * Revision 1.90  2009-11-04 09:58:06  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.89  2009-04-21 14:02:49  joergr
- * Fixed minor inconsistencies in manpage / syntax usage.
- *
- * Revision 1.88  2009-01-15 10:15:23  joergr
- * Added support for optional JPEG 2000 decompression (currently uncommented).
- *
- * Revision 1.87  2008-09-25 14:38:48  joergr
- * Moved output of resource identifier in order to avoid printing the same
- * information twice.
- *
- * Revision 1.86  2008-09-25 11:19:48  joergr
- * Added support for printing the expanded command line arguments.
- * Always output the resource identifier of the command line tool in debug mode.
- *
- * Revision 1.85  2007/01/10 13:05:18  joergr
- * Added new option that enables support for retired SOP classes.
- * Re-ordered and re-structured command line options.
- *
- * Revision 1.84  2006/12/15 14:26:14  joergr
- * Added new option that allows to update existing entries in a DICOMDIR. This
- * also adds support for mixed media stored application profiles.
- * Fixed wrong spelling of command line option which prevented the MPEG2-DVD
- * application profile from working.
- * Changed name of enum value for the MPEG2-DVD application profile in order to
- * be more consistent with other names.
- *
- * Revision 1.83  2006/08/15 15:50:56  meichel
- * Updated all code in module dcmdata to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.82  2006/07/27 13:52:42  joergr
- * Changed parameter "exclusive" of method addOption() from type OFBool into an
- * integer parameter "flags". Prepended prefix "PF_" to parseLine() flags.
- * Option "--help" is no longer an exclusive option by default.
- *
- * Revision 1.81  2005/12/08 15:40:48  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.80  2005/11/28 15:28:54  meichel
- * File dcdebug.h is not included by any other header file in the toolkit
- *   anymore, to minimize the risk of name clashes of macro debug().
- *
- * Revision 1.79  2005/06/13 14:36:07  joergr
- * Added new options to disable check on pixel encoding and transfer syntax.
- *
- * Revision 1.78  2005/03/09 17:56:20  joergr
- * Added support for new Media Storage Application Profiles according to DICOM
- * PS 3.12-2004. Removed support for non-standard conformant "No profile".
- *
- * Revision 1.77  2004/05/06 16:37:47  joergr
- * Added typecasts to keep Sun CC 2.0.1 quiet.
- *
- * Revision 1.76  2004/01/16 10:52:58  joergr
- * Removed acknowledgements with e-mail addresses from CVS log.
- *
- * Revision 1.75  2003/08/12 15:22:05  joergr
- * Replaced call of OFCommandLine::getValueAndCheckMin() by OFCommandLine::
- * getValueAndCheckMinMax() - warning reported by MSVC 5.
- *
- * Revision 1.74  2003/08/12 14:34:00  joergr
- * Adapted implementation to use new DICOMDIR class. Added new command line
- * options (e.g. --input-directory or --pattern).
- *
- * Revision 1.73  2003/05/20 08:50:19  joergr
- * Added support for SOP Class "Chest CAD SR" (Supplement 65).
- *
- * Revision 1.72  2003/03/12 17:32:38  meichel
- * Updated DcmObject::print() flags
- *
- * Revision 1.71  2002/11/27 12:07:17  meichel
- * Adapted module dcmdata to use of new header file ofstdinc.h
- *
- * Revision 1.70  2002/11/26 14:03:02  joergr
- * Numerous code purifications, e.g. made local functions "static".
- *
- * Revision 1.69  2002/11/26 08:43:00  meichel
- * Replaced all includes for "zlib.h" with <zlib.h>
- *   to avoid inclusion of zlib.h in the makefile dependencies.
- *
- * Revision 1.68  2002/11/04 16:39:18  joergr
- * Added new command line option preventing the creation of a backup of an
- * existing DICOMDIR.
- *
- * Revision 1.67  2002/09/23 17:52:03  joergr
- * Prepared code for future support of 'config.guess' host identifiers.
- *
- * Revision 1.66  2002/09/23 13:50:41  joergr
- * Added new command line option "--version" which prints the name and version
- * number of external libraries used.
- *
- * Revision 1.65  2002/08/21 10:14:15  meichel
- * Adapted code to new loadFile and saveFile methods, thus removing direct
- *   use of the DICOM stream classes.
- *
- * Revision 1.64  2002/08/13 09:56:44  joergr
- * Added new profile (NONE) based on STD-GEN-xxxx which allows DICOM objects
- * of any transfer syntax to be referenced from a DICOMDIR.  NB: there's no
- * equivilent application profile in the DICOM standard.
- *
- * Revision 1.63  2002/07/11 16:08:26  joergr
- * Added support for CT/MR application profile.  Added general support for
- * monochrome icon images.
- * Added new command line flags to handle inconsistent header information
- * (patient ID and name).
- *
- * Revision 1.62  2002/07/02 16:52:14  joergr
- * Minor fixes to keep MSVC6 quiet.
- *
- * Revision 1.61  2002/07/02 16:16:16  joergr
- * Added support for ultrasound and waveform media storage application profiles.
- * Added Mammography CAD SR to the list of supported SOP classes.
- *
- * Revision 1.60  2002/04/16 13:38:54  joergr
- * Added configurable support for C++ ANSI standard includes (e.g. streams).
- *
- * Revision 1.59  2002/04/11 12:35:54  joergr
- * Replaced direct call of system routines by new standard date and time
- * functions.
- * Use the new standard file system routines like fileExists() etc.
- *
- * Revision 1.58  2001/12/06 14:03:16  joergr
- * Minor "stylistic" changes.
- *
- * Revision 1.57  2001/11/29 16:51:45  joergr
- * Added new command line option to dcmmkdir that allows to ignore non-standard
- * conformant spatial resolutions for images (e.g. images larger than 1024*1024
- * for the cardiac profiles).
- *
- * Revision 1.56  2001/11/19 17:53:36  joergr
- * Implemented performance optimization for the generation of icon images of
- * compressed multi-frame images.
- *
- * Revision 1.55  2001/11/19 12:43:17  joergr
- * Re-added dcmgpdir tool to dcmdata module.
- *
- * Revision 1.1  2001/11/13 17:57:14  joergr
- * Replaced utility dcmgpdir with dcmmkdir which supports other Media Storage
- * Application Profiles in addition to the General Purpose one.
- *
- *
- */

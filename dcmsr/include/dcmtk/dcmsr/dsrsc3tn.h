@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2010, OFFIS e.V.
+ *  Copyright (C) 2010-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose:
  *    classes: DSRSCoord3DTreeNode
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:32 $
- *  CVS/RCS Revision: $Revision: 1.2 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -33,7 +26,7 @@
 
 #include "dcmtk/config/osconfig.h"   /* make sure OS specific configuration is included first */
 
-#include "dcmtk/dcmsr/dsrdoctr.h"
+#include "dcmtk/dcmsr/dsrdoctn.h"
 #include "dcmtk/dcmsr/dsrsc3vl.h"
 
 
@@ -43,7 +36,7 @@
 
 /** Class for content item SCOORD3D
  */
-class DSRSCoord3DTreeNode
+class DCMTK_DCMSR_EXPORT DSRSCoord3DTreeNode
   : public DSRDocumentTreeNode,
     public DSRSpatialCoordinates3DValue
 {
@@ -51,14 +44,44 @@ class DSRSCoord3DTreeNode
   public:
 
     /** constructor
-     ** @param  relationshipType  type of relationship to the parent tree node.
-     *                            Should not be RT_invalid or RT_isRoot.
+     ** @param  relationshipType  type of relationship to the parent tree node.  Should
+     *                            not be DSRTypes::RT_invalid or DSRTypes::RT_isRoot.
      */
     DSRSCoord3DTreeNode(const E_RelationshipType relationshipType);
+
+    /** copy constructor.
+     *  Please note that the comments on the copy constructor of the base class
+     *  DSRDocumentTreeNode apply.
+     ** @param  node  tree node to be copied
+     */
+    DSRSCoord3DTreeNode(const DSRSCoord3DTreeNode &node);
 
     /** destructor
      */
     virtual ~DSRSCoord3DTreeNode();
+
+    /** comparison operator "equal".
+     *  Two tree nodes are equal if the comparison operator of the base class DSRDocumentTreeNode
+     *  regards them as "equal" (same types and concept names) and the stored values are equal.
+     ** @param  node  tree node that should be compared to the current one
+     ** @return OFTrue if both tree nodes are equal, OFFalse otherwise
+     */
+    virtual OFBool operator==(const DSRDocumentTreeNode &node) const;
+
+    /** comparison operator "not equal".
+     *  Two tree nodes are not equal if either the comparison operator of the base class
+     *  DSRDocumentTreeNode regards them as "not equal" (different types or concept names) or
+     *  the stored values are not equal.
+     ** @param  node  tree node that should be compared to the current one
+     ** @return OFTrue if both tree nodes are not equal, OFFalse otherwise
+     */
+    virtual OFBool operator!=(const DSRDocumentTreeNode &node) const;
+
+    /** clone this tree node.
+     *  Internally, the copy constructor is used, so the corresponding comments apply.
+     ** @return copy of this tree node
+     */
+    virtual DSRSCoord3DTreeNode *clone() const;
 
     /** clear all member variables.
      *  Please note that the content item might become invalid afterwards.
@@ -66,13 +89,19 @@ class DSRSCoord3DTreeNode
     virtual void clear();
 
     /** check whether the content item is valid.
-     *  The content item is valid if the two base classes are valid.
+     *  The content item is valid if the two base classes are valid.  This check includes the value
+     *  of the content item, which can also be checked separately with hasValidValue().
      ** @return OFTrue if tree node is valid, OFFalse otherwise
      */
     virtual OFBool isValid() const;
 
+    /** check whether the value of the content item, i.e.\ the spatial coordinates value, is valid
+     ** @return OFTrue if the value is valid, OFFalse otherwise
+     */
+    virtual OFBool hasValidValue() const;
+
     /** check whether the content is short.
-     *  The method isShort() from the base class DSRSpatialCoordinatesValue is called.
+     *  The method isShort() from the base class DSRSpatialCoordinates3DValue is called.
      ** @param  flags  flag used to customize the output (see DSRTypes::HF_xxx)
      ** @return OFTrue if the content is short, OFFalse otherwise
      */
@@ -101,9 +130,11 @@ class DSRSCoord3DTreeNode
 
     /** read content item (value) from dataset
      ** @param  dataset  DICOM dataset from which the content item should be read
+     *  @param  flags    flag used to customize the reading process (see DSRTypes::RF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
-    virtual OFCondition readContentItem(DcmItem &dataset);
+    virtual OFCondition readContentItem(DcmItem &dataset,
+                                        const size_t flags);
 
     /** write content item (value) to dataset
      ** @param  dataset  DICOM dataset to which the content item should be written
@@ -114,10 +145,12 @@ class DSRSCoord3DTreeNode
     /** read content item specific XML data
      ** @param  doc     document containing the XML file content
      *  @param  cursor  cursor pointing to the starting node
+     *  @param  flags   flag used to customize the reading process (see DSRTypes::XF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
     virtual OFCondition readXMLContentItem(const DSRXMLDocument &doc,
-                                           DSRXMLCursor cursor);
+                                           DSRXMLCursor cursor,
+                                           const size_t flags);
 
     /** render content item (value) in HTML/XHTML format
      ** @param  docStream     output stream to which the main HTML/XHTML document is written
@@ -137,25 +170,11 @@ class DSRSCoord3DTreeNode
 
   private:
 
-// --- declaration of default/copy constructor and assignment operator
+// --- declaration of default constructor and assignment operator
 
     DSRSCoord3DTreeNode();
-    DSRSCoord3DTreeNode(const DSRSCoord3DTreeNode &);
     DSRSCoord3DTreeNode &operator=(const DSRSCoord3DTreeNode &);
 };
 
 
 #endif
-
-
-/*
- *  CVS/RCS Log:
- *  $Log: dsrsc3tn.h,v $
- *  Revision 1.2  2010-10-14 13:16:32  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.1  2010-09-28 14:08:14  joergr
- *  Added support for Colon CAD SR which requires a new value type (SCOORD3D).
- *
- *
- */

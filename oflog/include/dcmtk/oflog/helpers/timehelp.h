@@ -1,10 +1,11 @@
+// -*- C++ -*-
 // Module:  Log4CPLUS
 // File:    timehelper.h
 // Created: 6/2003
 // Author:  Tad E. Smith
 //
 //
-// Copyright 2003-2009 Tad E. Smith
+// Copyright 2003-2010 Tad E. Smith
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,29 +21,40 @@
 
 /** @file */
 
-#ifndef _LOG4CPLUS_HELPERS_TIME_HELPER_HEADER_
-#define _LOG4CPLUS_HELPERS_TIME_HELPER_HEADER_
+#ifndef DCMTK_LOG4CPLUS_HELPERS_TIME_HELPER_HEADER_
+#define DCMTK_LOG4CPLUS_HELPERS_TIME_HELPER_HEADER_
 
 #include "dcmtk/oflog/config.h"
-#include "dcmtk/oflog/tstring.h"
 
-#ifdef TM_IN_SYS_TIME
-#include <sys/time.h>
+#if defined (DCMTK_LOG4CPLUS_HAVE_PRAGMA_ONCE)
+#pragma once
 #endif
 
-//#include <time.h>
-#define INCLUDE_CTIME
-#include "dcmtk/ofstd/ofstdinc.h"
+#include "dcmtk/oflog/tstring.h"
+
+#if defined (DCMTK_LOG4CPLUS_HAVE_TIME_H)
+#include <time.h>
+#endif
+
+#include <ctime>
 
 
+namespace dcmtk {
 namespace log4cplus {
 
 namespace helpers {
 
+
+#if 0 // Needed for MSC6
+using STD_NAMESPACE time_t;
+using STD_NAMESPACE tm;
+#endif
+
+
 /**
  * This class represents a Epoch time with microsecond accuracy.
  */
-class LOG4CPLUS_EXPORT Time {
+class DCMTK_LOG4CPLUS_EXPORT Time {
 public:
     Time();
     Time(time_t tv_sec, long tv_usec);
@@ -50,7 +62,7 @@ public:
 
     /**
      * Returns the current time using the <code>gettimeofday()</code>
-     * method if it is available on the current platform.  (Not on
+     * method if it is available on the current platform.  (Not on 
      * WIN32.)
      */
     static Time gettimeofday();
@@ -79,36 +91,36 @@ public:
     /**
      * Sets this Time using the <code>mktime</code> function.
      */
-    time_t setTime(struct tm* t);
+    time_t setTime(tm* t);
 
     /**
-     * Returns this Time as a <code>time_t></code> value.
+     * Returns this Time as a <code>time_t</code> value.
      */
-    time_t getTime() const;
+    time_t getTime() const DCMTK_LOG4CPLUS_ATTRIBUTE_PURE;
 
     /**
      * Populates <code>tm</code> using the <code>gmtime()</code>
      * function.
      */
-    void gmtime(struct tm* t) const;
+    void gmtime(tm* t) const;
 
     /**
      * Populates <code>tm</code> using the <code>localtime()</code>
      * function.
      */
-    void localtime(struct tm* t) const;
+    void localtime(tm* t) const;
 
     /**
      * Returns a string with a "formatted time" specified by
      * <code>fmt</code>.  It used the <code>strftime()</code>
-     * function to do this.
-     *
+     * function to do this.  
+     * 
      * Look at your platform's <code>strftime()</code> documentation
      * for the formatting options available.
-     *
+     * 
      * The following additional options are provided:<br>
      * <code>%q</code> - 3 character field that provides milliseconds
-     * <code>%Q</code> - 7 character field that provides fractional
+     * <code>%Q</code> - 7 character field that provides fractional 
      * milliseconds.
      */
     log4cplus::tstring getFormattedTime(const log4cplus::tstring& fmt,
@@ -121,47 +133,51 @@ public:
     Time& operator*=(long rhs);
 
 private:
-    void build_q_value (log4cplus::tstring & q_str) const;
-    void build_uc_q_value (log4cplus::tstring & uc_q_str) const;
-
   // Data
     time_t tv_sec;  /* seconds */
     long tv_usec;  /* microseconds */
 };
 
 
-LOG4CPLUS_EXPORT const log4cplus::helpers::Time operator+
+DCMTK_LOG4CPLUS_EXPORT const log4cplus::helpers::Time operator+
                                    (const log4cplus::helpers::Time& lhs,
                                     const log4cplus::helpers::Time& rhs);
-LOG4CPLUS_EXPORT const log4cplus::helpers::Time operator-
+DCMTK_LOG4CPLUS_EXPORT const log4cplus::helpers::Time operator-
                                    (const log4cplus::helpers::Time& lhs,
                                     const log4cplus::helpers::Time& rhs);
-LOG4CPLUS_EXPORT const log4cplus::helpers::Time operator/
+DCMTK_LOG4CPLUS_EXPORT const log4cplus::helpers::Time operator/
                                    (const log4cplus::helpers::Time& lhs,
                                     long rhs);
-LOG4CPLUS_EXPORT const log4cplus::helpers::Time operator*
+DCMTK_LOG4CPLUS_EXPORT const log4cplus::helpers::Time operator*
                                    (const log4cplus::helpers::Time& lhs,
                                     long rhs);
 
-LOG4CPLUS_EXPORT bool operator<(const log4cplus::helpers::Time& lhs,
-                                const log4cplus::helpers::Time& rhs);
-LOG4CPLUS_EXPORT bool operator<=(const log4cplus::helpers::Time& lhs,
-                                 const log4cplus::helpers::Time& rhs);
+DCMTK_LOG4CPLUS_EXPORT bool operator<(const log4cplus::helpers::Time& lhs,
+                                const log4cplus::helpers::Time& rhs)
+    DCMTK_LOG4CPLUS_ATTRIBUTE_PURE;
+DCMTK_LOG4CPLUS_EXPORT bool operator<=(const log4cplus::helpers::Time& lhs,
+                                 const log4cplus::helpers::Time& rhs)
+    DCMTK_LOG4CPLUS_ATTRIBUTE_PURE;
 
-LOG4CPLUS_EXPORT bool operator>(const log4cplus::helpers::Time& lhs,
-                                const log4cplus::helpers::Time& rhs);
-LOG4CPLUS_EXPORT bool operator>=(const log4cplus::helpers::Time& lhs,
-                                 const log4cplus::helpers::Time& rhs);
+DCMTK_LOG4CPLUS_EXPORT bool operator>(const log4cplus::helpers::Time& lhs,
+                                const log4cplus::helpers::Time& rhs)
+    DCMTK_LOG4CPLUS_ATTRIBUTE_PURE;
+DCMTK_LOG4CPLUS_EXPORT bool operator>=(const log4cplus::helpers::Time& lhs,
+                                 const log4cplus::helpers::Time& rhs)
+    DCMTK_LOG4CPLUS_ATTRIBUTE_PURE;
 
-LOG4CPLUS_EXPORT bool operator==(const log4cplus::helpers::Time& lhs,
-                                 const log4cplus::helpers::Time& rhs);
-LOG4CPLUS_EXPORT bool operator!=(const log4cplus::helpers::Time& lhs,
-                                 const log4cplus::helpers::Time& rhs);
+DCMTK_LOG4CPLUS_EXPORT bool operator==(const log4cplus::helpers::Time& lhs,
+                                 const log4cplus::helpers::Time& rhs)
+    DCMTK_LOG4CPLUS_ATTRIBUTE_PURE;
+DCMTK_LOG4CPLUS_EXPORT bool operator!=(const log4cplus::helpers::Time& lhs,
+                                 const log4cplus::helpers::Time& rhs)
+    DCMTK_LOG4CPLUS_ATTRIBUTE_PURE;
 
 } // namespace helpers
 
 } // namespace log4cplus
+} // end namespace dcmtk
 
 
-#endif // _LOG4CPLUS_HELPERS_TIME_HELPER_HEADER_
+#endif // DCMTK_LOG4CPLUS_HELPERS_TIME_HELPER_HEADER_
 

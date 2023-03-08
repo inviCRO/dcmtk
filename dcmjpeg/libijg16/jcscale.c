@@ -18,7 +18,7 @@
 
 METHODDEF(void)
 simple_downscale(j_compress_ptr cinfo,
-		 JSAMPROW input_buf, JSAMPROW output_buf, JDIMENSION width)
+		 const JSAMPROW input_buf, JSAMPROW output_buf, JDIMENSION width)
 {
   /* j_lossless_c_ptr losslsc = (j_lossless_c_ptr) cinfo->codec; */
   unsigned int xindex;
@@ -34,6 +34,7 @@ METHODDEF(void)
 noscale(j_compress_ptr cinfo,
 	JSAMPROW input_buf, JSAMPROW output_buf, JDIMENSION width)
 {
+  (void)cinfo;
   MEMCOPY(output_buf, input_buf, width * SIZEOF(JSAMPLE));
   return;
 }

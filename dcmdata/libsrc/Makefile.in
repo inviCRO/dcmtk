@@ -17,7 +17,7 @@ oflogdir = $(top_srcdir)/../oflog
 
 LOCALINCLUDES = -I$(ofstddir)/include -I$(oflogdir)/include
 LIBDIRS = -L$(ofstddir)/libsrc -L$(oflogdir)/libsrc
-LOCALLIBS = -loflog -lofstd
+LOCALLIBS = -loflog -lofstd $(CHARCONVLIBS)
 LOCALDEFS =
 
 # clear environment variable in the scope of this makefile
@@ -32,21 +32,25 @@ DCMDICTPATH =
 dicomdic = $(top_srcdir)/data/dicom.dic
 privatedic = $(top_srcdir)/data/private.dic
 
-dictobjs = dctagkey.o dcdicent.o dcdict.o dcdictbi.o dcvr.o dchashdi.o
-objs = dcpixseq.o dcpxitem.o dcuid.o dcerror.o \
+# Dictionary objects for building the helper tools mkdeftag and mkdictbi
+dict_tools_objs = dctagkey.o dcdicent.o dcdict.o dcvr.o dchashdi.o
+
+objs = dcpixseq.o dcpxitem.o dcuid.o dcerror.o dcencdoc.o\
 	dcstack.o dclist.o dcswap.o dctag.o dcxfer.o \
-	dcobject.o dcelem.o dcitem.o dcmetinf.o dcdatset.o \
+	dcobject.o dcelem.o dcitem.o dcmetinf.o dcdatset.o dcdatutl.o dcspchrs.o \
 	dcsequen.o dcfilefo.o dcbytstr.o dcpixel.o dcvrae.o dcvras.o dcvrcs.o \
 	dccodec.o dcvrda.o dcvrds.o dcvrdt.o dcvris.o dcvrtm.o dcvrui.o \
 	dcchrstr.o dcvrlo.o dcvrlt.o dcvrpn.o dcvrsh.o dcvrst.o dcvrobow.o \
-	dcvrat.o dcvrss.o dcvrus.o dcvrsl.o dcvrul.o dcvrulup.o dcvrfl.o \
-	dcvrfd.o dcvrpobw.o dcvrof.o dcdirrec.o dcdicdir.o dcvm.o \
-	dcrleccd.o dcrlecce.o dcrlecp.o dcrlerp.o dcrledrg.o dcrleerg.o \
-	$(dictobjs) cmdlnarg.o dcvrut.o dctypes.o dcpcache.o dcddirif.o \
-	dcistrma.o dcistrmb.o dcistrmf.o dcistrmz.o \
-	dcostrma.o dcostrmb.o dcostrmf.o dcostrmz.o dcwcache.o dcpath.o \
-	vrscan.o vrscanl.o
-support_objs = mkdeftag.o mkdictbi.o dcdictzz.o
+	dcvrat.o dcvrss.o dcvrus.o dcvrsl.o dcvrsv.o dcvrul.o dcvruv.o dcvrulup.o \
+	dcvrfl.o dcvrfd.o dcvrpobw.o dcvrof.o dcvrod.o dcvrol.o dcvrov.o dcdirrec.o \
+	dcdicdir.o dcrleccd.o dcrlecce.o dcrlecp.o dcrlerp.o dcrledrg.o dcrleerg.o \
+	dcdictbi.o dctagkey.o dcdicent.o dcdict.o dcvr.o dchashdi.o cmdlnarg.o \
+	dcvrut.o dcvrur.o dcvruc.o dctypes.o dcpcache.o dcddirif.o dcistrma.o \
+	dcistrmb.o dcistrmf.o dcistrms.o dcistrmz.o dcostrma.o dcostrmb.o \
+	dcostrmf.o dcostrms.o dcostrmz.o dcwcache.o dcpath.o vrscan.o vrscanl.o \
+	dcfilter.o dcmatch.o dcjson.o xml2dcm.o
+
+support_objs = mkdeftag.o mkdictbi.o
 support_progs = mkdeftag mkdictbi
 
 # Extra objects needed by support_progs
@@ -69,11 +73,11 @@ $(library): $(objs)
 	$(AR) $(ARFLAGS) $@ $(objs)
 	$(RANLIB) $@
 
-mkdeftag: mkdeftag.o $(dictobjs) $(support_progs_objs)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(LIBDIRS) -o $@ $@.o $(dictobjs) $(support_progs_objs) $(LOCALLIBS) $(LIBS)
+mkdeftag: mkdeftag.o $(dict_tools_objs) $(support_progs_objs)
+	$(CXX) $(CXXFLAGS) $(LIBDIRS) $(LDFLAGS) -o $@ $@.o $(dict_tools_objs) $(support_progs_objs) $(LOCALLIBS) $(LIBS)
 
-mkdictbi: mkdictbi.o $(dictobjs) $(support_progs_objs)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(LIBDIRS) -o $@ $@.o $(dictobjs) $(support_progs_objs) $(LOCALLIBS) $(LIBS)
+mkdictbi: mkdictbi.o $(dict_tools_objs) $(support_progs_objs)
+	$(CXX) $(CXXFLAGS) $(LIBDIRS) $(LDFLAGS) -o $@ $@.o $(dict_tools_objs) $(support_progs_objs) $(LOCALLIBS) $(LIBS)
 
 mkvrscan:
 	flex -8 --header-file=vrscanl.h --outfile=vrscanl.c vrscanl.l
@@ -81,23 +85,13 @@ mkvrscan:
 
 # Generate a new include file of defined tags
 
-gendeftag: mkdeftag $(dicomdic) $(privatedic) $(VQPATH)/extern/dicom-ns.dic
-	`pwd`/mkdeftag $(dicomdic) $(privatedic) $(VQPATH)/extern/dicom-ns.dic > $(top_srcdir)/include/dcmtk/dcmdata/dcdeftag.h
-
-# Generate a file which can be used as a builtin dictionary
-
-dcdictzz.cc: mkdictbi $(dicomdic) $(privatedic) $(VQPATH)/extern/dicom-ns.dic
-	`pwd`/mkdictbi $(dicomdic) $(privatedic) $(VQPATH)/extern/dicom-ns.dic > dcdictzz.cc
+updatedeftag: mkdeftag $(dicomdic) $(privatedic) $(VQPATH)/extern/dicom-ns.dic
+	`pwd`/mkdeftag -o $(top_srcdir)/include/dcmtk/dcmdata/dcdeftag.h $(dicomdic) $(privatedic) $(VQPATH)/extern/dicom-ns.dic
 
 # Generate a builtin data dictionary from $(dicomdic) and $(privatedic)
 
-builtindict: nobuiltindict mkdictbi $(dicomdic) $(privatedic) $(VQPATH)/extern/dicom-ns.dic
+updatebuiltindict: mkdictbi $(dicomdic) $(privatedic) $(VQPATH)/extern/dicom-ns.dic
 	`pwd`/mkdictbi $(dicomdic) $(privatedic) $(VQPATH)/extern/dicom-ns.dic > dcdictbi.cc
-
-# Generate an empty builtin data dictionary
-
-nobuiltindict:
-	cp dcdictbi.nul dcdictbi.cc
 
 
 # Clean-up
@@ -105,7 +99,7 @@ nobuiltindict:
 clean:
 	rm -f $(support_progs) $(support_objs) $(objs) $(library) $(TRASH)
 
-distclean: nobuiltindict clean
+distclean: clean
 	rm -f $(DISTTRASH)
 
 

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2003-2010, OFFIS e.V.
+ *  Copyright (C) 2003-2015, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose:
  *    class DcmProfileEntry
  *    class DcmProfileMap
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:28 $
- *  CVS/RCS Revision: $Revision: 1.5 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -48,6 +41,17 @@ DcmProfileEntry::DcmProfileEntry(const DcmProfileEntry& arg)
 , roleSelectionGroup_(arg.roleSelectionGroup_)
 , extendedNegotiationGroup_(arg.extendedNegotiationGroup_)
 {
+}
+
+DcmProfileEntry& DcmProfileEntry::operator=(const DcmProfileEntry& arg)
+{
+  if (this != &arg)
+  {
+    presentationContextGroup_ = arg.presentationContextGroup_;
+    roleSelectionGroup_ = arg.roleSelectionGroup_;
+    extendedNegotiationGroup_ = arg.extendedNegotiationGroup_;
+  }
+  return *this;
 }
 
 DcmProfileEntry::~DcmProfileEntry()
@@ -78,12 +82,67 @@ DcmProfileMap::DcmProfileMap()
 
 DcmProfileMap::~DcmProfileMap()
 {
-  OFListIterator(DcmKeyValuePair<DcmProfileEntry *> *) first = map_.begin();
-  OFListIterator(DcmKeyValuePair<DcmProfileEntry *> *) last = map_.end();
+  clear();
+}
+
+DcmProfileMap::DcmProfileMap(const DcmProfileMap& arg)
+{
+  /* Copy all map entries */
+  OFMap<OFString, DcmProfileEntry *>::const_iterator first = arg.map_.begin();
+  OFMap<OFString, DcmProfileEntry *>::const_iterator last = arg.map_.end();
   while (first != last)
   {
-    delete (*first)->value();
+    DcmProfileEntry* copy = new DcmProfileEntry( *(*first).second );
+    map_.insert( OFPair<const OFString, DcmProfileEntry*>( (*first).first, copy ) );
     ++first;
+  }
+}
+
+DcmProfileMap& DcmProfileMap::operator=(const DcmProfileMap& arg)
+{
+  if (this != &arg)
+  {
+     /* Clear old and copy all map entries */
+    this->clear();
+    OFMap<OFString, DcmProfileEntry *>::const_iterator first = arg.map_.begin();
+    OFMap<OFString, DcmProfileEntry *>::const_iterator last = arg.map_.end();
+    while (first != last)
+    {
+      DcmProfileEntry* copy = new DcmProfileEntry( *(*first).second );
+      map_.insert( OFPair<const OFString, DcmProfileEntry*>( (*first).first, copy ) ); // TODO: Does that work?
+      ++first;
+    }
+  }
+  return *this;
+}
+
+OFMap<OFString, DcmProfileEntry*>::const_iterator DcmProfileMap::begin()
+{
+  return map_.begin();
+}
+
+OFMap<OFString, DcmProfileEntry*>::const_iterator DcmProfileMap::end()
+{
+  return map_.end();
+}
+
+const DcmProfileEntry* DcmProfileMap::getProfile(const OFString& name)
+{
+  OFMap<OFString,DcmProfileEntry*>::const_iterator it = map_.find(name);
+  if ( it != map_.end() )
+  {
+    return (*it).second;
+  }
+  return NULL;
+}
+
+void DcmProfileMap::clear()
+{
+  while (map_.size () != 0)
+  {
+    OFMap<OFString, DcmProfileEntry *>::iterator first = map_.begin();
+    delete (*first).second;
+    map_.erase(first);
   }
 }
 
@@ -102,11 +161,12 @@ OFCondition DcmProfileMap::add(
   if (extendedNegotiationKey) extnegKey = extendedNegotiationKey;
 
   OFString skey(key);
-  DcmProfileEntry * const *value = OFconst_cast(DcmProfileEntry * const *, map_.lookup(skey));
-  if (value == NULL)
+  OFMap<OFString, DcmProfileEntry*>::iterator it = map_.find(skey);
+
+  if (it == map_.end())
   {
     DcmProfileEntry *newentry = new DcmProfileEntry(presKey, roleKey, extnegKey);
-    map_.add(skey, OFstatic_cast(DcmProfileEntry *, newentry));
+    map_.insert(OFPair<OFString, DcmProfileEntry*>(skey, newentry));
   }
   else
   {
@@ -122,7 +182,7 @@ OFCondition DcmProfileMap::add(
 OFBool DcmProfileMap::isKnownKey(const char *key) const
 {
   if (!key) return OFFalse;
-  if (map_.lookup(OFString(key))) return OFTrue;
+  if (map_.find(OFString(key)) != map_.end()) return OFTrue;
   return OFFalse;
 }
 
@@ -131,11 +191,9 @@ const char *DcmProfileMap::getPresentationContextKey(const char *key) const
 {
   if (key)
   {
-    DcmProfileEntry * const *entry = OFconst_cast(DcmProfileEntry * const *, map_.lookup(OFString(key)));
-    if (entry)
-    {
-      return (*entry)->getPresentationContextKey();
-    }
+    OFMap<OFString, DcmProfileEntry*>::const_iterator it = map_.find(OFString(key));
+    if (it != map_.end())
+      return (*it).second->getPresentationContextKey();
   }
   return NULL;
 }
@@ -145,10 +203,11 @@ const char *DcmProfileMap::getRoleSelectionKey(const char *key) const
 {
   if (key)
   {
-    DcmProfileEntry * const *entry = OFconst_cast(DcmProfileEntry * const *, map_.lookup(OFString(key)));
-    if (entry)
+    OFMap<OFString, DcmProfileEntry*>::const_iterator it = map_.find(OFString(key));
+    if (it != map_.end())
     {
-      return (*entry)->getRoleSelectionKey();
+      if ( (*it).second != NULL)
+        return (*it).second->getRoleSelectionKey();
     }
   }
   return NULL;
@@ -159,36 +218,12 @@ const char *DcmProfileMap::getExtendedNegotiationKey(const char *key) const
 {
   if (key)
   {
-    DcmProfileEntry * const *entry = OFconst_cast(DcmProfileEntry * const *, map_.lookup(OFString(key)));
-    if (entry)
+    OFMap<OFString, DcmProfileEntry*>::const_iterator it = map_.find(OFString(key));
+    if (it != map_.end())
     {
-      return (*entry)->getExtendedNegotiationKey();
+      if ( (*it).second != NULL)
+        return (*it).second->getExtendedNegotiationKey();
     }
   }
   return NULL;
 }
-
-
-/*
- * CVS/RCS Log
- * $Log: dccfprmp.cc,v $
- * Revision 1.5  2010-10-14 13:14:28  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.4  2005/12/08 15:44:30  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.3  2004/05/06 16:36:30  joergr
- * Added typecasts to keep Sun CC 2.0.1 quiet.
- *
- * Revision 1.2  2004/05/05 12:57:58  meichel
- * Simplified template class DcmSimpleMap<T>, needed for Sun CC 2.0.1
- *
- * Revision 1.1  2003/06/10 14:30:15  meichel
- * Initial release of class DcmAssociationConfiguration and support
- *   classes. This class maintains a list of association negotiation
- *   profiles that can be addressed by symbolic keys. The profiles may
- *   be read from a configuration file.
- *
- *
- */

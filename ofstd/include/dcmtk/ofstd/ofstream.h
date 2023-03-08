@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2010, OFFIS e.V.
+ *  Copyright (C) 2002-2019, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: C++ header to handle standard and old stream libraries.
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:50 $
- *  CVS/RCS Revision: $Revision: 1.11 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -31,8 +24,6 @@
 #define OFSTREAM_H
 
 #include "dcmtk/config/osconfig.h"
-
-#ifdef USE_STD_CXX_INCLUDES
 
 #include <iostream>
 #ifdef HAVE_IOS
@@ -50,40 +41,14 @@
 #error DCMTK needs stringstream or strstream type
 #endif
 
-/* DCMTK by default does not anymore pollute the default namespace by 
+/* DCMTK by default does not anymore pollute the default namespace by
  * importing namespace std. Earlier releases did this to simplify compatibility
  * with older compilers where STL classes were not consistently defined
  * in namespace std. We now have configure macros which should care for this.
  * If user code still relies on namespace std to be included, compile with
  * macro USING_STD_NAMESPACE defined.
  */
-#ifdef USING_STD_NAMESPACE
-namespace std { }
-using namespace std;
-#endif
-
-#else /* USE_STD_CXX_INCLUDES */
-
-#include <iostream.h>
-#include <fstream.h>
-// For old STREAMS library: preference for strstream
-#if defined(HAVE_STRSTREA_H) || defined(HAVE_STRSTREAM_H)
-#ifdef HAVE_STRSTREA_H
-#include <strstrea.h>
-#else
-#include <strstream.h>
-#endif
-#elif defined(HAVE_SSTREAM_H)
-#include <sstream.h>
-#define USE_STRINGSTREAM
-#else
-#error DCMTK needs stringstream or strstream type
-#endif
-#include <iomanip.h>
-
-#endif 
-
-#ifdef USE_STRINGSTREAM
+#include "dcmtk/ofstd/ofstdinc.h"
 
 // define STD_NAMESPACE to std:: if the standard namespace exists
 #ifndef STD_NAMESPACE
@@ -96,13 +61,23 @@ using namespace std;
 
 #define OFendl STD_NAMESPACE endl
 
+#ifdef USE_STRINGSTREAM
+
 typedef STD_NAMESPACE stringstream OFStringStream;
 typedef STD_NAMESPACE ostringstream OFOStringStream;
 typedef STD_NAMESPACE istringstream OFIStringStream;
 
 #define OFStringStream_ends ""
-#define OFSTRINGSTREAM_GETOFSTRING(oss, string) \
-    OFString string((oss).str().c_str());
+
+#ifdef HAVE_STL_STRING
+#define OFSTRINGSTREAM_GETOFSTRING(oss, strng) \
+    OFString strng((oss).str());
+#else
+#define OFSTRINGSTREAM_GETOFSTRING(oss, strng) \
+    STD_NAMESPACE string strng##__((oss).str()); \
+    OFString strng(strng##__.c_str(), strng##__.length());
+#endif
+
 // The following two macros define a block structure. Please note that variables
 // declared between xxx_GETSTR and xxx_FREESTR are only valid within this scope.
 #define OFSTRINGSTREAM_GETSTR(oss, chptr) \
@@ -114,15 +89,15 @@ typedef STD_NAMESPACE istringstream OFIStringStream;
 
 #else /* USE_STRINGSTREAM */
 
-typedef strstream OFStringStream;
-typedef ostrstream OFOStringStream;
-typedef istrstream OFIStringStream;
+typedef STD_NAMESPACE strstream OFStringStream;
+typedef STD_NAMESPACE ostrstream OFOStringStream;
+typedef STD_NAMESPACE istrstream OFIStringStream;
 
-#define OFStringStream_ends ends
-#define OFSTRINGSTREAM_GETOFSTRING(oss, string) \
-    char * string##__ = (oss).str(); \
-    OFString string(string##__); \
-    delete[] string##__;
+#define OFStringStream_ends STD_NAMESPACE ends
+#define OFSTRINGSTREAM_GETOFSTRING(oss, strng) \
+    char *strng##__ = (oss).str(); \
+    OFString strng(strng##__, (oss).pcount()); \
+    delete[] strng##__;
 // The following two macros define a block structure. Please note that variables
 // declared between xxx_GETSTR and xxx_FREESTR are only valid within this scope.
 #define OFSTRINGSTREAM_GETSTR(oss, chptr) \
@@ -134,49 +109,13 @@ typedef istrstream OFIStringStream;
 
 #endif /* USE_STRINGSTREAM */
 
-#endif /* USE_STD_CXX_INCLUDES */
+// Define OFopenmode_in_nocreate as a macro that either expands
+// to ios::in or to ios::in|ios::nocreate, if the historic
+// nocreate flag is supported on the platform.
+#if defined(HAVE_IOS_NOCREATE) && (__cplusplus < 201103L)
+#define OFopenmode_in_nocreate STD_NAMESPACE ios::in|STD_NAMESPACE ios::nocreate
+#else
+#define OFopenmode_in_nocreate STD_NAMESPACE ios::in
+#endif
 
-
-/*
- * CVS/RCS Log:
- * $Log: ofstream.h,v $
- * Revision 1.11  2010-10-14 13:15:50  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.10  2007/02/19 15:16:16  meichel
- * Namespace std is not imported into the default namespace anymore,
- *   unless DCMTK is compiled with macro USING_STD_NAMESPACE defined.
- *
- * Revision 1.9  2006/08/15 15:52:23  meichel
- * Updated all code in module dcmdata to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.8  2006/08/14 16:42:02  meichel
- * Defined two new macros: STD_NAMESPACE is defined to std:: if the standard
- *   namespace exists and empty otherwise. OFendl is defined as std::endl if
- *   the standard namespace exists and as endl otherwise.
- *
- * Revision 1.7  2005/12/08 16:06:06  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.6  2004/05/07 10:46:32  meichel
- * Removed unneeded semicolon, reported by gcc 3.4
- *
- * Revision 1.5  2004/01/16 10:30:12  joergr
- * Removed acknowledgements with e-mail addresses from CVS log.
- *
- * Revision 1.4  2003/12/05 10:37:41  joergr
- * Removed leading underscore characters from preprocessor symbols (reserved
- * symbols). Updated copyright date where appropriate.
- *
- * Revision 1.3  2002/12/11 15:54:48  meichel
- * Added empty namespace std declaration, needed on MSVC.
- *
- * Revision 1.2  2002/05/02 14:05:50  joergr
- * Added support for standard and non-standard string streams (which one is
- * supported is detected automatically via the configure mechanism).
- *
- * Revision 1.1  2002/04/16 13:36:03  joergr
- * Added configurable support for C++ ANSI standard includes (e.g. streams).
- *
- */
+#endif /* OFSTREAM_H */

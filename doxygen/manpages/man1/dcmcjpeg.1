@@ -1,23 +1,22 @@
-.TH "dcmcjpeg" 1 "6 Jan 2011" "Version 3.6.0" "OFFIS DCMTK" \" -*- nroff -*-
+.TH "dcmcjpeg" 1 "Fri Apr 22 2022" "Version 3.6.7" "OFFIS DCMTK" \" -*- nroff -*-
 .nh
 .SH NAME
 dcmcjpeg \- Encode DICOM file to JPEG transfer syntax
+
 .SH "SYNOPSIS"
 .PP
 .PP
 .nf
-
 dcmcjpeg [options] dcmfile-in dcmfile-out
 .fi
 .PP
 .SH "DESCRIPTION"
 .PP
-The \fBdcmcjpeg\fP utility reads an uncompressed DICOM image (\fIdcmfile-in\fP), performs a JPEG compression (i. e. conversion to an encapsulated DICOM transfer syntax) and writes the converted image to an output file (\fIdcmfile-out\fP).
+The \fBdcmcjpeg\fP utility reads an uncompressed DICOM image (\fIdcmfile-in\fP), performs a JPEG compression (i\&. e\&. conversion to an encapsulated DICOM transfer syntax) and writes the converted image to an output file (\fIdcmfile-out\fP)\&.
 .SH "PARAMETERS"
 .PP
 .PP
 .nf
-
 dcmfile-in   DICOM input filename to be converted
 
 dcmfile-out  DICOM output filename
@@ -28,7 +27,6 @@ dcmfile-out  DICOM output filename
 .SS "general options"
 .PP
 .nf
-
   -h    --help
           print this help text and exit
 
@@ -58,7 +56,6 @@ dcmfile-out  DICOM output filename
 .SS "input options"
 .PP
 .nf
-
 input file format:
 
   +f    --read-file
@@ -106,7 +103,6 @@ compatibility (ignored by +tl):
 .SS "JPEG encoding options"
 .PP
 .nf
-
 JPEG process:
 
   +e1   --encode-lossless-sv1
@@ -151,7 +147,7 @@ lossless JPEG codec selection:
   +tl   --true-lossless
           true lossless codec (default)
 
-  # This option selects an encoder, that guarantees truely lossless
+  # This option selects an encoder, that guarantees truly lossless
   # image compression. See NOTES for further information.
 
   +pl   --pseudo-lossless
@@ -221,7 +217,7 @@ compressed bits per sample (always +ba with +tl):
   +bs   --bits-force-16
           force 16 bits/sample (lossless only)
 
-compression color space conversion (overriden by +tl):
+compression color space conversion (overridden by +tl):
 
   +cy   --color-ybr
           use YCbCr for color images if lossy (default)
@@ -284,50 +280,81 @@ decompression color space conversion
 
   # Never convert color space during decompression.
 
-standard YCbCr component subsampling (not with +tl):
+decompr. workaround options for incorrect encodings (if input is compressed):
 
-  +s4   --sample-444
-          4:4:4 sampling with YBR_FULL (default)
+  +w6   --workaround-pred6
+          enable workaround for JPEG lossless images
+          with overflow in predictor 6
 
-  # This option disables color component subsampling for compression in
-  # the YCbCr color space. The DICOM photometric interpretation is
-  # encoded as YBR_FULL.
+  # DICOM images with 16 bits/pixel have been observed "in the wild"
+  # that are compressed with lossless JPEG and need special handling
+  # because the encoder produced an 16-bit integer overflow in predictor
+  # 6, which needs to be compensated (reproduced) during decompression.
+  # This flag enables a correct decompression of such faulty images, but
+  # at the same time will cause an incorrect decompression of correctly
+  # compressed images. Use with care.
+
+  +wi   --workaround-incpl
+          enable workaround for incomplete JPEG data
+
+  # This option causes dcmjpeg to ignore incomplete JPEG data
+  # at the end of a compressed fragment and to start decompressing
+  # the next frame from the next fragment (if any). This permits
+  # images with incomplete JPEG data to be decoded.
+
+  +wc   --workaround-cornell
+          enable workaround for 16-bit JPEG lossless
+          Cornell images with Huffman table overflow
+
+  # One of the first open-source implementations of lossless JPEG
+  # compression, the "Cornell" library, has a well-known bug that leads
+  # to invalid values in the Huffmann table when images with 16 bit/sample
+  # are compressed. This flag enables a workaround that permits such
+  # images to be decoded correctly.
+
+YCbCr component subsampling (lossy JPEG only):
 
   +s2   --sample-422
-          4:2:2 subsampling with YBR_FULL_422
+          4:2:2 subsampling with YBR_FULL_422 (default)
 
   # This option enables a 4:2:2 color component subsampling for
   # compression in the YCbCr color space. The DICOM photometric
-  # interpretation is encoded as YBR_FULL.
+  # interpretation is encoded as YBR_FULL_422.
 
 non-standard YCbCr component subsampling (not with +tl):
+
+  +s4   --nonstd-444
+          4:4:4 sampling with YBR_FULL
+
+  # This option disables color component subsampling for compression in
+  # the YCbCr color space. The DICOM photometric interpretation is
+  # encoded as YBR_FULL, which violates DICOM rules for lossy JPEG.
 
   +n2   --nonstd-422-full
           4:2:2 subsampling with YBR_FULL
 
   # This option enables a 4:2:2 color component subsampling for
   # compression in the YCbCr color space. The DICOM photometric
-  # interpretation is encoded as YBR_FULL which violates DICOM rules.
+  # interpretation is encoded as YBR_FULL, which violates DICOM rules.
 
   +n1   --nonstd-411-full
           4:1:1 subsampling with YBR_FULL
 
   # This option enables a 4:1:1 color component subsampling for
   # compression in the YCbCr color space. The DICOM photometric
-  # interpretation is encoded as YBR_FULL which violates DICOM rules.
+  # interpretation is encoded as YBR_FULL, which violates DICOM rules.
 
   +np   --nonstd-411
           4:1:1 subsampling with YBR_FULL_422
 
   # This option enables a 4:1:1 color component subsampling for
   # compression in the YCbCr color space. The DICOM photometric
-  # interpretation is encoded as YBR_FULL_422 which violates DICOM rules.
+  # interpretation is encoded as YBR_FULL_422, which violates DICOM rules.
 .fi
 .PP
-.SS "encapsulated pixel data encoding options"
+.SS "encapsulated pixel data encoding options:"
 .PP
 .nf
-
 encapsulated pixel data fragmentation:
 
   +ff   --fragment-per-frame
@@ -381,14 +408,14 @@ VOI windowing for monochrome images (not with +tl):
           compute VOI window using min-max algorithm
 
   # Compute and apply a window center and width that covers the
-  # range from the smallest to the largest occuring pixel value.
+  # range from the smallest to the largest occurring pixel value.
 
   +Wn   --min-max-window-n
           compute VOI window using min-max algorithm,
           ignoring extreme values
 
   # Compute and apply a window center and width that covers the
-  # range from the second smallest to the second largest occuring
+  # range from the second smallest to the second largest occurring
   # pixel value. This is useful if the background is set to an
   # artificial black (padding value) or if white overlays are burned
   # into the image data which should not be considered for the window
@@ -422,7 +449,7 @@ pixel scaling for monochrome images (--no-windowing; ignored by +tl):
   # Monochrome image pixel values are always scaled to make use of the
   # pixel range available with the selected JPEG process as good as
   # possible. This option selects a scaling based on the minimum and
-  # maximum pixel value occuring in the image.  This often leads to
+  # maximum pixel value occurring in the image.  This often leads to
   # significantly better image quality, but may cause different
   # compressed images within one series to have different values for
   # rescale slope and intercept, which is a problem if a presentation
@@ -492,7 +519,6 @@ SOP Instance UID:
 .SS "output options"
 .PP
 .nf
-
 post-1993 value representations:
 
   +u    --enable-new-vr
@@ -535,44 +561,43 @@ data set trailing padding:
 .PP
 .SH "NOTES"
 .PP
-The \fBdcmcjpeg\fP utility compresses DICOM images of all SOP classes. Special handling has been implemented for CT images (where the modality transformation is required to create Hounsfield units) and the XA/RF/Biplane SOP classes (where the modality transformation has 'inversed' semantics). However, \fBdcmcjpeg\fP does not attempt to ensure that the compressed image still complies with all restrictions of the object's IOD.
+The \fBdcmcjpeg\fP utility compresses DICOM images of all SOP classes\&. It processes all Pixel Data (7fe0,0010) elements in the dataset, i\&.e\&. compression is also performed on an icon image\&. Special handling has been implemented for CT images (where the modality transformation is required to create Hounsfield units) and the XA/RF/Biplane SOP classes (where the modality transformation has 'inversed' semantics)\&. However, \fBdcmcjpeg\fP does not attempt to ensure that the compressed image still complies with all restrictions of the object's IOD\&.
 .PP
 A few examples:
 .PP
 .PD 0
 .IP "\(bu" 2
-MR images are required to have BitsAllocated=16. 
+MR images are required to have BitsAllocated=16\&.
 .IP "\(bu" 2
-NM Images can only be encoded with MONOCHROME2 or PALETTE COLOR photometric interpretation but not with RGB or YBR_FULL (which effectively prevents compression). 
+NM Images can only be encoded with MONOCHROME2 or PALETTE COLOR photometric interpretation but not with RGB or YBR_FULL (which effectively prevents compression)\&.
 .IP "\(bu" 2
-Hardcopy Color images must have RGB color model which is a problem if lossy compression is to be performed.
+Hardcopy Color images must have RGB color model which is a problem if lossy compression is to be performed\&.
 .PP
-The user is responsible for making sure that the compressed images he creates are compliant with the DICOM standard. If in question, the \fBdcmcjpeg\fP utility allows to convert an image to secondary capture - this SOP class does not pose restrictions as the ones mentioned above.
+The user is responsible for making sure that the compressed images he creates are compliant with the DICOM standard\&. If in question, the \fBdcmcjpeg\fP utility allows one to convert an image to secondary capture - this SOP class does not pose restrictions as the ones mentioned above\&.
 .PP
-With version DCMTK 3.5.4 a new encoder for truely lossless JPEG compression was added (\fI--true-lossless\fP). Compared to the old (\fI--pseudo-lossless\fP) encoder, that creates slightly lossy images caused from internal color space conversions, windowing etc., there are a some issues to consider:
+With version DCMTK 3\&.5\&.4 a new encoder for truly lossless JPEG compression was added (\fI--true-lossless\fP)\&. Compared to the old (\fI--pseudo-lossless\fP) encoder, that creates slightly lossy images caused from internal color space conversions, windowing etc\&., there are a some issues to consider:
 .PP
 .PD 0
 .IP "\(bu" 2
-Only source images with Bits Allocated 8 or 16 are supported 
+Only source images with Bits Allocated 8 or 16 are supported
 .IP "\(bu" 2
-Options for color space conversions, windowing or pixel scaling are ignored or overriden 
+Options for color space conversions, windowing or pixel scaling are ignored or overridden
 .IP "\(bu" 2
-Photometric Interpretations YBR_FULL_422, YBR_PARTIAL_422, YBR_PARTIAL_420, YBR_ICT, YBR_RCT are not supported 
+Photometric Interpretations YBR_FULL_422, YBR_PARTIAL_422, YBR_PARTIAL_420, YBR_ICT, YBR_RCT are not supported
 .IP "\(bu" 2
-The encoder changes automatically Planar Configuration from 1 to 0 if necessary 
+The encoder changes automatically Planar Configuration from 1 to 0 if necessary
 .IP "\(bu" 2
 The compression ratio can be lower than in \fI--pseudo-lossless\fP mode
 .PP
-However, when using the new encoder (default), you can be sure, that compression does not affect image quality.
+However, when using the new encoder (default), you can be sure, that compression does not affect image quality\&.
 .PP
-In order to be on the safe side, the Lossy Compression Flag is always set to '01' and a new SOP instance UID is assigned (by default) for the old pseudo-lossless encoder. The output of the old and new lossless encoder can also be distinguished by the Derivation Description in the resulting DICOM image, which contains the term 'Lossless JPEG compression' for the new and 'Pseudo-Lossless JPEG compression' for the old encoder.
+In order to be on the safe side, the Lossy Compression Flag is always set to '01' and a new SOP instance UID is assigned (by default) for the old pseudo-lossless encoder\&. The output of the old and new lossless encoder can also be distinguished by the Derivation Description in the resulting DICOM image, which contains the term 'Lossless JPEG compression' for the new and 'Pseudo-Lossless JPEG compression' for the old encoder\&.
 .SH "TRANSFER SYNTAXES"
 .PP
 \fBdcmcjpeg\fP supports the following transfer syntaxes for input (\fIdcmfile-in\fP):
 .PP
 .PP
 .nf
-
 LittleEndianImplicitTransferSyntax             1.2.840.10008.1.2
 LittleEndianExplicitTransferSyntax             1.2.840.10008.1.2.1
 DeflatedExplicitVRLittleEndianTransferSyntax   1.2.840.10008.1.2.1.99 (*)
@@ -592,7 +617,6 @@ JPEGProcess14SV1TransferSyntax                 1.2.840.10008.1.2.4.70
 .PP
 .PP
 .nf
-
 JPEGProcess1TransferSyntax                     1.2.840.10008.1.2.4.50
 JPEGProcess2_4TransferSyntax                   1.2.840.10008.1.2.4.51
 JPEGProcess6_8TransferSyntax                   1.2.840.10008.1.2.4.53
@@ -603,24 +627,24 @@ JPEGProcess14SV1TransferSyntax                 1.2.840.10008.1.2.4.70
 .PP
 .SH "LOGGING"
 .PP
-The level of logging output of the various command line tools and underlying libraries can be specified by the user. By default, only errors and warnings are written to the standard error stream. Using option \fI--verbose\fP also informational messages like processing details are reported. Option \fI--debug\fP can be used to get more details on the internal activity, e.g. for debugging purposes. Other logging levels can be selected using option \fI--log-level\fP. In \fI--quiet\fP mode only fatal errors are reported. In such very severe error events, the application will usually terminate. For more details on the different logging levels, see documentation of module 'oflog'.
+The level of logging output of the various command line tools and underlying libraries can be specified by the user\&. By default, only errors and warnings are written to the standard error stream\&. Using option \fI--verbose\fP also informational messages like processing details are reported\&. Option \fI--debug\fP can be used to get more details on the internal activity, e\&.g\&. for debugging purposes\&. Other logging levels can be selected using option \fI--log-level\fP\&. In \fI--quiet\fP mode only fatal errors are reported\&. In such very severe error events, the application will usually terminate\&. For more details on the different logging levels, see documentation of module 'oflog'\&.
 .PP
-In case the logging output should be written to file (optionally with logfile rotation), to syslog (Unix) or the event log (Windows) option \fI--log-config\fP can be used. This configuration file also allows for directing only certain messages to a particular output stream and for filtering certain messages based on the module or application where they are generated. An example configuration file is provided in \fI<etcdir>/logger.cfg\fP).
+In case the logging output should be written to file (optionally with logfile rotation), to syslog (Unix) or the event log (Windows) option \fI--log-config\fP can be used\&. This configuration file also allows for directing only certain messages to a particular output stream and for filtering certain messages based on the module or application where they are generated\&. An example configuration file is provided in \fI<etcdir>/logger\&.cfg\fP\&.
 .SH "COMMAND LINE"
 .PP
-All command line tools use the following notation for parameters: square brackets enclose optional values (0-1), three trailing dots indicate that multiple values are allowed (1-n), a combination of both means 0 to n values.
+All command line tools use the following notation for parameters: square brackets enclose optional values (0-1), three trailing dots indicate that multiple values are allowed (1-n), a combination of both means 0 to n values\&.
 .PP
-Command line options are distinguished from parameters by a leading '+' or '-' sign, respectively. Usually, order and position of command line options are arbitrary (i.e. they can appear anywhere). However, if options are mutually exclusive the rightmost appearance is used. This behaviour conforms to the standard evaluation rules of common Unix shells.
+Command line options are distinguished from parameters by a leading '+' or '-' sign, respectively\&. Usually, order and position of command line options are arbitrary (i\&.e\&. they can appear anywhere)\&. However, if options are mutually exclusive the rightmost appearance is used\&. This behavior conforms to the standard evaluation rules of common Unix shells\&.
 .PP
-In addition, one or more command files can be specified using an '@' sign as a prefix to the filename (e.g. \fI@command.txt\fP). Such a command argument is replaced by the content of the corresponding text file (multiple whitespaces are treated as a single separator unless they appear between two quotation marks) prior to any further evaluation. Please note that a command file cannot contain another command file. This simple but effective approach allows to summarize common combinations of options/parameters and avoids longish and confusing command lines (an example is provided in file \fI<datadir>/dumppat.txt\fP).
+In addition, one or more command files can be specified using an '@' sign as a prefix to the filename (e\&.g\&. \fI@command\&.txt\fP)\&. Such a command argument is replaced by the content of the corresponding text file (multiple whitespaces are treated as a single separator unless they appear between two quotation marks) prior to any further evaluation\&. Please note that a command file cannot contain another command file\&. This simple but effective approach allows one to summarize common combinations of options/parameters and avoids longish and confusing command lines (an example is provided in file \fI<datadir>/dumppat\&.txt\fP)\&.
 .SH "ENVIRONMENT"
 .PP
-The \fBdcmcjpeg\fP utility will attempt to load DICOM data dictionaries specified in the \fIDCMDICTPATH\fP environment variable. By default, i.e. if the \fIDCMDICTPATH\fP environment variable is not set, the file \fI<datadir>/dicom.dic\fP will be loaded unless the dictionary is built into the application (default for Windows).
+The \fBdcmcjpeg\fP utility will attempt to load DICOM data dictionaries specified in the \fIDCMDICTPATH\fP environment variable\&. By default, i\&.e\&. if the \fIDCMDICTPATH\fP environment variable is not set, the file \fI<datadir>/dicom\&.dic\fP will be loaded unless the dictionary is built into the application (default for Windows)\&.
 .PP
-The default behaviour should be preferred and the \fIDCMDICTPATH\fP environment variable only used when alternative data dictionaries are required. The \fIDCMDICTPATH\fP environment variable has the same format as the Unix shell \fIPATH\fP variable in that a colon (':') separates entries. On Windows systems, a semicolon (';') is used as a separator. The data dictionary code will attempt to load each file specified in the \fIDCMDICTPATH\fP environment variable. It is an error if no data dictionary can be loaded.
+The default behavior should be preferred and the \fIDCMDICTPATH\fP environment variable only used when alternative data dictionaries are required\&. The \fIDCMDICTPATH\fP environment variable has the same format as the Unix shell \fIPATH\fP variable in that a colon (':') separates entries\&. On Windows systems, a semicolon (';') is used as a separator\&. The data dictionary code will attempt to load each file specified in the \fIDCMDICTPATH\fP environment variable\&. It is an error if no data dictionary can be loaded\&.
 .SH "SEE ALSO"
 .PP
 \fBdcmdjpeg\fP(1)
 .SH "COPYRIGHT"
 .PP
-Copyright (C) 2001-2010 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany. 
+Copyright (C) 2001-2022 by OFFIS e\&.V\&., Escherweg 2, 26121 Oldenburg, Germany\&.

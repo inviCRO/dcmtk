@@ -6,26 +6,26 @@
 \page dcmqridx dcmqridx: Register a DICOM image file in an image database index file
 \endif
 
-\section synopsis SYNOPSIS
+\section dcmqridx_synopsis SYNOPSIS
 
 \verbatim
 dcmqridx [options] index-out [dcmfile-in...]
 \endverbatim
 
-\section description DESCRIPTION
+\section dcmqridx_description DESCRIPTION
 
-The \b dcmqridx ulility registers DICOM image files in the database index file
+The \b dcmqridx utility registers DICOM image files in the database index file
 used by the \b dcmqrscp and \b dcmqrti applications.  No image files are copied.
 \b dcmqridx can also list the contents of the database index file.
 
-\section parameters PARAMETERS
+\section dcmqridx_parameters PARAMETERS
 \verbatim
 index-out   storage area for the index file (directory)
 
 dcmfile-in  DICOM image file to be registered in the index file
 \endverbatim
 
-\section options OPTIONS
+\section dcmqridx_options OPTIONS
 
 \verbatim
   -h   --help
@@ -60,7 +60,7 @@ dcmfile-in  DICOM image file to be registered in the index file
          set instance reviewed status to 'not new'
 \endverbatim
 
-\section notes NOTES
+\section dcmqridx_notes NOTES
 
 \b dcmqridx attempts to add a reference to the database index file for each
 image-file provided on the command line.
@@ -68,7 +68,7 @@ image-file provided on the command line.
 \b dcmqridx disables the database back-end quota system so that no image files
 will be deleted.
 
-\section logging LOGGING
+\section dcmqridx_logging LOGGING
 
 The level of logging output of the various command line tools and underlying
 libraries can be specified by the user.  By default, only errors and warnings
@@ -85,9 +85,9 @@ rotation), to syslog (Unix) or the event log (Windows) option \e --log-config
 can be used.  This configuration file also allows for directing only certain
 messages to a particular output stream and for filtering certain messages
 based on the module or application where they are generated.  An example
-configuration file is provided in <em>\<etcdir\>/logger.cfg</em>).
+configuration file is provided in <em>\<etcdir\>/logger.cfg</em>.
 
-\section command_line COMMAND LINE
+\section dcmqridx_command_line COMMAND LINE
 
 All command line tools use the following notation for parameters: square
 brackets enclose optional values (0-1), three trailing dots indicate that
@@ -96,7 +96,7 @@ multiple values are allowed (1-n), a combination of both means 0 to n values.
 Command line options are distinguished from parameters by a leading '+' or '-'
 sign, respectively.  Usually, order and position of command line options are
 arbitrary (i.e. they can appear anywhere).  However, if options are mutually
-exclusive the rightmost appearance is used.  This behaviour conforms to the
+exclusive the rightmost appearance is used.  This behavior conforms to the
 standard evaluation rules of common Unix shells.
 
 In addition, one or more command files can be specified using an '@' sign as a
@@ -105,11 +105,11 @@ is replaced by the content of the corresponding text file (multiple
 whitespaces are treated as a single separator unless they appear between two
 quotation marks) prior to any further evaluation.  Please note that a command
 file cannot contain another command file.  This simple but effective approach
-allows to summarize common combinations of options/parameters and avoids
+allows one to summarize common combinations of options/parameters and avoids
 longish and confusing command lines (an example is provided in file
 <em>\<datadir\>/dumppat.txt</em>).
 
-\section environment ENVIRONMENT
+\section dcmqridx_environment ENVIRONMENT
 
 The \b dcmqridx utility will attempt to load DICOM data dictionaries specified
 in the \e DCMDICTPATH environment variable.  By default, i.e. if the
@@ -117,7 +117,7 @@ in the \e DCMDICTPATH environment variable.  By default, i.e. if the
 <em>\<datadir\>/dicom.dic</em> will be loaded unless the dictionary is built
 into the application (default for Windows).
 
-The default behaviour should be preferred and the \e DCMDICTPATH environment
+The default behavior should be preferred and the \e DCMDICTPATH environment
 variable only used when alternative data dictionaries are required.  The
 \e DCMDICTPATH environment variable has the same format as the Unix shell
 \e PATH variable in that a colon (":") separates entries.  On Windows systems,
@@ -125,12 +125,12 @@ a semicolon (";") is used as a separator.  The data dictionary code will
 attempt to load each file specified in the \e DCMDICTPATH environment variable.
 It is an error if no data dictionary can be loaded.
 
-\section see_also SEE ALSO
+\section dcmqridx_see_also SEE ALSO
 
 <b>dcmqrscp</b>(1), <b>dcmqrti</b>(1)
 
-\section copyright COPYRIGHT
+\section dcmqridx_copyright COPYRIGHT
 
-Copyright (C) 1993-2010 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany.
+Copyright (C) 1993-2022 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany.
 
 */

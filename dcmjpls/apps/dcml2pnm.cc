@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2001-2010, OFFIS e.V.
+ *  Copyright (C) 2001-2011, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: Convert DICOM Images to PPM or PGM using the dcmimage/dcmjpls library.
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:13:40 $
- *  CVS/RCS Revision: $Revision: 1.2 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -32,17 +25,3 @@
 
 // include full implementation of "dcm2pnm"
 #include "../../dcmimage/apps/dcm2pnm.cc"
-
-
-/*
- * CVS/RCS Log:
- * $Log: dcml2pnm.cc,v $
- * Revision 1.2  2010-10-14 13:13:40  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.1  2010-10-12 13:12:58  uli
- * Added dcml2pnm which is a dcmjpls-enabled dcm2pnm.
- *
- *
- *
- */

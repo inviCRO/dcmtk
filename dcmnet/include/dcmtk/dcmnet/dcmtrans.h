@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,40 +18,60 @@
  *  Purpose:
  *    classes: DcmTransportConnection, DcmTCPConnection
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:22 $
- *  CVS/RCS Revision: $Revision: 1.11 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCMTRANS_H
 #define DCMTRANS_H
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
-#include "dcmtk/ofstd/oftypes.h"     /* for OFBool */
-#include "dcmtk/dcmnet/dcmlayer.h"    /* for DcmTransportLayerStatus */
-#include "dcmtk/ofstd/ofstream.h"    /* for ostream */
 
-#define INCLUDE_UNISTD
-#include "dcmtk/ofstd/ofstdinc.h"
+#include "dcmtk/ofstd/ofcond.h"       /* for OFCondition */
+#include "dcmtk/ofstd/ofglobal.h"     /* for OFGlobal */
+#include "dcmtk/ofstd/oftypes.h"      /* for OFBool */
+#include "dcmtk/ofstd/ofstream.h"     /* for ostream */
+#include "dcmtk/dcmnet/dndefine.h"    /* for DCMTK_DCMNET_EXPORT */
+#include "dcmtk/dcmnet/dntypes.h"     /* for DcmNativeSocketType */
+
+// include this file in doxygen documentation
+
+/** @file dcmtrans.h
+ *  @brief global variables and classes for transport connections
+ */
+
+/** Global timeout in seconds for sending data on a socket to a remote host.
+ *  The default value is 60, which is useful in cases where the sender (e.g.
+ *  storescu) looses the connection to the receiver because the network cable
+ *  is pulled (e.g. for a mobile device).
+ *  A value of 0 means that the send() will never timeout, and a value of -1
+ *  disables the call of the corresponding setsockopt() function, so that the
+ *  system's default behavior remains unchanged.
+ */
+extern DCMTK_DCMNET_EXPORT OFGlobal<Sint32> dcmSocketSendTimeout;   /* default: 60 */
+
+/** Global timeout in seconds for receiving data on a socket from a remote host.
+ *  The default value is 60, which is useful in cases where the receiver (e.g.
+ *  storescp) looses the connection to the sender because the network cable is
+ *  pulled (e.g. for a mobile device).
+ *  A value of 0 means that the recv() will never timeout, and a value of -1
+ *  disables the call of the corresponding setsockopt() function, so that the
+ *  system's default behavior remains unchanged.
+ */
+extern DCMTK_DCMNET_EXPORT OFGlobal<Sint32> dcmSocketReceiveTimeout;   /* default: 60 */
 
 /** this class represents a TCP/IP based transport connection
  *  which can be a transparent TCP/IP socket communication or a
  *  secure transport protocol such as TLS.
  */
-class DcmTransportConnection
+class DCMTK_DCMNET_EXPORT DcmTransportConnection
 {
 public:
 
   /** constructor.
    *  @param openSocket TCP/IP socket to be used for the transport connection.
-   *    the connection must already be establised on socket level. This object
+   *    the connection must already be established on socket level. This object
    *    takes over control of the socket.
    */
-  DcmTransportConnection(int openSocket);
+  DcmTransportConnection(DcmNativeSocketType openSocket);
 
   /** destructor
    */
@@ -60,24 +80,24 @@ public:
   /** performs server side handshake on established socket.
    *  This function is used to establish a secure transport connection
    *  over the established TCP connection. Abstract method.
-   *  @return TCS_ok if successful, an error code otherwise.
+   *  @return EC_Normal if successful, an error code otherwise.
    */
-  virtual DcmTransportLayerStatus serverSideHandshake() = 0;
+  virtual OFCondition serverSideHandshake() = 0;
 
   /** performs client side handshake on established socket.
    *  This function is used to establish a secure transport connection
    *  over the established TCP connection. Abstract method.
-   *  @return TCS_ok if successful, an error code otherwise.
+   *  @return EC_Normal if successful, an error code otherwise.
    */
-  virtual DcmTransportLayerStatus clientSideHandshake() = 0;
+  virtual OFCondition clientSideHandshake() = 0;
 
   /** performs a re-negotiation of the connection with different
    *  connection parameters. Used to change the parameters of the
    *  secure transport connection. Abstract method.
    *  @param newSuite string identifying the ciphersuite to be negotiated.
-   *  @return TCS_ok if successful, an error code otherwise.
+   *  @return EC_Normal if successful, an error code otherwise.
    */
-  virtual DcmTransportLayerStatus renegotiate(const char *newSuite) = 0;
+  virtual OFCondition renegotiate(const char *newSuite) = 0;
 
   /** attempts to read nbyte bytes from the transport connection and
    *  writes them into the given buffer. Abstract method.
@@ -100,6 +120,12 @@ public:
    *  is closed. Abstract method.
    */
   virtual void close() = 0;
+
+  /** Closes the transport connection directly. If a secure connection
+   *  is used, a closure alert is NOT sent before the connection
+   *  is closed. Abstract method.
+   */
+  virtual void closeTransportConnection() = 0;
 
   /** returns the size in bytes of the peer certificate of a secure connection.
    *  May return 0 if connection is transparent TCP/IP.
@@ -142,12 +168,6 @@ public:
    */
   void dumpConnectionParameters(STD_NAMESPACE ostream& out);
 
-  /** returns an error string for a given error code.
-   *  @param code error code
-   *  @return description for error code
-   */
-  virtual const char *errorString(DcmTransportLayerStatus code) = 0;
-
   /** indicates which of the specified transport connections is ready for
    *  reading. If none of the specified transport connections is ready
    *  for reading, this method blocks up to the specified timeout interval
@@ -169,12 +189,12 @@ protected:
   /** returns the socket file descriptor managed by this object.
    *  @return socket file descriptor
    */
-  int getSocket() { return theSocket; }
+  DcmNativeSocketType getSocket() { return theSocket; }
 
   /** set the socket file descriptor managed by this object.
    *  @param socket file descriptor
    */
-  void setSocket(int socket) { theSocket = socket; }
+  void setSocket(DcmNativeSocketType socket) { theSocket = socket; }
 
 private:
 
@@ -206,7 +226,7 @@ private:
    *  reading. If none of the specified transport connections is ready
    *  for reading, this method blocks up to the specified timeout interval
    *  or until one of the connections becomes readable, whatever occurs
-   *  first. This method uses the select() system call. It may only be used
+   *  first. This method uses the poll() or select() system call. It may only be used
    *  with an array of transparent TCP transport connections. This precondition
    *  must be assured by the caller.
    *  @param connections list of transport connections. May contain NULL entries.
@@ -220,23 +240,23 @@ private:
    */
   static OFBool fastSelectReadableAssociation(DcmTransportConnection *connections[], int connCount, int timeout);
 
-  /// the socket file descriptor used by the transport connection.
-  int theSocket;
+  /// the socket file descriptor/handle used by the transport connection.
+  DcmNativeSocketType theSocket;
 };
 
 
 /** this class represents a TCP/IP based transport connection.
  */
-class DcmTCPConnection: public DcmTransportConnection
+class DCMTK_DCMNET_EXPORT DcmTCPConnection: public DcmTransportConnection
 {
 public:
 
   /** constructor.
    *  @param openSocket TCP/IP socket to be used for the transport connection.
-   *    the connection must already be establised on socket level. This object
+   *    the connection must already be established on socket level. This object
    *    takes over control of the socket.
    */
-  DcmTCPConnection(int openSocket);
+  DcmTCPConnection(DcmNativeSocketType openSocket);
 
   /** destructor
    */
@@ -245,24 +265,24 @@ public:
   /** performs server side handshake on established socket.
    *  This function is used to establish a secure transport connection
    *  over the established TCP connection.
-   *  @return TCS_ok if successful, an error code otherwise.
+   *  @return EC_Normal if successful, an error code otherwise.
    */
-  virtual DcmTransportLayerStatus serverSideHandshake();
+  virtual OFCondition serverSideHandshake();
 
   /** performs client side handshake on established socket.
    *  This function is used to establish a secure transport connection
    *  over the established TCP connection.
-   *  @return TCS_ok if successful, an error code otherwise.
+   *  @return EC_Normal if successful, an error code otherwise.
    */
-  virtual DcmTransportLayerStatus clientSideHandshake();
+  virtual OFCondition clientSideHandshake();
 
   /** performs a re-negotiation of the connection with different
    *  connection parameters. Used to change the parameters of the
    *  secure transport connection.
    *  @param newSuite string identifying the ciphersuite to be negotiated.
-   *  @return TCS_ok if successful, an error code otherwise.
+   *  @return EC_Normal if successful, an error code otherwise.
    */
-  virtual DcmTransportLayerStatus renegotiate(const char *newSuite);
+  virtual OFCondition renegotiate(const char *newSuite);
 
   /** attempts to read nbyte bytes from the transport connection and
    *  writes them into the given buffer.
@@ -285,6 +305,12 @@ public:
    *  is closed.
    */
   virtual void close();
+
+  /** Closes the transport connection directly. If a secure connection
+   *  is used, a closure alert is NOT sent before the connection
+   *  is closed.
+   */
+  virtual void closeTransportConnection();
 
   /** returns the size in bytes of the peer certificate of a secure connection.
    *  May return 0 if connection is transparent TCP/IP.
@@ -319,12 +345,6 @@ public:
    */
   virtual OFString& dumpConnectionParameters(OFString& str);
 
-  /** returns an error string for a given error code.
-   *  @param code error code
-   *  @return description for error code
-   */
-  virtual const char *errorString(DcmTransportLayerStatus code);
-
 private:
 
   /// private undefined copy constructor
@@ -336,46 +356,3 @@ private:
 };
 
 #endif
-
-/*
- *  $Log: dcmtrans.h,v $
- *  Revision 1.11  2010-10-14 13:17:22  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.10  2009-11-18 11:53:58  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.9  2009-01-29 11:39:44  joergr
- *  Fixed issue with missing invalidation of socket variable during close method.
- *  Please note that this is only required if the connection objects exists after
- *  the TCP/IP connection has been closed (which is currently not the case).
- *
- *  Revision 1.8  2006/08/15 16:04:29  meichel
- *  Updated the code in module dcmnet to correctly compile when
- *    all standard C++ classes remain in namespace std.
- *
- *  Revision 1.7  2005/12/08 16:02:18  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.6  2004/08/03 11:42:43  meichel
- *  Headers libc.h and unistd.h are now included via ofstdinc.h
- *
- *  Revision 1.5  2003/12/05 10:39:45  joergr
- *  Removed leading underscore characters from preprocessor symbols (reserved
- *  symbols).
- *
- *  Revision 1.4  2003/07/04 13:27:15  meichel
- *  Added include for ofstream.h, to make sure ofstream is correctly defined
- *
- *  Revision 1.3  2001/06/01 15:50:04  meichel
- *  Updated copyright header
- *
- *  Revision 1.2  2000/10/10 12:06:53  meichel
- *  Updated transport layer error codes and routines for printing
- *    connection parameters.
- *
- *  Revision 1.1  2000/08/10 14:50:53  meichel
- *  Added initial OpenSSL support.
- *
- *
- */

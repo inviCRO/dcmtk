@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2001-2010, OFFIS e.V.
+ *  Copyright (C) 2001-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,24 +17,15 @@
  *
  *  Purpose: decompression routines of the IJG JPEG library configured for 16 bits/sample.
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:21 $
- *  CVS/RCS Revision: $Revision: 1.23 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"
 #include "dcmtk/dcmjpeg/djdijg16.h"
 #include "dcmtk/dcmjpeg/djcparam.h"
 #include "dcmtk/dcmdata/dcerror.h"
-
-#define INCLUDE_CSTDIO
-#define INCLUDE_CSETJMP
-#define INCLUDE_CSTRING
 #include "dcmtk/ofstd/ofstdinc.h"
+#include "dcmtk/ofstd/ofdiag.h"
+#include <csetjmp>
 
 // These two macros are re-defined in the IJG header files.
 // We undefine them here and hope that IJG's configure has
@@ -57,11 +48,12 @@ BEGIN_EXTERN_C
 #undef const
 #endif
 
-#ifdef USE_STD_CXX_INCLUDES
 // Solaris defines longjmp() in namespace std, other compilers don't...
-namespace std { }
-using namespace std;
-#endif
+using STD_NAMESPACE longjmp;
+using STD_NAMESPACE jmp_buf;
+
+#include DCMTK_DIAGNOSTIC_PUSH
+#include DCMTK_DIAGNOSTIC_IGNORE_VISUAL_STUDIO_DECLSPEC_PADDING_WARNING
 
 // private error handler struct
 struct DJDIJG16ErrorStruct
@@ -75,6 +67,8 @@ struct DJDIJG16ErrorStruct
   // pointer to this
   DJDecompressIJG16Bit *instance;
 };
+
+#include DCMTK_DIAGNOSTIC_POP
 
 // private source manager struct
 struct DJDIJG16SourceManagerStruct
@@ -100,20 +94,26 @@ ijg_boolean DJDIJG16fillInputBuffer(j_decompress_ptr);
 void DJDIJG16skipInputData(j_decompress_ptr, long);
 void DJDIJG16termSource(j_decompress_ptr);
 
+// helper method to fix old-style casts warnings
+static void OFjpeg_create_decompress(j_decompress_ptr cinfo)
+{
+  jpeg_create_decompress(cinfo);
+}
+
 END_EXTERN_C
 
 
 // error handler, executes longjmp
 void DJDIJG16ErrorExit(j_common_ptr cinfo)
 {
-  DJDIJG16ErrorStruct *myerr = (DJDIJG16ErrorStruct *)cinfo->err;
+  DJDIJG16ErrorStruct *myerr = OFreinterpret_cast(DJDIJG16ErrorStruct*, cinfo->err);
   longjmp(myerr->setjmp_buffer, 1);
 }
 
 // message handler for warning messages and the like
 void DJDIJG16EmitMessage(j_common_ptr cinfo, int msg_level)
 {
-  DJDIJG16ErrorStruct *myerr = (DJDIJG16ErrorStruct *)cinfo->err;
+  DJDIJG16ErrorStruct *myerr = OFreinterpret_cast(DJDIJG16ErrorStruct*, cinfo->err);
   myerr->instance->emitMessage(msg_level);
 }
 
@@ -126,13 +126,13 @@ void DJDIJG16initSource(j_decompress_ptr /* cinfo */)
 
 ijg_boolean DJDIJG16fillInputBuffer(j_decompress_ptr cinfo)
 {
-  DJDIJG16SourceManagerStruct *src = (DJDIJG16SourceManagerStruct *)(cinfo->src);
+  DJDIJG16SourceManagerStruct *src = OFreinterpret_cast(DJDIJG16SourceManagerStruct*, cinfo->src);
 
   // if we already have the next buffer, switch buffers
   if (src->next_buffer)
   {
     src->pub.next_input_byte    = src->next_buffer;
-    src->pub.bytes_in_buffer    = (unsigned int) src->next_buffer_size;
+    src->pub.bytes_in_buffer    = OFstatic_cast(unsigned int, src->next_buffer_size);
     src->next_buffer            = NULL;
     src->next_buffer_size       = 0;
 
@@ -140,9 +140,9 @@ ijg_boolean DJDIJG16fillInputBuffer(j_decompress_ptr cinfo)
     // In this case we must skip the remaining number of bytes here.
     if (src->skip_bytes > 0)
     {
-      if (src->pub.bytes_in_buffer < (unsigned long) src->skip_bytes)
+      if (src->pub.bytes_in_buffer < OFstatic_cast(unsigned long, src->skip_bytes))
       {
-        src->skip_bytes            -= src->pub.bytes_in_buffer;
+        src->skip_bytes            -= OFstatic_cast(Uint32, src->pub.bytes_in_buffer);
         src->pub.next_input_byte   += src->pub.bytes_in_buffer;
         src->pub.bytes_in_buffer    = 0;
         // cause a suspension return
@@ -150,7 +150,7 @@ ijg_boolean DJDIJG16fillInputBuffer(j_decompress_ptr cinfo)
       }
       else
       {
-        src->pub.bytes_in_buffer   -= (unsigned int) src->skip_bytes;
+        src->pub.bytes_in_buffer   -= OFstatic_cast(unsigned int, src->skip_bytes);
         src->pub.next_input_byte   += src->skip_bytes;
         src->skip_bytes             = 0;
       }
@@ -166,17 +166,17 @@ void DJDIJG16skipInputData(
   j_decompress_ptr cinfo,
   long num_bytes)
 {
-  DJDIJG16SourceManagerStruct *src = (DJDIJG16SourceManagerStruct *)(cinfo->src);
+  DJDIJG16SourceManagerStruct *src = OFreinterpret_cast(DJDIJG16SourceManagerStruct*, cinfo->src);
 
-  if (src->pub.bytes_in_buffer < (size_t)num_bytes)
+  if (src->pub.bytes_in_buffer < OFstatic_cast(size_t, num_bytes))
   {
-    src->skip_bytes             = num_bytes - src->pub.bytes_in_buffer;
+    src->skip_bytes             = num_bytes - OFstatic_cast(Uint32, src->pub.bytes_in_buffer);
     src->pub.next_input_byte   += src->pub.bytes_in_buffer;
     src->pub.bytes_in_buffer    = 0; // causes a suspension return
   }
   else
   {
-    src->pub.bytes_in_buffer   -= (unsigned int) num_bytes;
+    src->pub.bytes_in_buffer   -= OFstatic_cast(unsigned int, num_bytes);
     src->pub.next_input_byte   += num_bytes;
     src->skip_bytes             = 0;
   }
@@ -203,6 +203,8 @@ DJDecompressIJG16Bit::~DJDecompressIJG16Bit()
   cleanup();
 }
 
+#include DCMTK_DIAGNOSTIC_PUSH
+#include DCMTK_DIAGNOSTIC_IGNORE_VISUAL_STUDIO_OBJECT_DESTRUCTION_WARNING
 
 OFCondition DJDecompressIJG16Bit::init()
 {
@@ -247,8 +249,9 @@ OFCondition DJDecompressIJG16Bit::init()
       {
         // the IJG error handler will cause the following code to be executed
         char buffer[JMSG_LENGTH_MAX];
-        (*cinfo->err->format_message)((jpeg_common_struct *)cinfo, buffer); /* Create the message */
+        (*cinfo->err->format_message)(OFreinterpret_cast(jpeg_common_struct*, cinfo), buffer); /* Create the message */
         cleanup();
+        delete OFconst_cast(DJDIJG16SourceManagerStruct *, src);
         return makeOFCondition(OFM_dcmjpeg, EJCode_IJG16_Decompression, OF_error, buffer);
       }
     }
@@ -258,10 +261,11 @@ OFCondition DJDecompressIJG16Bit::init()
       cinfo = NULL;
       return EC_MemoryExhausted;
     }
-    jpeg_create_decompress(cinfo);
-    cinfo->src = &OFconst_cast(DJDIJG16SourceManagerStruct *, src)->pub;
+    OFjpeg_create_decompress(cinfo);
+    cinfo->src = &OFconst_cast(DJDIJG16SourceManagerStruct*, src)->pub;
     cinfo->workaround_options = 0;
     if (cparam->predictor6WorkaroundEnabled()) cinfo->workaround_options |= WORKAROUND_PREDICTOR6OVERFLOW;
+    if (cparam->cornellWorkaroundEnabled()) cinfo->workaround_options |= WORKAROUND_BUGGY_CORNELL_16BIT_JPEG_ENCODER;
   } else return EC_MemoryExhausted;
 
   // everything OK
@@ -274,8 +278,8 @@ void DJDecompressIJG16Bit::cleanup()
   if (cinfo)
   {
     jpeg_destroy_decompress(cinfo);
-    delete (DJDIJG16ErrorStruct *)(cinfo->err);
-    delete (DJDIJG16SourceManagerStruct *)(cinfo->src);
+    delete OFreinterpret_cast(DJDIJG16ErrorStruct*, cinfo->err);
+    delete OFreinterpret_cast(DJDIJG16SourceManagerStruct*, cinfo->src);
     delete cinfo;
     cinfo = NULL;
   }
@@ -292,18 +296,18 @@ OFCondition DJDecompressIJG16Bit::decode(
 
   if (cinfo==NULL || compressedFrameBuffer==NULL || uncompressedFrameBuffer==NULL) return EC_IllegalCall;
 
-  if (setjmp(((DJDIJG16ErrorStruct *)(cinfo->err))->setjmp_buffer))
+  if (setjmp(OFreinterpret_cast(DJDIJG16ErrorStruct*, cinfo->err)->setjmp_buffer))
   {
     // the IJG error handler will cause the following code to be executed
     char buffer[JMSG_LENGTH_MAX];
-    (*cinfo->err->format_message)((jpeg_common_struct *)cinfo, buffer); /* Create the message */
+    (*cinfo->err->format_message)(OFreinterpret_cast(jpeg_common_struct*, cinfo), buffer); /* Create the message */
     cleanup();
     return makeOFCondition(OFM_dcmjpeg, EJCode_IJG16_Decompression, OF_error, buffer);
   }
 
   // feed compressed buffer into cinfo structure.
   // The buffer will be activated by the next call to DJDIJG16fillInputBuffer.
-  DJDIJG16SourceManagerStruct *src = (DJDIJG16SourceManagerStruct *)(cinfo->src);
+  DJDIJG16SourceManagerStruct *src = OFreinterpret_cast(DJDIJG16SourceManagerStruct*, cinfo->src);
   src->next_buffer = compressedFrameBuffer;
   src->next_buffer_size = compressedFrameBufferSize;
 
@@ -419,7 +423,7 @@ OFCondition DJDecompressIJG16Bit::decode(
     }
     bufsize = cinfo->output_width * cinfo->output_components; // number of JSAMPLEs per row
     rowsize = bufsize * sizeof(JSAMPLE); // number of bytes per row
-    buffer = (*cinfo->mem->alloc_sarray)((j_common_ptr)cinfo, JPOOL_IMAGE, bufsize, 1);
+    buffer = (*cinfo->mem->alloc_sarray)(OFreinterpret_cast(j_common_ptr, cinfo), JPOOL_IMAGE, bufsize, 1);
     if (buffer == NULL) return EC_MemoryExhausted;
     jsampBuffer = buffer;
   }
@@ -427,7 +431,7 @@ OFCondition DJDecompressIJG16Bit::decode(
   {
     bufsize = cinfo->output_width * cinfo->output_components;
     rowsize = bufsize * sizeof(JSAMPLE);
-    buffer = (JSAMPARRAY)jsampBuffer;
+    buffer = OFreinterpret_cast(JSAMPARRAY, jsampBuffer);
   }
 
   if (uncompressedFrameBufferSize < rowsize * cinfo->output_height) return EJ_IJG16_FrameBufferTooSmall;
@@ -451,6 +455,8 @@ OFCondition DJDecompressIJG16Bit::decode(
   return EC_Normal;
 }
 
+#include DCMTK_DIAGNOSTIC_POP
+
 void DJDecompressIJG16Bit::emitMessage(int msg_level) const
 {
   // This is how we map the message levels:
@@ -473,96 +479,10 @@ void DJDecompressIJG16Bit::emitMessage(int msg_level) const
     break;
   }
 
-  if (cinfo && DCM_dcmjpegGetLogger().isEnabledFor(level))
+  if (cinfo && DCM_dcmjpegLogger.isEnabledFor(level))
   {
     char buffer[JMSG_LENGTH_MAX];
-    (*cinfo->err->format_message)((jpeg_common_struct *)cinfo, buffer); /* Create the message */
-    DCM_dcmjpegGetLogger().forcedLog(level, buffer, __FILE__, __LINE__);
+    (*cinfo->err->format_message)(OFreinterpret_cast(jpeg_common_struct*, cinfo), buffer); /* Create the message */
+    DCM_dcmjpegLogger.forcedLog(level, buffer, __FILE__, __LINE__);
   }
 }
-
-/*
- * CVS/RCS Log
- * $Log: djdijg16.cc,v $
- * Revision 1.23  2010-10-14 13:14:21  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.22  2010-06-25 09:15:19  uli
- * Fixed issues with compiling with HAVE_STD_STRING.
- *
- * Revision 1.21  2010-03-24 14:57:40  joergr
- * Added new options for the color space conversion during decompression based
- * on the color model that is "guessed" by the underlying JPEG library (IJG).
- *
- * Revision 1.20  2010-03-01 09:08:48  uli
- * Removed some unnecessary include directives in the headers.
- *
- * Revision 1.19  2010-02-22 11:39:54  uli
- * Remove some unneeded includes.
- *
- * Revision 1.18  2009-11-18 16:17:54  uli
- * Use more than just the INFO log level.
- *
- * Revision 1.17  2009-10-07 12:44:33  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.16  2009-08-19 12:19:19  meichel
- * Unlike some other compilers, Sun Studio 11 on Solaris
- *   declares longjmp() in namespace std. Added code to handle this case.
- *
- * Revision 1.15  2006-08-16 16:30:21  meichel
- * Updated all code in module dcmjpeg to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.14  2006/03/29 15:58:52  meichel
- * Added support for decompressing images with 16 bits/pixel compressed with
- *   a faulty lossless JPEG encoder that produces integer overflows in predictor 6.
- *
- * Revision 1.13  2005/12/08 15:43:37  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.12  2005/11/30 14:08:50  onken
- * Added check to decline automatic IJG color space conversion of signed pixel
- * data, because IJG lib only handles unsigned input for conversions.
- *
- * Revision 1.11  2005/11/14 17:09:39  meichel
- * Changed some function return types from int to ijg_boolean, to avoid
- *   compilation errors if the ijg_boolean type is ever changed.
- *
- * Revision 1.10  2004/05/07 12:18:45  meichel
- * Added explicit typecast to volatile variables, needed for MSVC
- *
- * Revision 1.9  2004/05/07 10:45:13  meichel
- * Added explicit typecast to volatile variables, needed for MSVC
- *
- * Revision 1.8  2004/05/05 14:10:24  joergr
- * Added explicit typecast to volatile variables to compiler with gcc 3.2.
- *
- * Revision 1.7  2004/05/05 11:50:06  meichel
- * Declared a few local variables as volatile that might otherwise
- *   be clobbered by longjmp.
- *
- * Revision 1.6  2003/10/13 13:25:49  meichel
- * Added workaround for name clash of typedef "boolean" in the IJG header files
- *   and the standard headers for Borland C++.
- *
- * Revision 1.5  2002/11/27 15:40:00  meichel
- * Adapted module dcmjpeg to use of new header file ofstdinc.h
- *
- * Revision 1.4  2001/12/20 10:41:52  meichel
- * Fixed warnings reported by Sun CC 2.0.1
- *
- * Revision 1.3  2001/12/18 09:48:57  meichel
- * Modified configure test for "const" support of the C compiler
- *   in order to avoid a macro recursion error on Sun CC 2.0.1
- *
- * Revision 1.2  2001/11/19 15:13:31  meichel
- * Introduced verbose mode in module dcmjpeg. If enabled, warning
- *   messages from the IJG library are printed on ofConsole, otherwise
- *   the library remains quiet.
- *
- * Revision 1.1  2001/11/13 15:58:28  meichel
- * Initial release of module dcmjpeg
- *
- *
- */

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2010, OFFIS e.V.
+ *  Copyright (C) 1997-2011, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: representation parameter for lossy JPEG
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:17 $
- *  CVS/RCS Revision: $Revision: 1.3 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DJRPLOSS_H
@@ -31,10 +24,11 @@
 
 #include "dcmtk/config/osconfig.h"
 #include "dcmtk/dcmdata/dcpixel.h" /* for class DcmRepresentationParameter */
+#include "dcmtk/dcmjpeg/djdefine.h"
 
 /** representation parameter for lossy JPEG
  */
-class DJ_RPLossy: public DcmRepresentationParameter
+class DCMTK_DCMJPEG_EXPORT DJ_RPLossy: public DcmRepresentationParameter
 {
 public:
 
@@ -84,18 +78,3 @@ private:
 
 
 #endif
-
-/*
- * CVS/RCS Log
- * $Log: djrploss.h,v $
- * Revision 1.3  2010-10-14 13:17:17  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.2  2005-12-08 16:59:37  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.1  2001/11/13 15:56:29  meichel
- * Initial release of module dcmjpeg
- *
- *
- */

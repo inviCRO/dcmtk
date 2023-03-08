@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -15,16 +15,9 @@
  *
  *  Author:  Marco Eichelberg
  *
- *  Purpose: 
+ *  Purpose:
  *    class DcmPresentationContextItem
  *    class DcmPresentationContextMap
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:22 $
- *  CVS/RCS Revision: $Revision: 1.4 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -35,14 +28,14 @@
 #include "dcmtk/ofstd/oflist.h"   /* for class OFList<> */
 #include "dcmtk/ofstd/ofstring.h" /* for class OFString */
 #include "dcmtk/ofstd/ofcond.h"   /* for class OFCondition */
-#include "dcmtk/dcmnet/dcmsmap.h"  /* for class DcmSimpleMap<> */
+#include "dcmtk/ofstd/ofmap.h"    /* for class OFMap */
 #include "dcmtk/dcmnet/dccfuidh.h" /* for class DcmUIDHandler */
 
 
 /** this helper class is a presentation context list entry.
  *  Not intended for use by the end user.
  */
-class DcmPresentationContextItem
+class DCMTK_DCMNET_EXPORT DcmPresentationContextItem
 {
 public:
   /** constructor
@@ -55,9 +48,12 @@ public:
 
   /// copy constructor
   DcmPresentationContextItem(const DcmPresentationContextItem& arg);
- 
+
   /// destructor
   ~DcmPresentationContextItem();
+
+  /// assignment operator
+  DcmPresentationContextItem& operator=(const DcmPresentationContextItem& arg);
 
   /** checks if the given argument matches the abstract syntax UID
    *  maintained by this object
@@ -92,13 +88,10 @@ public:
    */
   OFBool operator==(const DcmPresentationContextItem& arg) const
   {
-    return (uid_ == arg.uid_) && (xferSyntaxGroup_ == arg.xferSyntaxGroup_); 
+    return (uid_ == arg.uid_) && (xferSyntaxGroup_ == arg.xferSyntaxGroup_);
   }
 
 private:
-
-  /// private undefined copy assignment operator
-  DcmPresentationContextItem& operator=(const DcmPresentationContextItem& arg);
 
   /// abstract syntax UID
   DcmUIDHandler uid_;
@@ -117,7 +110,7 @@ typedef OFList<DcmPresentationContextItem> DcmPresentationContextList;
 /** this helper class maintains a map of presentation context lists.
  *  Not intended for use by the end user.
  */
-class DcmPresentationContextMap
+class DCMTK_DCMNET_EXPORT DcmPresentationContextMap
 {
 public:
   /// constructor
@@ -125,6 +118,32 @@ public:
 
   /// destructor
   ~DcmPresentationContextMap();
+
+  /** Resets DcmPresentationContextMap and frees any allocated memory.
+   */
+  void clear();
+
+  /// Copy constructor, creates deep copy
+  DcmPresentationContextMap(const DcmPresentationContextMap& arg);
+
+  /// Copy assignment operator, creates deep copy
+  DcmPresentationContextMap& operator=(const DcmPresentationContextMap& arg);
+
+  /** const iterator pointing to start of presentation context map
+   *  @return iterator to start of presentation context map
+   */
+  OFMap<OFString, DcmPresentationContextList*>::const_iterator begin();
+
+  /** const iterator pointing to end of presentation context map (behind last entry)
+   *  @return iterator to end of presentation context map
+   */
+  OFMap<OFString, DcmPresentationContextList*>::const_iterator end();
+
+  /** get list of presentation contexts given the corresponding symbolic name
+   *  @param pcName the symbolic name of the pc list
+   *  @return the requested presentation context list (or NULL, if not existing)
+   */
+  const DcmPresentationContextList* getPresentationContextList(const OFString& pcName);
 
   /** add new entry to list within map.
    *  If key is new, new list is created. Otherwise value
@@ -135,9 +154,9 @@ public:
    *  @return EC_Normal if successful, an error code otherwise
    */
   OFCondition add(
-    const char *key,
-    const char *abstractSyntaxUID,
-    const char *transferSyntaxKey);
+    const OFString& key,
+    const OFString& abstractSyntaxUID,
+    const OFString& transferSyntaxKey);
 
   /** checks if the key is known
    *  @param key key name, must not be NULL
@@ -160,36 +179,10 @@ public:
   const DcmPresentationContextList *getPresentationContextList(const char *key) const;
 
 private:
-  /// private undefined copy constructor
-  DcmPresentationContextMap(const DcmPresentationContextMap& arg);
-
-  /// private undefined copy assignment operator
-  DcmPresentationContextMap& operator=(const DcmPresentationContextMap& arg);
 
   /// map of presentation context lists
-  DcmSimpleMap<DcmPresentationContextList *> map_;
+  OFMap<OFString, DcmPresentationContextList *> map_;
 
 };
 
 #endif
-
-/*
- * CVS/RCS Log
- * $Log: dccfpcmp.h,v $
- * Revision 1.4  2010-10-14 13:17:22  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.3  2005/12/08 16:02:11  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.2  2003/06/18 08:16:16  meichel
- * Added comparison operators to keep MSVC5 compiler happy
- *
- * Revision 1.1  2003/06/10 14:27:33  meichel
- * Initial release of class DcmAssociationConfiguration and support
- *   classes. This class maintains a list of association negotiation
- *   profiles that can be addressed by symbolic keys. The profiles may
- *   be read from a configuration file.
- *
- *
- */

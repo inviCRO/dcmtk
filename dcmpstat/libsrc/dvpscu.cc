@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2020, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose:
  *    classes: DVPSCurve
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:32 $
- *  CVS/RCS Revision: $Revision: 1.8 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -74,7 +67,7 @@ OFCondition DVPSCurve::read(DcmItem &dset, Uint8 group)
 {
   OFCondition result = EC_Normal;
   DcmStack stack;
-  
+
   curveGroup = group;
   DcmElement *d_curveDimensions = NULL;
   DcmElement *d_numberOfPoints = NULL;
@@ -84,19 +77,19 @@ OFCondition DVPSCurve::read(DcmItem &dset, Uint8 group)
   DcmElement *d_curveDescription = NULL;
   DcmElement *d_axisUnits = NULL;
   DcmElement *d_curveLabel = NULL;
-  
+
   /* first we look for the Curve Data */
   DcmTagKey key(0x5000 + group,0x3000);
   if (EC_Normal == dset.search(key, stack, ESM_fromHere, OFFalse))
   {
-    d_curveData = (DcmElement *)(stack.top());  
+    d_curveData = (DcmElement *)(stack.top());
   } else return EC_IllegalCall;
-  
+
   key.setElement(0x0005); // Curve Dimensions
   stack.clear();
   if (EC_Normal == dset.search(key, stack, ESM_fromHere, OFFalse))
   {
-    d_curveDimensions = (DcmElement *)(stack.top());  
+    d_curveDimensions = (DcmElement *)(stack.top());
   } else return EC_IllegalCall;
 
   key.setElement(0x0110); // Curve Data Descriptor
@@ -110,42 +103,42 @@ OFCondition DVPSCurve::read(DcmItem &dset, Uint8 group)
   stack.clear();
   if (EC_Normal == dset.search(key, stack, ESM_fromHere, OFFalse))
   {
-    d_numberOfPoints = (DcmElement *)(stack.top());  
+    d_numberOfPoints = (DcmElement *)(stack.top());
   } else return EC_IllegalCall;
 
   key.setElement(0x0020); // Type of Data
   stack.clear();
   if (EC_Normal == dset.search(key, stack, ESM_fromHere, OFFalse))
   {
-    d_typeOfData = (DcmElement *)(stack.top());  
+    d_typeOfData = (DcmElement *)(stack.top());
   } else return EC_IllegalCall;
 
   key.setElement(0x0103); // Data Value Representation
   stack.clear();
   if (EC_Normal == dset.search(key, stack, ESM_fromHere, OFFalse))
   {
-    d_dataVR = (DcmElement *)(stack.top());  
+    d_dataVR = (DcmElement *)(stack.top());
   } else return EC_IllegalCall;
 
   key.setElement(0x0022); // Curve Description
   stack.clear();
   if (EC_Normal == dset.search(key, stack, ESM_fromHere, OFFalse))
   {
-    d_curveDescription = (DcmElement *)(stack.top());  
+    d_curveDescription = (DcmElement *)(stack.top());
   }
 
   key.setElement(0x0030); // Axis Units
   stack.clear();
   if (EC_Normal == dset.search(key, stack, ESM_fromHere, OFFalse))
   {
-    d_axisUnits = (DcmElement *)(stack.top());  
+    d_axisUnits = (DcmElement *)(stack.top());
   }
 
   key.setElement(0x2500); // Curve Label
   stack.clear();
   if (EC_Normal == dset.search(key, stack, ESM_fromHere, OFFalse))
   {
-    d_curveLabel = (DcmElement *)(stack.top());  
+    d_curveLabel = (DcmElement *)(stack.top());
   }
 
   Uint16 u=0;
@@ -154,7 +147,7 @@ OFCondition DVPSCurve::read(DcmItem &dset, Uint8 group)
     // Curve Dimensions unreadable or != 2, bail out
     return EC_IllegalCall;
   }
-  
+
   u=0;
   if ((EC_Normal != d_numberOfPoints->getUint16(u,0))||(u == 0))
   {
@@ -175,36 +168,36 @@ OFCondition DVPSCurve::read(DcmItem &dset, Uint8 group)
 
   if ((d_curveDescription) &&(EC_Normal == d_curveDescription->getOFString(aString,0)))
   {
-    curveDescription = aString; 
+    curveDescription = aString;
   }
-  
+
   if ((d_axisUnits) &&(EC_Normal == d_axisUnits->getOFString(aString,0)))
   {
-    axisUnitsX = aString; 
+    axisUnitsX = aString;
   }
   if ((d_axisUnits) &&(EC_Normal == d_axisUnits->getOFString(aString,1)))
   {
-    axisUnitsY = aString; 
+    axisUnitsY = aString;
   }
 
   if ((d_curveLabel) &&(EC_Normal == d_curveLabel->getOFString(aString,0)))
   {
-    curveLabel = aString; 
+    curveLabel = aString;
   }
-  
+
   Uint16 dataVR=0;
   if (EC_Normal != d_dataVR->getUint16(dataVR,0))
   {
     // cannot read curve data VR, bail out
     return EC_IllegalCall;
-  } 
+  }
 
   curveData = new double[numberOfPoints*2];
   if (curveData==NULL) return EC_MemoryExhausted;
 
   void *rawData=NULL;
   size_t align=0;
-  
+
   Uint8 *pui8=NULL;
   Uint16 *pui16=NULL;
   Sint16 *psi16=NULL;
@@ -216,16 +209,17 @@ OFCondition DVPSCurve::read(DcmItem &dset, Uint8 group)
     case EVR_OB:
     case EVR_OW:
     case EVR_ox:
+    case EVR_px:
     case EVR_US:
-      
+
       if (EC_Normal == d_curveData->getUint8Array(pui8))
       {
-      	rawData = pui8;
+        rawData = pui8;
         align = 1;
-      } 
+      }
       else if (EC_Normal == d_curveData->getUint16Array(pui16))
       {
-      	rawData = pui16;
+        rawData = pui16;
         align = sizeof(Uint16);
       }
       else result = EC_IllegalCall;
@@ -233,28 +227,28 @@ OFCondition DVPSCurve::read(DcmItem &dset, Uint8 group)
     case EVR_SS:
       if (EC_Normal == d_curveData->getSint16Array(psi16))
       {
-      	rawData = psi16;
+        rawData = psi16;
         align = sizeof(Sint16);
       } else result = EC_IllegalCall;
       break;
     case EVR_FL:
       if (EC_Normal == d_curveData->getFloat32Array(pfl32))
       {
-      	rawData = pfl32;
+        rawData = pfl32;
         align = sizeof(Float32);
       } else result = EC_IllegalCall;
       break;
     case EVR_FD:
       if (EC_Normal == d_curveData->getFloat64Array(pfl64))
       {
-      	rawData = pfl64;
+        rawData = pfl64;
         align = sizeof(Float64);
       } else result = EC_IllegalCall;
       break;
     case EVR_SL:
       if (EC_Normal == d_curveData->getSint32Array(psi32))
       {
-      	rawData = psi32;
+        rawData = psi32;
         align = sizeof(Sint32);
       } else result = EC_IllegalCall;
       break;
@@ -262,18 +256,18 @@ OFCondition DVPSCurve::read(DcmItem &dset, Uint8 group)
       result = EC_IllegalCall;
       break;
   }
-  
+
   size_t byteLength = (size_t)(d_curveData->getLength());
   size_t maxidx = 2*numberOfPoints;
   size_t i;
-  
+
   switch (dataVR)
   {
     case 0: // VR=US. align can be 1 or 2
       if ((align==1)||(align==sizeof(Uint16)))
       {
-        if (align==1) swapIfNecessary(gLocalByteOrder, EBO_LittleEndian, rawData, byteLength, sizeof(Uint16));
-        if (maxidx*sizeof(Uint16) <= byteLength) 
+        if (align==1) swapIfNecessary(gLocalByteOrder, EBO_LittleEndian, rawData, OFstatic_cast(Uint32, byteLength), sizeof(Uint16));
+        if (maxidx*sizeof(Uint16) <= byteLength)
         {
           for (i=0; i<maxidx; i++) curveData[i] = (double)(((Uint16 *)rawData)[i]);
         } else result=EC_IllegalCall;
@@ -282,8 +276,8 @@ OFCondition DVPSCurve::read(DcmItem &dset, Uint8 group)
     case 1: // VR=SS. align can be 1 or 2
       if ((align==1)||(align==sizeof(Sint16)))
       {
-        if (align==1) swapIfNecessary(gLocalByteOrder, EBO_LittleEndian, rawData, byteLength, sizeof(Sint16));
-        if (maxidx*sizeof(Sint16) <= byteLength) 
+        if (align==1) swapIfNecessary(gLocalByteOrder, EBO_LittleEndian, rawData, OFstatic_cast(Uint32, byteLength), sizeof(Sint16));
+        if (maxidx*sizeof(Sint16) <= byteLength)
         {
           for (i=0; i<maxidx; i++) curveData[i] = (double)(((Sint16 *)rawData)[i]);
         } else result=EC_IllegalCall;
@@ -292,11 +286,11 @@ OFCondition DVPSCurve::read(DcmItem &dset, Uint8 group)
     case 2: // VR=FL. align can be 1, 2, 4
       if ((align==1)||(align==sizeof(Uint16))||(align==sizeof(Float32)))
       {
-      	// if data is word aligned, first swap back to little endian OB
-      	if (align==sizeof(Uint16)) swapIfNecessary(EBO_LittleEndian, gLocalByteOrder, rawData, byteLength, sizeof(Uint16));
-        if ((align==1)||(align==sizeof(Uint16))) 
-          swapIfNecessary(gLocalByteOrder, EBO_LittleEndian, rawData, byteLength, sizeof(Float32));
-        if (maxidx*sizeof(Float32) <= byteLength) 
+        // if data is word aligned, first swap back to little endian OB
+        if (align==sizeof(Uint16)) swapIfNecessary(EBO_LittleEndian, gLocalByteOrder, rawData, OFstatic_cast(Uint32, byteLength), sizeof(Uint16));
+        if ((align==1)||(align==sizeof(Uint16)))
+          swapIfNecessary(gLocalByteOrder, EBO_LittleEndian, rawData, OFstatic_cast(Uint32, byteLength), sizeof(Float32));
+        if (maxidx*sizeof(Float32) <= byteLength)
         {
           for (i=0; i<maxidx; i++) curveData[i] = (double)(((Float32 *)rawData)[i]);
         } else result=EC_IllegalCall;
@@ -305,11 +299,11 @@ OFCondition DVPSCurve::read(DcmItem &dset, Uint8 group)
     case 3: // VR=FD. align can be 1, 2, 8
       if ((align==1)||(align==sizeof(Uint16))||(align==sizeof(Float64)))
       {
-      	// if data is word aligned, first swap back to little endian OB
-      	if (align==sizeof(Uint16)) swapIfNecessary(EBO_LittleEndian, gLocalByteOrder, rawData, byteLength, sizeof(Uint16));
+        // if data is word aligned, first swap back to little endian OB
+        if (align==sizeof(Uint16)) swapIfNecessary(EBO_LittleEndian, gLocalByteOrder, rawData, OFstatic_cast(Uint32, byteLength), sizeof(Uint16));
         if ((align==1)||(align==sizeof(Uint16)))
-          swapIfNecessary(gLocalByteOrder, EBO_LittleEndian, rawData, byteLength, sizeof(Float64));
-        if (maxidx*sizeof(Float64) <= byteLength) 
+          swapIfNecessary(gLocalByteOrder, EBO_LittleEndian, rawData, OFstatic_cast(Uint32, byteLength), sizeof(Float64));
+        if (maxidx*sizeof(Float64) <= byteLength)
         {
           for (i=0; i<maxidx; i++) curveData[i] = (double)(((Float64 *)rawData)[i]);
         } else result=EC_IllegalCall;
@@ -318,11 +312,11 @@ OFCondition DVPSCurve::read(DcmItem &dset, Uint8 group)
     case 4: // VR=SL. align can be 1, 2, 4
       if ((align==1)||(align==sizeof(Uint16))||(align==sizeof(Sint32)))
       {
-      	// if data is word aligned, first swap back to little endian OB
-      	if (align==sizeof(Uint16)) swapIfNecessary(EBO_LittleEndian, gLocalByteOrder, rawData, byteLength, sizeof(Uint16));
+        // if data is word aligned, first swap back to little endian OB
+        if (align==sizeof(Uint16)) swapIfNecessary(EBO_LittleEndian, gLocalByteOrder, rawData, OFstatic_cast(Uint32, byteLength), sizeof(Uint16));
         if ((align==1)||(align==sizeof(Uint16)))
-          swapIfNecessary(gLocalByteOrder, EBO_LittleEndian, rawData, byteLength, sizeof(Sint32));
-        if (maxidx*sizeof(Sint32) <= byteLength) 
+          swapIfNecessary(gLocalByteOrder, EBO_LittleEndian, rawData, OFstatic_cast(Uint32, byteLength), sizeof(Sint32));
+        if (maxidx*sizeof(Sint32) <= byteLength)
         {
           for (i=0; i<maxidx; i++) curveData[i] = (double)(((Sint32 *)rawData)[i]);
         } else result=EC_IllegalCall;
@@ -331,8 +325,8 @@ OFCondition DVPSCurve::read(DcmItem &dset, Uint8 group)
     default:
       result = EC_IllegalCall;
       break;
-  }  
-    
+  }
+
   return result;
 }
 
@@ -348,35 +342,3 @@ OFCondition DVPSCurve::getPoint(size_t idx, double& x, double& y)
   } else return EC_IllegalCall;
   return EC_Normal;
 }
-
-/*
- *  $Log: dvpscu.cc,v $
- *  Revision 1.8  2010-10-14 13:14:32  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.7  2009-11-24 14:12:58  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.6  2005-12-08 15:46:21  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.5  2001/09/26 15:36:23  meichel
- *  Adapted dcmpstat to class OFCondition
- *
- *  Revision 1.4  2001/06/01 15:50:28  meichel
- *  Updated copyright header
- *
- *  Revision 1.3  2000/06/02 16:00:58  meichel
- *  Adapted all dcmpstat classes to use OFConsole for log and error output
- *
- *  Revision 1.2  2000/03/08 16:29:03  meichel
- *  Updated copyright header.
- *
- *  Revision 1.1  1998/12/22 17:57:14  meichel
- *  Implemented Presentation State interface for overlays,
- *    VOI LUTs, VOI windows, curves. Added test program that
- *    allows to add curve data to DICOM images.
- *
- *
- */
-

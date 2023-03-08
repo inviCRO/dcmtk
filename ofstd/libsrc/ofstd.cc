@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2001-2010, OFFIS e.V.
+ *  Copyright (C) 2001-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -87,28 +87,34 @@
  *
  *  Purpose: Class for various helper functions
  *
- *  Last Update:      $Author: uli $
- *  Update Date:      $Date: 2010-11-01 08:55:56 $
- *  CVS/RCS Revision: $Revision: 1.66 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
+
+#ifdef __SUNPRO_CC
+BEGIN_EXTERN_C
+// SunPro declares vsnprintf() only in <stdio.h>, not in <cstdio>.
+#include <stdio.h>
+END_EXTERN_C
+#else
+#include <cstdio>
+#endif
+
 #include "dcmtk/ofstd/ofstd.h"
 #include "dcmtk/ofstd/ofcond.h"
+#include "dcmtk/ofstd/offile.h"
 #include "dcmtk/ofstd/ofstream.h"
+#include "dcmtk/ofstd/oftuple.h"
+#include "dcmtk/ofstd/ofmath.h"
+#include "dcmtk/ofstd/ofsockad.h"
+#include "dcmtk/ofstd/ofvector.h"
+#include "dcmtk/ofstd/ofdiag.h"
+#include "dcmtk/ofstd/oftimer.h"
 
-#define INCLUDE_CMATH
-#define INCLUDE_CFLOAT
-#define INCLUDE_CSTRING
-#define INCLUDE_CSTDIO
-#define INCLUDE_CCTYPE
-#define INCLUDE_UNISTD
-#include "dcmtk/ofstd/ofstdinc.h"
+
+#include <cmath>
+#include <cstring>       /* for memset() */
 
 BEGIN_EXTERN_C
 #ifdef HAVE_SYS_STAT_H
@@ -138,24 +144,49 @@ BEGIN_EXTERN_C
 #include <fnmatch.h>     /* for fnmatch() */
 #endif
 #ifdef HAVE_IEEEFP_H
-#include <ieeefp.h>     /* for finite() on Solaris 2.5.1 */
+#include <ieeefp.h>      /* for finite() on Solaris 2.5.1 */
+#endif
+#ifdef HAVE_SYS_UTSNAME_H
+#include <sys/utsname.h>
+#endif
+#ifdef HAVE_SYS_SOCKET_H
+#include <sys/socket.h>
+#endif
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>
+#endif
+#ifdef HAVE_NETDB_H
+#include <netdb.h>
 #endif
 END_EXTERN_C
 
 #ifdef HAVE_WINDOWS_H
+#define WIN32_LEAN_AND_MEAN
+#include <winsock2.h>
 #include <windows.h>     /* for GetFileAttributes() */
-
-#ifndef R_OK /* windows defines access() but not the constants */
+#include <direct.h>      /* for _mkdir() */
+#include <lm.h>          /* for NetWkstaUserGetInfo */
+#include <ws2tcpip.h>    /* for struct sockaddr_in6 */
+#ifndef R_OK /* Windows defines access() but not the constants */
 #define W_OK 02 /* Write permission */
 #define R_OK 04 /* Read permission */
-#define F_OK 00 /* Existance only */
-#endif /* R_OK */
+#define F_OK 00 /* Existence only */
+#endif /* !R_OK */
 
+#elif defined(HAVE_WINSOCK_H)
+#include <winsock.h>  /* include winsock.h directly i.e. on MacOS */
 #endif /* HAVE_WINDOWS_H */
 
 #ifdef _WIN32
 #include <process.h>     /* needed for declaration of getpid() */
 #endif
+
+#include "dcmtk/ofstd/ofgrp.h"
+#include "dcmtk/ofstd/ofpwd.h"
+#include "dcmtk/ofstd/ofoption.h"
+
+// maximum number of repetitions for EAI_AGAIN
+#define DCMTK_MAX_EAI_AGAIN_REPETITIONS 5
 
 // --- ftoa() processing flags ---
 
@@ -165,59 +196,6 @@ const unsigned int OFStandard::ftoa_uppercase = 0x04;
 const unsigned int OFStandard::ftoa_alternate = 0x08;
 const unsigned int OFStandard::ftoa_leftadj   = 0x10;
 const unsigned int OFStandard::ftoa_zeropad   = 0x20;
-
-
-/* Some MacOS X versions define isinf() and isnan() in <math.h> but not in <cmath> */
-#if defined(__APPLE__) && defined(__MACH__)
-#undef HAVE_PROTOTYPE_ISINF
-#undef HAVE_PROTOTYPE_ISNAN
-#endif
-
-
-// some systems don't properly define isnan()
-#ifdef HAVE_ISNAN
-#ifndef HAVE_PROTOTYPE_ISNAN
-extern "C"
-{
-  int isnan(double value);
-}
-#endif
-#endif
-
-
-// some systems don't properly define finite()
-#ifdef HAVE_FINITE
-#ifndef HAVE_PROTOTYPE_FINITE
-extern "C"
-{
-  int finite(double value);
-}
-#endif
-#endif
-
-
-// some systems don't properly define isinf()
-#ifdef HAVE_ISINF
-#ifndef HAVE_PROTOTYPE_ISINF
-extern "C"
-{
-  int isinf(double value);
-}
-#endif
-
-#else /* HAVE_ISINF */
-
-static int my_isinf(double x)
-{
-#ifdef HAVE_WINDOWS_H
-  return (! _finite(x)) && (! _isnan(x));
-#else
-  // Solaris 2.5.1 has finite() and isnan() but not isinf().
-  return (! finite(x)) && (! isnan(x));
-#endif
-}
-#endif /* HAVE_ISINF */
-
 
 // --- string functions ---
 
@@ -229,9 +207,9 @@ static int my_isinf(double x)
  */
 size_t OFStandard::my_strlcpy(char *dst, const char *src, size_t siz)
 {
-  register char *d = dst;
-  register const char *s = src;
-  register size_t n = siz;
+  char *d = dst;
+  const char *s = src;
+  size_t n = siz;
 
   /* Copy as many bytes as will fit */
   if (n != 0 && --n != 0)
@@ -248,7 +226,7 @@ size_t OFStandard::my_strlcpy(char *dst, const char *src, size_t siz)
   {
      if (siz != 0)
         *d = '\0'; /* NUL-terminate dst */
-     while (*s++) /* do_nothing */ ;
+     while (*s++) /* do nothing */ ;
   }
 
   return(s - src - 1);    /* count does not include NUL */
@@ -266,9 +244,9 @@ size_t OFStandard::my_strlcpy(char *dst, const char *src, size_t siz)
  */
 size_t OFStandard::my_strlcat(char *dst, const char *src, size_t siz)
 {
-  register char *d = dst;
-  register const char *s = src;
-  register size_t n = siz;
+  char *d = dst;
+  const char *s = src;
+  size_t n = siz;
   size_t dlen;
 
   /* Find the end of dst and adjust bytes left but don't go past end */
@@ -292,6 +270,69 @@ size_t OFStandard::my_strlcat(char *dst, const char *src, size_t siz)
 }
 #endif /* HAVE_STRLCAT */
 
+int OFStandard::snprintf(char *str, size_t size, const char *format, ...)
+{
+    // we emulate snprintf() via vsnprintf().
+    int count;
+    va_list ap;
+    va_start(ap, format);
+    count = OFStandard::vsnprintf(str, size, format, ap);
+    va_end(ap);
+    return count;
+}
+
+int OFStandard::vsnprintf(char *str, size_t size, const char *format, va_list ap)
+{
+#ifdef _MSC_VER
+#if _MSC_VER < 1900
+    // Visual Studio versions 2005 to 2013 do not have a C99 compliant
+    // vsnprintf(), but they have _snprintf(), which can be used to emulate it.
+    int count = -1;
+
+    if (size != 0)
+        count = _vsnprintf_s(str, size, _TRUNCATE, format, ap);
+    if (count == -1)
+        count = _vscprintf(format, ap);
+
+    return count;
+#else /* _MSC_VER < 1900 */
+    // Visual Studio 2015 and newer has a C99 compliant vsnprintf().
+    return ::vsnprintf(str, size, format, ap);
+#endif /* _MSC_VER < 1900 */
+#else /* _MSC_VER */
+#ifdef HAVE_VSNPRINTF
+    return ::vsnprintf(str, size, format, ap);
+#else /* HAVE_VSNPRINTF */
+#ifdef DCMTK_ENABLE_UNSAFE_VSNPRINTF
+    // This implementation internally uses sprintf (which is inherently unsafe).
+    // It allocates a buffer that is 1 kByte larger than "size",
+    // formats the string into that buffer, and then uses strlcpy() to
+    // copy the formatted string into the output buffer, truncating if necessary.
+    // This will work in most cases, since few snprintf calls should overrun
+    // the provided buffer by more than 1K, but it can be easily abused by
+    // a malicious attacker to cause a buffer overrun.
+    //
+    // Therefore, this implementation should only be used as a "last resort"
+    // and we strongly advise against using it in production code.
+    // The macro "DCMTK_ENABLE_UNSAFE_VSNPRINTF" must explicitly be defined
+    // by the used to enable this implementation.
+    int count = -1;
+    if (size != 0)
+    {
+      char *buf = new char[size+1024];
+      count = ::vsprintf(buf, format, ap);
+      OFStandard::strlcpy(str, buf, size);
+      delete[] buf;
+    }
+    return count;
+#warning Using unsafe implementation of vsnprintf(3)
+#else /* DCMTK_ENABLE_UNSAFE_VSNPRINTF */
+    return -1;
+#error vsnprintf(3) not found. Use different compiler or compile with DCMTK_ENABLE_UNSAFE_VSNPRINTF (unsafe!)
+#endif /* DCMTK_ENABLE_UNSAFE_VSNPRINTF */
+#endif /* HAVE_VSNPRINTF */
+#endif /* _MSC_VER */
+}
 
 #ifdef HAVE_PROTOTYPE_STRERROR_R
 /*
@@ -376,29 +417,43 @@ OFString &OFStandard::toLower(OFString &value)
 
 // --- file system functions ---
 
-OFBool OFStandard::pathExists(const OFString &pathName)
+OFBool OFStandard::pathExists(const OFFilename &pathName)
 {
     OFBool result = OFFalse;
-    /* check for valid path name */
-    if (!pathName.empty())
+    /* check for valid path name (avoid NULL or empty string) */
+    if (!pathName.isEmpty())
     {
 #if HAVE_ACCESS
-        /* check whether path exists */
-        result = (access(pathName.c_str(), F_OK) == 0);
-#else
+        /* check existence with "access()" */
+#if defined(WIDE_CHAR_FILE_IO_FUNCTIONS) && defined(_WIN32)
+        /* check whether to use the wide-char version of the API function */
+        if (pathName.usesWideChars())
+            result = (_waccess(pathName.getWideCharPointer(), F_OK) == 0);
+        else
+#endif
+            result = (access(pathName.getCharPointer(), F_OK) == 0);
+#else /* HAVE_ACCESS */
 #ifdef HAVE_WINDOWS_H
-        /* check whether path exists */
-        result = (GetFileAttributes(pathName.c_str()) != 0xffffffff);
-#else
+        /* get file attributes */
+        DWORD fileAttr;
+#if defined(WIDE_CHAR_FILE_IO_FUNCTIONS) && defined(_WIN32)
+        /* check whether to use the wide-char version of the API function */
+        if (pathName.usesWideChars())
+            fileAttr = GetFileAttributesW(pathName.getWideCharPointer());
+        else
+#endif
+            fileAttr = GetFileAttributes(pathName.getCharPointer());
+        result = (fileAttr != 0xffffffff);
+#else /* HAVE_WINDOWS_H */
 #ifdef HAVE_SYS_STAT_H
         /* check existence with "stat()" */
         struct stat stat_buf;
-        result = (stat(pathName.c_str(), &stat_buf) == 0);
+        result = (stat(pathName.getCharPointer(), &stat_buf) == 0);
 #else
         /* try to open the given "file" (or directory) in read-only mode */
-        FILE* filePtr = fopen(pathName.c_str(), "r");
-        result = (filePtr != NULL);
-        fclose(filePtr);
+        OFFile file;
+        result = file.fopen(pathName, "r");
+        file.fclose();
 #endif /* HAVE_SYS_STAT_H */
 #endif /* HAVE_WINDOWS_H */
 #endif /* HAVE_ACCESS */
@@ -407,46 +462,60 @@ OFBool OFStandard::pathExists(const OFString &pathName)
 }
 
 
-OFBool OFStandard::fileExists(const OFString &fileName)
+OFBool OFStandard::fileExists(const OFFilename &fileName)
 {
     OFBool result = OFFalse;
-    /* check for valid file name */
-    if (!fileName.empty())
+    /* check for valid file name (avoid NULL or empty string) */
+    if (!fileName.isEmpty())
     {
 #ifdef HAVE_WINDOWS_H
         /* get file attributes */
-        DWORD fileAttr = GetFileAttributes(fileName.c_str());
+        DWORD fileAttr;
+#if defined(WIDE_CHAR_FILE_IO_FUNCTIONS) && defined(_WIN32)
+        /* check whether to use the wide-char version of the API function */
+        if (fileName.usesWideChars())
+            fileAttr = GetFileAttributesW(fileName.getWideCharPointer());
+        else
+#endif
+            fileAttr = GetFileAttributesA(fileName.getCharPointer());
         if (fileAttr != 0xffffffff)
         {
             /* check file type (not a directory?) */
             result = ((fileAttr & FILE_ATTRIBUTE_DIRECTORY) == 0);
         }
-#else
+#else /* HAVE_WINDOWS_H */
         /* check whether path exists (but does not point to a directory) */
-        result = pathExists(fileName) && !dirExists(fileName);
+        result = pathExists(fileName.getCharPointer()) && !dirExists(fileName.getCharPointer());
 #endif /* HAVE_WINDOWS_H */
     }
     return result;
 }
 
 
-OFBool OFStandard::dirExists(const OFString &dirName)
+OFBool OFStandard::dirExists(const OFFilename &dirName)
 {
     OFBool result = OFFalse;
-    /* check for valid directory name */
-    if (!dirName.empty())
+    /* check for valid directory name (avoid NULL or empty string) */
+    if (!dirName.isEmpty())
     {
 #ifdef HAVE_WINDOWS_H
         /* get file attributes of the directory */
-        DWORD fileAttr = GetFileAttributes(dirName.c_str());
+        DWORD fileAttr;
+#if defined(WIDE_CHAR_FILE_IO_FUNCTIONS) && defined(_WIN32)
+        /* check whether to use the wide-char version of the API function */
+        if (dirName.usesWideChars())
+            fileAttr = GetFileAttributesW(dirName.getWideCharPointer());
+        else
+#endif
+            fileAttr = GetFileAttributesA(dirName.getCharPointer());
         if (fileAttr != 0xffffffff)
         {
             /* check file type (is a directory?) */
             result = ((fileAttr & FILE_ATTRIBUTE_DIRECTORY) != 0);
         }
-#else
+#else /* HAVE_WINDOWS_H */
         /* try to open the given directory */
-        DIR *dirPtr = opendir(dirName.c_str());
+        DIR *dirPtr = opendir(dirName.getCharPointer());
         if (dirPtr != NULL)
         {
             result = OFTrue;
@@ -458,33 +527,53 @@ OFBool OFStandard::dirExists(const OFString &dirName)
 }
 
 
-OFBool OFStandard::isReadable(const OFString &pathName)
+OFBool OFStandard::isReadable(const OFFilename &pathName)
 {
-#if HAVE_ACCESS
-    return (access(pathName.c_str(), R_OK) == 0);
-#else
     OFBool result = OFFalse;
-    /* try to open the given "file" (or directory) in read-only mode */
-    FILE* filePtr = fopen(pathName.c_str(), "r");
-    result = (filePtr != NULL);
-    fclose(filePtr);
-    return result;
+    /* check for valid path name (avoid NULL or empty string) */
+    if (!pathName.isEmpty())
+    {
+#if HAVE_ACCESS
+        /* check whether the path is readable using "access()" */
+#if defined(WIDE_CHAR_FILE_IO_FUNCTIONS) && defined(_WIN32)
+        /* check whether to use the wide-char version of the API function */
+        if (pathName.usesWideChars())
+            result = (_waccess(pathName.getWideCharPointer(), R_OK) == 0);
+        else
+#endif
+            result = (access(pathName.getCharPointer(), R_OK) == 0);
+#else /* HAVE_ACCESS */
+        /* try to open the given "file" (or directory) in read-only mode */
+        OFFile file;
+        result = file.fopen(pathName, "r");
 #endif /* HAVE_ACCESS */
+}
+    return result;
 }
 
 
-OFBool OFStandard::isWriteable(const OFString &pathName)
+OFBool OFStandard::isWriteable(const OFFilename &pathName)
 {
-#if HAVE_ACCESS
-    return (access(pathName.c_str(), W_OK) == 0);
-#else
     OFBool result = OFFalse;
-    /* try to open the given "file" (or directory) in write mode */
-    FILE* filePtr = fopen(pathName.c_str(), "w");
-    result = (filePtr != NULL);
-    fclose(filePtr);
-    return result;
+    /* check for valid path name (avoid NULL or empty string) */
+    if (!pathName.isEmpty())
+    {
+#if HAVE_ACCESS
+        /* check whether the path is writable using "access()" */
+#if defined(WIDE_CHAR_FILE_IO_FUNCTIONS) && defined(_WIN32)
+        /* check whether to use the wide-char version of the API function */
+        if (pathName.usesWideChars())
+            result = (_waccess(pathName.getWideCharPointer(), W_OK) == 0);
+        else
+#endif
+            result = (access(pathName.getCharPointer(), W_OK) == 0);
+#else /* HAVE_ACCESS */
+        /* try to open the given "file" (or directory) in write mode */
+        OFFile file;
+        result = file.fopen(pathName, "w");
 #endif /* HAVE_ACCESS */
+    }
+    return result;
 }
 
 
@@ -492,16 +581,71 @@ OFString &OFStandard::getDirNameFromPath(OFString &result,
                                          const OFString &pathName,
                                          const OFBool assumeDirName)
 {
-    const size_t pos = pathName.find_last_of(PATH_SEPARATOR);
-    /* path separator found? */
-    if (pos == OFString_npos)
+    OFFilename resultFilename;
+    /* call the real function */
+    getDirNameFromPath(resultFilename, pathName, assumeDirName);
+    /* convert result into a string object */
+    result = OFSTRING_GUARD(resultFilename.getCharPointer());
+    return result;
+}
+
+
+OFFilename &OFStandard::getDirNameFromPath(OFFilename &result,
+                                           const OFFilename &pathName,
+                                           const OFBool assumeDirName)
+{
+#if defined(WIDE_CHAR_FILE_IO_FUNCTIONS) && defined(_WIN32)
+    /* check whether to use the wide-char version of the API function */
+    if (pathName.usesWideChars())
     {
-        if (assumeDirName)
-            result = pathName;
-        else
-            result.clear();
+        const wchar_t *strValue = pathName.getWideCharPointer();
+        const wchar_t *strPos = wcsrchr(strValue, L'\\' /* WIDE_PATH_SEPARATOR */);
+
+        // Windows accepts both backslash and forward slash as path separators.
+        const wchar_t *strPos2 = wcsrchr(strValue, L'/');
+
+        // if strPos2 points to a character closer to the end of the string, use this instead of strPos
+        if ((strPos == NULL) || ((strPos2 != NULL) && (strPos2 > strPos))) strPos = strPos2;
+
+        /* path separator found? */
+        if (strPos == NULL)
+        {
+            if (assumeDirName)
+                result = pathName;
+            else
+                result.clear();
+        } else {
+            wchar_t *tmpString = new wchar_t[strPos - strValue + 1];
+            wcsncpy(tmpString, strValue, strPos - strValue);
+            tmpString[strPos - strValue] = L'\0';
+            result.set(tmpString, OFTrue /*convert*/);
+            delete[] tmpString;
+        }
     } else
-        result = pathName.substr(0, pos);
+#endif
+    /* otherwise, use the conventional 8-bit characters version */
+    {
+        const char *strValue = pathName.getCharPointer();
+        const char *strPos = strrchr(strValue, PATH_SEPARATOR);
+
+#ifdef _WIN32
+        // Windows accepts both backslash and forward slash as path separators.
+        const char *strPos2 = strrchr(strValue, '/');
+
+        // if strPos2 points to a character closer to the end of the string, use this instead of strPos
+        if ((strPos == NULL) || ((strPos2 != NULL) && (strPos2 > strPos))) strPos = strPos2;
+#endif
+
+        /* path separator found? */
+        if (strPos == NULL)
+        {
+            if (assumeDirName)
+                result = pathName;
+            else
+                result.clear();
+        } else
+            result.set(OFString(strValue, strPos - strValue));
+    }
     return result;
 }
 
@@ -510,16 +654,70 @@ OFString &OFStandard::getFilenameFromPath(OFString &result,
                                           const OFString &pathName,
                                           const OFBool assumeFilename)
 {
-    const size_t pos = pathName.find_last_of(PATH_SEPARATOR);
-    /* path separator found? */
-    if (pos == OFString_npos)
+    OFFilename resultFilename;
+    /* call the real function */
+    getFilenameFromPath(resultFilename, pathName, assumeFilename);
+    /* convert result into a string object */
+    result = OFSTRING_GUARD(resultFilename.getCharPointer());
+    return result;
+}
+
+
+OFFilename &OFStandard::getFilenameFromPath(OFFilename &result,
+                                            const OFFilename &pathName,
+                                            const OFBool assumeFilename)
+{
+#if defined(WIDE_CHAR_FILE_IO_FUNCTIONS) && defined(_WIN32)
+    /* check whether to use the wide-char version of the API function */
+    if (pathName.usesWideChars())
     {
-        if (assumeFilename)
-            result = pathName;
-        else
-            result.clear();
+        const wchar_t *strValue = pathName.getWideCharPointer();
+        const wchar_t *strPos = wcsrchr(strValue, L'\\' /* WIDE_PATH_SEPARATOR */);
+
+        // Windows accepts both backslash and forward slash as path separators.
+        const wchar_t *strPos2 = wcsrchr(strValue, L'/');
+
+        // if strPos2 points to a character closer to the end of the string, use this instead of strPos
+        if ((strPos == NULL) || ((strPos2 != NULL) && (strPos2 > strPos))) strPos = strPos2;
+
+        /* path separator found? */
+        if (strPos == NULL)
+        {
+            if (assumeFilename)
+                result = pathName;
+            else
+                result.clear();
+        } else {
+            wchar_t *tmpString = new wchar_t[wcslen(strPos)];
+            wcscpy(tmpString, strPos + 1);
+            result.set(tmpString, OFTrue /*convert*/);
+            delete[] tmpString;
+        }
     } else
-        result = pathName.substr(pos + 1);
+#endif
+    /* otherwise, use the conventional 8-bit characters version */
+    {
+        const char *strValue = pathName.getCharPointer();
+        const char *strPos = strrchr(strValue, PATH_SEPARATOR);
+
+#ifdef _WIN32
+        // Windows accepts both backslash and forward slash as path separators.
+        const char *strPos2 = strrchr(strValue, '/');
+
+        // if strPos2 points to a character closer to the end of the string, use this instead of strPos
+        if ((strPos == NULL) || ((strPos2 != NULL) && (strPos2 > strPos))) strPos = strPos2;
+#endif
+
+        /* path separator found? */
+        if (strPos == NULL)
+        {
+            if (assumeFilename)
+                result = pathName;
+            else
+                result.clear();
+        } else
+            result.set(OFString(strPos + 1));
+    }
     return result;
 }
 
@@ -528,19 +726,69 @@ OFString &OFStandard::normalizeDirName(OFString &result,
                                        const OFString &dirName,
                                        const OFBool allowEmptyDirName)
 {
-    result = dirName;
+    OFFilename resultFilename;
+    /* call the real function */
+    normalizeDirName(resultFilename, dirName, allowEmptyDirName);
+    /* convert result into a string object */
+    result = OFSTRING_GUARD(resultFilename.getCharPointer());
+    return result;
+}
+
+
+OFFilename &OFStandard::normalizeDirName(OFFilename &result,
+                                         const OFFilename &dirName,
+                                         const OFBool allowEmptyDirName)
+{
     /* remove trailing path separators (keep it if appearing at the beginning of the string) */
-    while ((result.length() > 1) && (result.at(result.length() - 1) == PATH_SEPARATOR))
-        result.erase(result.length() - 1, 1);
-    if (allowEmptyDirName)
+    /* TODO: do we need to check for absolute path containing Windows drive name, e.g. "c:\"? */
+#if defined(WIDE_CHAR_FILE_IO_FUNCTIONS) && defined(_WIN32)
+    /* check whether to use the wide-char version of the API function */
+    if (dirName.usesWideChars())
     {
+        const wchar_t *strValue = dirName.getWideCharPointer();
+        size_t strLength = (strValue == NULL) ? 0 : wcslen(strValue);
+        // Windows accepts both backslash and forward slash as path separators.
+        while ((strLength > 1) && ((strValue[strLength - 1] == L'\\' /* WIDE_PATH_SEPARATOR */) ||
+              (strValue[strLength - 1] == L'/' )))
+            --strLength;
         /* avoid "." as a directory name, use empty string instead */
-        if (result == ".")
+        if (allowEmptyDirName && ((strLength == 0) || ((strLength == 1) && (strValue[0] == L'.'))))
             result.clear();
-    } else {
         /* avoid empty directory name (use "." instead) */
-        if (result.empty())
-            result = ".";
+        else if (!allowEmptyDirName && (strLength == 0))
+            result.set(L".", OFTrue /*convert*/);
+        /* copy resulting string (omit trailing backslashes) */
+        else {
+            wchar_t *tmpString = new wchar_t[strLength + 1];
+            wcsncpy(tmpString, strValue, strLength);
+            tmpString[strLength] = L'\0';
+            result.set(tmpString, OFTrue /*convert*/);
+            delete[] tmpString;
+        }
+    } else
+#endif
+    /* otherwise, use the conventional 8-bit characters version */
+    {
+        const char *strValue = dirName.getCharPointer();
+        size_t strLength = (strValue == NULL) ? 0 : strlen(strValue);
+#ifdef _WIN32
+        // Windows accepts both backslash and forward slash as path separators.
+        while ((strLength > 1) && ((strValue[strLength - 1] == PATH_SEPARATOR) ||
+              (strValue[strLength - 1] == '/' )))
+            --strLength;
+#else
+        while ((strLength > 1) && (strValue[strLength - 1] == PATH_SEPARATOR))
+            --strLength;
+#endif
+        /* avoid "." as a directory name, use empty string instead */
+        if (allowEmptyDirName && ((strLength == 0) || ((strLength == 1) && (strValue[0] == '.'))))
+            result.clear();
+        /* avoid empty directory name (use "." instead) */
+        else if (!allowEmptyDirName && (strLength == 0))
+            result.set(".");
+        /* copy resulting string (omit trailing backslashes) */
+        else
+            result.set(OFString(strValue, strLength));
     }
     return result;
 }
@@ -551,75 +799,293 @@ OFString &OFStandard::combineDirAndFilename(OFString &result,
                                             const OFString &fileName,
                                             const OFBool allowEmptyDirName)
 {
+    OFFilename resultFilename;
+    /* call the real function */
+    combineDirAndFilename(resultFilename, dirName, fileName, allowEmptyDirName);
+    /* convert result into a string object */
+    result = OFSTRING_GUARD(resultFilename.getCharPointer());
+    return result;
+}
+
+
+OFFilename &OFStandard::combineDirAndFilename(OFFilename &result,
+                                              const OFFilename &dirName,
+                                              const OFFilename &fileName,
+                                              const OFBool allowEmptyDirName)
+{
     // # might use system function realpath() in the future to resolve paths including ".."
     // # or combinations of absolute paths in both 'dirName' and 'fileName'
-
-    /* check whether 'fileName' contains absolute path */
-    /* (this check also covers UNC syntax, e. g. "\\server\...") */
-    if (!fileName.empty() && (fileName.at(0) == PATH_SEPARATOR))
+#if defined(WIDE_CHAR_FILE_IO_FUNCTIONS) && defined(_WIN32)
+    /* check whether to use the wide-char version of the API function */
+    if (dirName.usesWideChars() || fileName.usesWideChars())
     {
-        result = fileName;
-        return result;
-    }
-#ifdef HAVE_WINDOWS_H
-    else if ((fileName.length() >= 3))
-    {
-        /* check for absolute path containing windows drive name, e. g. "c:\..." */
-        char c = fileName.at(0);
-        if (((c >= 'A') && (c <= 'Z')) || ((c >= 'a') && (c <= 'z')))
+        const wchar_t *strValue = fileName.getWideCharPointer();
+        size_t strLength = (strValue == NULL) ? 0 : wcslen(strValue);
+        /* check whether 'fileName' contains absolute path */
+        /* (this check also covers UNC syntax, e.g. "\\server\...") */
+        // Windows accepts both backslash and forward slash as path separators.
+        if ((strLength > 0) && ((strValue[0] == L'\\' /* WIDE_PATH_SEPARATOR */) || (strValue[0] == L'/')))
         {
-            if (fileName.substr(1, 2) == ":\\")
+            result.set(strValue, OFTrue /*convert*/);
+            return result;
+        }
+#ifdef HAVE_WINDOWS_H
+        else if (strLength >= 3)
+        {
+            /* check for absolute path containing Windows drive name, e.g. "c:\..." */
+            const wchar_t c = strValue[0];
+            if (((c >= L'A') && (c <= L'Z')) || ((c >= L'a') && (c <= L'z')))
             {
-                result = fileName;
-                return result;
+                // Windows accepts both backslash and forward slash as path separators.
+                if ((strValue[1] == L':') && ((strValue[2] == L'\\' /* WIDE_PATH_SEPARATOR */))||(strValue[2] == L'/'))
+                {
+                    result.set(strValue, OFTrue /*convert*/);
+                    return result;
+                }
             }
         }
-    }
 #endif
-    /* we only get here, if we don't have an absolute directory in "fileName" */
-    /* now normalize the directory name */
-    normalizeDirName(result, dirName, allowEmptyDirName);
-    /* check file name */
-    if (!fileName.empty() && (fileName != "."))
+        /* we only get here, if we don't have an absolute directory in "fileName" */
+        /* now normalize the directory name */
+        normalizeDirName(result, dirName, allowEmptyDirName);
+        /* do some extra checks on a special case */
+        if (!result.isEmpty() && !result.usesWideChars())
+        {
+            /* make sure that wide-char version exists */
+            OFFilename tmpDirName(result);
+            result.set(tmpDirName.getCharPointer(), OFTrue /*convert*/);
+        }
+        /* check file name (ignore empty string and ".") */
+        if ((strLength > 1) || ((strLength == 1) && (strValue[0] != L'.')))
+        {
+            if (result.isEmpty())
+                result.set(strValue, OFTrue /*convert*/);
+            else {
+                const wchar_t *resValue = result.getWideCharPointer();
+                const size_t resLength = wcslen(resValue); /* should never be 0 */
+                wchar_t *tmpString = new wchar_t[strLength + resLength + 1 + 1];
+                wcscpy(tmpString, resValue);
+                /* add path separator (if required) ... */
+                // Windows accepts both backslash and forward slash as path separators.
+                if ((resValue[resLength - 1] != L'\\' /* WIDE_PATH_SEPARATOR */) && (resValue[resLength - 1] != L'/'))
+                {
+                    tmpString[resLength] = L'\\' /* WIDE_PATH_SEPARATOR */;
+                    tmpString[resLength + 1] = L'\0';
+                }
+                /* ...and file name */
+                wcscat(tmpString, strValue);
+                result.set(tmpString, OFTrue /*convert*/);
+                delete[] tmpString;
+            }
+        }
+    } else
+#endif
+    /* otherwise, use the conventional 8-bit characters version */
     {
-        /* add path separator (if required) ... */
-        if (!result.empty() && (result.at(result.length() - 1) != PATH_SEPARATOR))
-            result += PATH_SEPARATOR;
-        /* ...and file name */
-        result += fileName;
+        const char *strValue = fileName.getCharPointer();
+        size_t strLength = (strValue == NULL) ? 0 : strlen(strValue);
+        /* check whether 'fileName' contains absolute path */
+        /* (this check also covers UNC syntax, e.g. "\\server\...") */
+#ifdef _WIN32
+        // Windows accepts both backslash and forward slash as path separators.
+        if ((strLength > 0) && ((strValue[0] == PATH_SEPARATOR) || (strValue[0] == '/')))
+#else
+        if ((strLength > 0) && (strValue[0] == PATH_SEPARATOR))
+#endif
+        {
+            result.set(strValue);
+            return result;
+        }
+#ifdef HAVE_WINDOWS_H
+        else if (strLength >= 3)
+        {
+            /* check for absolute path containing Windows drive name, e.g. "c:\..." */
+            const char c = strValue[0];
+            if (((c >= 'A') && (c <= 'Z')) || ((c >= 'a') && (c <= 'z')))
+            {
+                if ((strValue[1] == ':') && ((strValue[2] == '\\') || (strValue[2] == '/')))
+                {
+                    result.set(strValue);
+                    return result;
+                }
+            }
+        }
+#endif
+        /* we only get here, if we don't have an absolute directory in "fileName" */
+        /* now normalize the directory name */
+        normalizeDirName(result, dirName, allowEmptyDirName);
+        /* check file name (ignore empty string and ".") */
+        if ((strLength > 1) || ((strLength == 1) && (strValue[0] != '.')))
+        {
+            if (result.isEmpty())
+                result.set(strValue);
+            else {
+                const char *resValue = result.getCharPointer();
+                const size_t resLength = strlen(resValue); /* should never be 0 */
+                const size_t buflen = strLength + resLength + 1 + 1;
+                char *tmpString = new char[buflen];
+                OFStandard::strlcpy(tmpString, resValue, buflen);
+                /* add path separator (if required) ... */
+#ifdef _WIN32
+                // Windows accepts both backslash and forward slash as path separators.
+                if ((resValue[resLength - 1] != PATH_SEPARATOR) && (resValue[resLength - 1] != '/'))
+#else
+                if (resValue[resLength - 1] != PATH_SEPARATOR)
+#endif
+                {
+                    tmpString[resLength] = PATH_SEPARATOR;
+                    tmpString[resLength + 1] = '\0';
+                }
+                /* ...and file name */
+                OFStandard::strlcat(tmpString, strValue, buflen);
+                result.set(tmpString);
+                delete[] tmpString;
+            }
+        }
     }
     return result;
 }
 
 
-OFCondition OFStandard::removeRootDirFromPathname(OFString &result,
-                                                  const OFString &rootDir,
-                                                  const OFString &pathName,
+OFCondition OFStandard::removeRootDirFromPathname(OFFilename &result,
+                                                  const OFFilename &rootDir,
+                                                  const OFFilename &pathName,
                                                   const OFBool allowLeadingPathSeparator)
 {
     OFCondition status = EC_IllegalParameter;
-    const size_t rootLength = rootDir.length();
-    /* check for "compatible" length */
-    if (rootLength <= pathName.length())
+#if defined(WIDE_CHAR_FILE_IO_FUNCTIONS) && defined(_WIN32)
+    /* check whether to use the wide-char version of the API function */
+    if (rootDir.usesWideChars() || pathName.usesWideChars())
     {
-        /* check for same prefix */
-        if (pathName.compare(0, rootLength, rootDir) == 0)
+        const wchar_t *rootValue = rootDir.getWideCharPointer();
+        const wchar_t *pathValue = pathName.getWideCharPointer();
+        const size_t rootLength = (rootValue == NULL) ? 0 : wcslen(rootValue);
+        const size_t pathLength = (pathValue == NULL) ? 0 : wcslen(pathValue);
+        /* check for empty strings */
+        if ((rootLength == 0) && (pathLength == 0))
         {
-            /* remove root dir prefix from path name */
-            result = pathName.substr(rootLength);
-            if (!allowLeadingPathSeparator)
-            {
-                /* remove leading path separator (if present) */
-                if (!result.empty() && (result.at(0) == PATH_SEPARATOR))
-                    result.erase(0, 1);
-            }
+            result.set("", OFTrue /*convert*/);
             status = EC_Normal;
+        }
+        /* check for empty root dir */
+        else if (rootLength == 0)
+        {
+            result.set(pathValue, OFTrue /*convert*/);
+            status = EC_Normal;
+        }
+        /* check for "compatible" length */
+        else if (rootLength <= pathLength)
+        {
+            /* check for same prefix */
+            if (wcsncmp(rootValue, pathValue, rootLength) == 0)
+            {
+                /* create temporary buffer for destination string */
+                wchar_t *tmpString = new wchar_t[pathLength - rootLength + 1];
+                /* remove root dir prefix from path name */
+                wcscpy(tmpString, pathValue + rootLength);
+                /* remove leading path separator (if present) */
+                if (!allowLeadingPathSeparator && ((tmpString[0] == PATH_SEPARATOR) || (tmpString[0] == '/')))
+                    result.set(tmpString + 1, OFTrue /*convert*/);
+                else
+                    result.set(tmpString, OFTrue /*convert*/);
+                delete[] tmpString;
+                status = EC_Normal;
+            }
+        }
+    } else
+#endif
+    /* otherwise, use the conventional 8-bit characters version */
+    {
+        const char *rootValue = rootDir.getCharPointer();
+        const char *pathValue = pathName.getCharPointer();
+        const size_t rootLength = (rootValue == NULL) ? 0 : strlen(rootValue);
+        const size_t pathLength = (pathValue == NULL) ? 0 : strlen(pathValue);
+        /* check for empty strings */
+        if ((rootLength == 0) && (pathLength == 0))
+        {
+            result.set("");
+            status = EC_Normal;
+        }
+        /* check for empty root dir */
+        else if (rootLength == 0)
+        {
+            result.set(pathValue);
+            status = EC_Normal;
+        }
+        /* check for "compatible" length */
+        else if (rootLength <= pathLength)
+        {
+            /* check for same prefix */
+            if (strncmp(rootValue, pathValue, rootLength) == 0)
+            {
+                /* create temporary buffer for destination string */
+                size_t buflen = pathLength - rootLength + 1;
+                char *tmpString = new char[buflen];
+                /* remove root dir prefix from path name */
+                OFStandard::strlcpy(tmpString, pathValue + rootLength, buflen);
+                /* remove leading path separator (if present) */
+#ifdef _WIN32
+                // Windows accepts both backslash and forward slash as path separators.
+                if (!allowLeadingPathSeparator && ((tmpString[0] == PATH_SEPARATOR) || (tmpString[0] == '/')))
+#else
+                if (!allowLeadingPathSeparator && (tmpString[0] == PATH_SEPARATOR))
+#endif
+                    result.set(tmpString + 1);
+                else
+                    result.set(tmpString);
+                delete[] tmpString;
+                status = EC_Normal;
+            }
         }
     }
     /* return empty string in case of error */
     if (status.bad())
-        result = "";
+        result.clear();
     return status;
+}
+
+
+OFFilename &OFStandard::appendFilenameExtension(OFFilename &result,
+                                                const OFFilename &fileName,
+                                                const OFFilename &fileExtension)
+{
+#if defined(WIDE_CHAR_FILE_IO_FUNCTIONS) && defined(_WIN32)
+    /* check whether to use the wide-char version of the API function */
+    if (fileName.usesWideChars())
+    {
+        OFFilename fileExt(fileExtension);
+        /* convert file extension to wide chars (if needed) */
+        if (!fileExt.isEmpty() && !fileExt.usesWideChars())
+            fileExt.set(fileExtension.getCharPointer(), OFTrue /*convert*/);
+        const wchar_t *namValue = fileName.getWideCharPointer();
+        const wchar_t *extValue = fileExt.getWideCharPointer();
+        size_t namLength = (namValue == NULL) ? 0 : wcslen(namValue);
+        size_t extLength = (extValue == NULL) ? 0 : wcslen(extValue);
+        /* create temporary buffer for destination string */
+        wchar_t *tmpString = new wchar_t[namLength + extLength + 1];
+        wcscpy(tmpString, namValue);
+        if (extValue != NULL)
+            wcscat(tmpString, extValue);
+        result.set(tmpString, OFTrue /*convert*/);
+        delete[] tmpString;
+    } else
+#endif
+    /* otherwise, use the conventional 8-bit characters version */
+    {
+        const char *namValue = fileName.getCharPointer();
+        const char *extValue = fileExtension.getCharPointer();
+        size_t namLength = (namValue == NULL) ? 0 : strlen(namValue);
+        size_t extLength = (extValue == NULL) ? 0 : strlen(extValue);
+        /* create temporary buffer for destination string */
+        size_t buflen = namLength + extLength + 1;
+        char *tmpString = new char[buflen];
+        OFStandard::strlcpy(tmpString, (namValue == NULL) ? "" : namValue, buflen);
+        if (extValue != NULL)
+            OFStandard::strlcat(tmpString, extValue, buflen);
+        result.set(tmpString);
+        delete[] tmpString;
+    }
+    return result;
 }
 
 
@@ -629,138 +1095,481 @@ size_t OFStandard::searchDirectoryRecursively(const OFString &directory,
                                               const OFString &dirPrefix,
                                               const OFBool recurse)
 {
+    OFList<OFFilename> filenameList;
+    /* call the real function */
+    const size_t result = searchDirectoryRecursively(directory, filenameList, pattern, dirPrefix, recurse);
+    /* copy all list entries to reference parameter */
+    OFListIterator(OFFilename) iter = filenameList.begin();
+    OFListIterator(OFFilename) last = filenameList.end();
+    while (iter != last)
+    {
+        fileList.push_back(OFSTRING_GUARD((*iter).getCharPointer()));
+        ++iter;
+    }
+    return result;
+}
+
+
+size_t OFStandard::searchDirectoryRecursively(const OFFilename &directory,
+                                              OFList<OFFilename> &fileList,
+                                              const OFFilename &pattern,
+                                              const OFFilename &dirPrefix,
+                                              const OFBool recurse)
+{
     const size_t initialSize = fileList.size();
-    OFString dirname, pathname, tmpString;
-    combineDirAndFilename(dirname, dirPrefix, directory);
+    OFFilename dirName, pathName, tmpString;
+    combineDirAndFilename(dirName, dirPrefix, directory);
 #ifdef HAVE_WINDOWS_H
     /* check whether given directory exists */
-    if (dirExists(dirname))
+    if (dirExists(dirName))
     {
-        HANDLE handle;
-        WIN32_FIND_DATA data;
-        /* check whether file pattern is given */
-        if (!pattern.empty())
+#if defined(WIDE_CHAR_FILE_IO_FUNCTIONS) && defined(_WIN32)
+        /* check whether to use the wide-char version of the API function */
+        if (dirName.usesWideChars())
         {
-            /* first, search for matching files on this directory level */
-            handle = FindFirstFile(combineDirAndFilename(tmpString, dirname, pattern, OFTrue /*allowEmptyDirName*/).c_str(), &data);
+            HANDLE handle;
+            WIN32_FIND_DATAW data;
+            /* check whether file pattern is given */
+            if (!pattern.isEmpty())
+            {
+                /* first, search for matching files on this directory level */
+                handle = FindFirstFileW(combineDirAndFilename(tmpString, dirName, pattern, OFTrue /*allowEmptyDirName*/).getWideCharPointer(), &data);
+                if (handle != INVALID_HANDLE_VALUE)
+                {
+                    do {
+                        /* avoid leading "." */
+                        if (wcscmp(dirName.getWideCharPointer(), L".") == 0)
+                            pathName.set(data.cFileName, OFTrue /*convert*/);
+                        else
+                            combineDirAndFilename(pathName, directory, data.cFileName, OFTrue /*allowEmptyDirName*/);
+                        /* ignore directories and the like */
+                        if (fileExists(combineDirAndFilename(tmpString, dirPrefix, pathName, OFTrue /*allowEmptyDirName*/)))
+                            fileList.push_back(pathName);
+                    } while (FindNextFileW(handle, &data));
+                    FindClose(handle);
+                }
+            }
+            /* then search for _any_ file/directory entry */
+            handle = FindFirstFileW(combineDirAndFilename(tmpString, dirName, L"*.*", OFTrue /*allowEmptyDirName*/).getWideCharPointer(), &data);
             if (handle != INVALID_HANDLE_VALUE)
             {
                 do {
-                    /* avoid leading "." */
-                    if (dirname == ".")
-                        pathname = data.cFileName;
-                    else
-                        combineDirAndFilename(pathname, directory, data.cFileName, OFTrue /*allowEmptyDirName*/);
-                    /* ignore directories and the like */
-                    if (fileExists(combineDirAndFilename(tmpString, dirPrefix, pathname, OFTrue /*allowEmptyDirName*/)))
-                        fileList.push_back(pathname);
-                } while (FindNextFile(handle, &data));
+                    /* filter out current and parent directory */
+                    if ((wcscmp(data.cFileName, L".") != 0) && (wcscmp(data.cFileName, L"..") != 0))
+                    {
+                        /* avoid leading "." */
+                        if (wcscmp(dirName.getWideCharPointer(), L".") == 0)
+                            pathName.set(data.cFileName, OFTrue /*convert*/);
+                        else
+                            combineDirAndFilename(pathName, directory, data.cFileName, OFTrue /*allowEmptyDirName*/);
+                        if (dirExists(combineDirAndFilename(tmpString, dirPrefix, pathName, OFTrue /*allowEmptyDirName*/)))
+                        {
+                            /* recursively search sub directories */
+                            if (recurse)
+                                searchDirectoryRecursively(pathName, fileList, pattern, dirPrefix, recurse);
+                        }
+                        else if (pattern.isEmpty())
+                        {
+                            /* add filename to the list (if no pattern is given) */
+                            fileList.push_back(pathName);
+                        }
+                    }
+                } while (FindNextFileW(handle, &data));
+                FindClose(handle);
+            }
+        } else
+#endif /* defined(WIDE_CHAR_FILE_IO_FUNCTIONS) && defined(_WIN32) */
+        /* otherwise, use the conventional 8-bit characters version */
+        {
+            HANDLE handle;
+            WIN32_FIND_DATAA data;
+            /* check whether file pattern is given */
+            if (!pattern.isEmpty())
+            {
+                /* first, search for matching files on this directory level */
+                handle = FindFirstFileA(combineDirAndFilename(tmpString, dirName, pattern, OFTrue /*allowEmptyDirName*/).getCharPointer(), &data);
+                if (handle != INVALID_HANDLE_VALUE)
+                {
+                    do {
+                        /* avoid leading "." */
+                        if (strcmp(dirName.getCharPointer(), ".") == 0)
+                            pathName.set(data.cFileName);
+                        else
+                            combineDirAndFilename(pathName, directory, data.cFileName, OFTrue /*allowEmptyDirName*/);
+                        /* ignore directories and the like */
+                        if (fileExists(combineDirAndFilename(tmpString, dirPrefix, pathName, OFTrue /*allowEmptyDirName*/)))
+                            fileList.push_back(pathName);
+                    } while (FindNextFileA(handle, &data));
+                    FindClose(handle);
+                }
+            }
+            /* then search for _any_ file/directory entry */
+            handle = FindFirstFileA(combineDirAndFilename(tmpString, dirName, "*.*", OFTrue /*allowEmptyDirName*/).getCharPointer(), &data);
+            if (handle != INVALID_HANDLE_VALUE)
+            {
+                do {
+                    /* filter out current and parent directory */
+                    if ((strcmp(data.cFileName, ".") != 0) && (strcmp(data.cFileName, "..") != 0))
+                    {
+                        /* avoid leading "." */
+                        if (strcmp(dirName.getCharPointer(), ".") == 0)
+                            pathName.set(data.cFileName);
+                        else
+                            combineDirAndFilename(pathName, directory, data.cFileName, OFTrue /*allowEmptyDirName*/);
+                        if (dirExists(combineDirAndFilename(tmpString, dirPrefix, pathName, OFTrue /*allowEmptyDirName*/)))
+                        {
+                            /* recursively search sub directories */
+                            if (recurse)
+                                searchDirectoryRecursively(pathName, fileList, pattern, dirPrefix, recurse);
+                        }
+                        else if (pattern.isEmpty())
+                        {
+                            /* add filename to the list (if no pattern is given) */
+                            fileList.push_back(pathName);
+                        }
+                    }
+                } while (FindNextFileA(handle, &data));
                 FindClose(handle);
             }
         }
-        /* then search for _any_ file/directory entry */
-        handle = FindFirstFile(combineDirAndFilename(tmpString, dirname, "*.*", OFTrue /*allowEmptyDirName*/).c_str(), &data);
-        if (handle != INVALID_HANDLE_VALUE)
-        {
-            do {
-                /* filter out current and parent directory */
-                if ((strcmp(data.cFileName, ".") != 0) && (strcmp(data.cFileName, "..") != 0))
-                {
-                    /* avoid leading "." */
-                    if (dirname == ".")
-                        pathname = data.cFileName;
-                    else
-                        combineDirAndFilename(pathname, directory, data.cFileName, OFTrue /*allowEmptyDirName*/);
-                    if (dirExists(combineDirAndFilename(tmpString, dirPrefix, pathname, OFTrue /*allowEmptyDirName*/)))
-                    {
-                        /* recursively search sub directories */
-                        if (recurse)
-                            searchDirectoryRecursively(pathname, fileList, pattern, dirPrefix, recurse);
-                    }
-                    else if (pattern.empty())
-                    {
-                        /* add filename to the list (if no pattern is given) */
-                        fileList.push_back(pathname);
-                    }
-                }
-            } while (FindNextFile(handle, &data));
-            FindClose(handle);
-        }
     }
-#else
+#else /* HAVE_WINDOWS_H */
     /* try to open the directory */
-    DIR *dirPtr = opendir(dirname.c_str());
+    DIR *dirPtr = opendir(dirName.getCharPointer());
     if (dirPtr != NULL)
     {
         struct dirent *entry = NULL;
+#if defined(HAVE_READDIR_R) && !defined(READDIR_IS_THREADSAFE)
+        dirent d = {};
+        while (!readdir_r(dirPtr, &d, &entry) && entry)
+#else
         while ((entry = readdir(dirPtr)) != NULL)
+#endif
         {
-            /* filter out current and parent directory */
+            /* filter out current (".") and parent directory ("..") */
             if ((strcmp(entry->d_name, ".") != 0) && (strcmp(entry->d_name, "..") != 0))
             {
                 /* avoid leading "." */
-                if (dirname == ".")
-                    pathname = entry->d_name;
+                if (strcmp(dirName.getCharPointer(), ".") == 0)
+                    pathName = entry->d_name;
                 else
-                    combineDirAndFilename(pathname, directory, entry->d_name, OFTrue /*allowEmptyDirName*/);
-                if (dirExists(combineDirAndFilename(tmpString, dirPrefix, pathname, OFTrue /*allowEmptyDirName*/)))
+                    combineDirAndFilename(pathName, directory, entry->d_name, OFTrue /*allowEmptyDirName*/);
+                if (dirExists(combineDirAndFilename(tmpString, dirPrefix, pathName, OFTrue /*allowEmptyDirName*/)))
                 {
                     /* recursively search sub directories */
                     if (recurse)
-                        searchDirectoryRecursively(pathname, fileList, pattern, dirPrefix, recurse);
+                        searchDirectoryRecursively(pathName, fileList, pattern, dirPrefix, recurse);
                 } else {
 #ifdef HAVE_FNMATCH_H
                     /* check whether filename matches pattern */
-                    if ((pattern.empty()) || (fnmatch(pattern.c_str(), entry->d_name, FNM_PATHNAME) == 0))
+                    if ((pattern.isEmpty()) || (fnmatch(pattern.getCharPointer(), entry->d_name, FNM_PATHNAME) == 0))
 #else
                         /* no pattern matching, sorry :-/ */
 #endif
-                        fileList.push_back(pathname);
+                        fileList.push_back(pathName);
                 }
             }
         }
         closedir(dirPtr);
     }
-#endif
+#endif /* HAVE_WINDOWS_H */
     /* return number of added files */
     return fileList.size() - initialSize;
 }
 
 
-OFBool OFStandard::deleteFile(const OFString &filename)
+OFCondition OFStandard::createDirectory(const OFFilename &dirName,
+                                        const OFFilename &rootDir)
 {
-  int err = unlink(filename.c_str());
-  return (err == 0);
+    OFCondition status = EC_Normal;
+    /* first, check whether the directory already exists */
+    if (!dirExists(dirName))
+    {
+#if defined(WIDE_CHAR_FILE_IO_FUNCTIONS) && defined(_WIN32)
+        /* check whether to use the wide-char version of the API function */
+        if (dirName.usesWideChars())
+        {
+            /* then, check whether the given prefix can be skipped */
+            size_t pos = 0;
+            const wchar_t *dirValue = dirName.getWideCharPointer();
+            const wchar_t *rootValue = rootDir.getWideCharPointer();
+            size_t dirLength = (dirValue == NULL) ? 0 : wcslen(dirValue);
+            size_t rootLength = (rootValue == NULL) ? 0 : wcslen(rootValue);
+            /* check for absolute path containing Windows drive name, e. g. "c:\",
+             * is not required since the root directory should always exist */
+#ifdef _WIN32
+            // Windows accepts both backslash and forward slash as path separators.
+            if ((dirLength > 1) && ((dirValue[dirLength - 1] == L'\\' /* WIDE_PATH_SEPARATOR */) || (dirValue[dirLength - 1] == L'/')))
+#else
+            if ((dirLength > 1) && (dirValue[dirLength - 1] == L'\\' /* WIDE_PATH_SEPARATOR */))
+#endif
+            {
+                /* ignore trailing path separator */
+                --dirLength;
+            }
+#ifdef _WIN32
+            // Windows accepts both backslash and forward slash as path separators.
+            if ((rootLength > 1) && ((rootValue[rootLength - 1] == L'\\' /* WIDE_PATH_SEPARATOR */) || (rootValue[rootLength - 1] == L'/')))
+#else
+            if ((rootLength > 1) && (rootValue[rootLength - 1] == L'\\' /* WIDE_PATH_SEPARATOR */))
+#endif
+            {
+                /* ignore trailing path separator */
+                --rootLength;
+            }
+            /* check for "compatible" length */
+            if ((rootLength > 0) && (rootLength < dirLength))
+            {
+                /* check for common prefix */
+                if (wcsncmp(dirValue, rootValue, rootLength) == 0)
+                {
+                    /* check whether root directory really exists */
+                    if (dirExists(rootDir))
+                    {
+                        /* start searching after the common prefix */
+                        pos = rootLength;
+                    }
+                }
+            }
+            /* and finally, iterate over all subsequent subdirectories */
+            do {
+                /* search for next path separator */
+                do {
+                    ++pos;
+#ifdef _WIN32
+                // Windows accepts both backslash and forward slash as path separators.
+                } while ((dirValue[pos] != L'\\' /* WIDE_PATH_SEPARATOR */) && (dirValue[pos] != L'/') && (dirValue[pos] != '\0'));
+#else
+                } while ((dirValue[pos] != L'\\' /* WIDE_PATH_SEPARATOR */) && (dirValue[pos] != L'\0'));
+#endif
+
+                /* get name of current directory component */
+                wchar_t *subDir = new wchar_t[pos + 1];
+                wcsncpy(subDir, dirValue, pos /*num*/);
+                subDir[pos] = L'\0';
+                if (!dirExists(subDir))
+                {
+                    /* and create the directory component (if not already existing) */
+                    if (_wmkdir(subDir) == -1)
+                    {
+                        char errBuf[256];
+                        OFString message("Cannot create directory: ");
+                        message.append(strerror(errno, errBuf, sizeof(errBuf)));
+                        status = makeOFCondition(0, EC_CODE_CannotCreateDirectory, OF_error, message.c_str());
+                        /* exit the loop */
+                        break;
+                    }
+                }
+                delete[] subDir;
+            } while (pos < dirLength);
+        } else
+#endif
+        /* otherwise, use the conventional 8-bit characters version */
+        {
+            /* then, check whether the given prefix can be skipped */
+            size_t pos = 0;
+            const char *dirValue = dirName.getCharPointer();
+            const char *rootValue = rootDir.getCharPointer();
+            size_t dirLength = (dirValue == NULL) ? 0 : strlen(dirValue);
+            size_t rootLength = (rootValue == NULL) ? 0 : strlen(rootValue);
+            /* check for absolute path containing Windows drive name, e. g. "c:\",
+             * is not required since the root directory should always exist */
+#ifdef _WIN32
+            // Windows accepts both backslash and forward slash as path separators.
+            if ((dirLength > 1) && ((dirValue[dirLength - 1] == PATH_SEPARATOR) || (dirValue[dirLength - 1] == '/')))
+#else
+            if ((dirLength > 1) && (dirValue[dirLength - 1] == PATH_SEPARATOR))
+#endif
+            {
+                /* ignore trailing path separator */
+                --dirLength;
+            }
+#ifdef _WIN32
+            // Windows accepts both backslash and forward slash as path separators.
+            if ((rootLength > 1) && ((rootValue[rootLength - 1] == PATH_SEPARATOR) || (rootValue[rootLength - 1] == '/')))
+#else
+            if ((rootLength > 1) && (rootValue[rootLength - 1] == PATH_SEPARATOR))
+#endif
+            {
+                /* ignore trailing path separator */
+                --rootLength;
+            }
+            /* check for "compatible" length */
+            if ((rootLength > 0) && (rootLength < dirLength))
+            {
+                /* check for common prefix */
+                if (strncmp(dirValue, rootValue, rootLength) == 0)
+                {
+                    /* check whether root directory really exists */
+                    if (dirExists(rootDir))
+                    {
+                        /* start searching after the common prefix */
+                        pos = rootLength;
+                    }
+                }
+            }
+            /* and finally, iterate over all subsequent subdirectories */
+            do {
+                /* search for next path separator */
+                do {
+                    ++pos;
+#ifdef _WIN32
+                // Windows accepts both backslash and forward slash as path separators.
+                } while ((dirValue[pos] != PATH_SEPARATOR) && (dirValue[pos] != '/') && (dirValue[pos] != '\0'));
+#else
+                } while ((dirValue[pos] != PATH_SEPARATOR) && (dirValue[pos] != '\0'));
+#endif
+                /* get name of current directory component */
+                char *subDir = new char[pos + 1];
+                strlcpy(subDir, dirValue, pos + 1 /*size*/);
+                if (!dirExists(subDir))
+                {
+                    /* and create the directory component (if not already existing) */
+#ifdef HAVE_WINDOWS_H
+                    if (_mkdir(subDir) == -1)
+#else
+                    if (mkdir(subDir, S_IRWXU | S_IRWXG | S_IRWXO) == -1)
+#endif
+                    {
+                        char errBuf[256];
+                        OFString message("Cannot create directory: ");
+                        message.append(strerror(errno, errBuf, sizeof(errBuf)));
+                        status = makeOFCondition(0, EC_CODE_CannotCreateDirectory, OF_error, message.c_str());
+                        /* exit the loop */
+                        break;
+                    }
+                }
+                delete[] subDir;
+            } while (pos < dirLength);
+        }
+    }
+    return status;
 }
 
 
-size_t OFStandard::getFileSize(const OFString &filename)
+#define COPY_FILE_BUFFER_SIZE 4096
+
+OFBool OFStandard::copyFile(const OFFilename &sourceFilename,
+                            const OFFilename &destFilename)
+{
+    OFBool status = OFFalse;
+    /* avoid NULL or empty string passed to fopen() */
+    if (!sourceFilename.isEmpty() && !destFilename.isEmpty())
+    {
+        /* open input file */
+        OFFile sourceFile;
+        if (sourceFile.fopen(sourceFilename, "rb"))
+        {
+            /* create output file */
+            OFFile destFile;
+            if (destFile.fopen(destFilename, "wb"))
+            {
+                size_t numRead = 0;
+                size_t numWrite = 0;
+                Uint8 buffer[COPY_FILE_BUFFER_SIZE];
+                /* read and write data in chunks */
+                do {
+                    numRead = sourceFile.fread(buffer, 1, COPY_FILE_BUFFER_SIZE);
+                } while ((numRead > 0) && ((numWrite = destFile.fwrite(buffer, 1, numRead)) == numRead));
+                /* check for any errors */
+                if ((sourceFile.error() == 0) && (destFile.error() == 0))
+                    status = OFTrue;
+            }
+        }
+    }
+    return status;
+}
+
+
+OFBool OFStandard::deleteFile(const OFFilename &filename)
+{
+    int err = -1;
+    /* avoid NULL or empty string passed to unlink() */
+    if (!filename.isEmpty())
+    {
+#if defined(WIDE_CHAR_FILE_IO_FUNCTIONS) && defined(_WIN32)
+        if (filename.usesWideChars())
+            err = _wunlink(filename.getWideCharPointer());
+        else
+#endif
+            err = unlink(filename.getCharPointer());
+    }
+    return (err == 0);
+}
+
+
+OFBool OFStandard::renameFile(const OFFilename &oldFilename,
+                              const OFFilename &newFilename)
+{
+    int err = -1;
+    /* avoid NULL or empty strings passed to rename() */
+    if (!oldFilename.isEmpty() && !newFilename.isEmpty())
+    {
+#if defined(WIDE_CHAR_FILE_IO_FUNCTIONS) && defined(_WIN32)
+        if (oldFilename.usesWideChars() && newFilename.usesWideChars())
+            err = _wrename(oldFilename.getWideCharPointer(), newFilename.getWideCharPointer());
+        else {
+            const char *oldName = oldFilename.getCharPointer();
+            const char *newName = newFilename.getCharPointer();
+            /* avoid passing invalid values to rename() */
+            if ((oldName != NULL) && (newName != NULL))
+                err = rename(oldName, newName);
+        }
+#else
+        err = rename(oldFilename.getCharPointer(), newFilename.getCharPointer());
+#endif
+    }
+    return (err == 0);
+}
+
+
+size_t OFStandard::getFileSize(const OFFilename &filename)
 {
     size_t fileSize = 0;
-    struct stat fileStat;
-    if (stat(filename.c_str(), &fileStat) == 0)
-        fileSize = OFstatic_cast(size_t, fileStat.st_size);
+    /* avoid NULL or empty strings passed to stat() */
+    if (!filename.isEmpty())
+    {
+#if defined(WIDE_CHAR_FILE_IO_FUNCTIONS) && defined(_WIN32)
+        if (filename.usesWideChars())
+        {
+            struct _stat64i32 fileStat;
+            if (_wstat(filename.getWideCharPointer(), &fileStat) == 0)
+                fileSize = OFstatic_cast(size_t, fileStat.st_size);
+        } else
+#endif
+        {
+            struct stat fileStat;
+            if (stat(filename.getCharPointer(), &fileStat) == 0)
+                fileSize = OFstatic_cast(size_t, fileStat.st_size);
+        }
+    }
     return fileSize;
 }
 
 
 OFBool OFStandard::checkForMarkupConversion(const OFString &sourceString,
-                                            const OFBool convertNonASCII)
+                                            const OFBool convertNonASCII,
+                                            const size_t maxLength)
 {
     OFBool result = OFFalse;
-    /* char pointer allows faster access to the string */
-    const char *str = sourceString.c_str();
-    unsigned char c;
+    size_t pos = 0;
+    const size_t strLen = sourceString.length();
+    /* determine maximum number of characters to be converted */
+    const size_t length = (maxLength == 0) ? strLen : ((strLen < maxLength) ? strLen : maxLength);
     /* check for characters to be converted */
-    do {
-        c = OFstatic_cast(unsigned char, *(str++));
+    while (pos < length)
+    {
+        const size_t c = OFstatic_cast(unsigned char, sourceString.at(pos));
         if ((c == '<') || (c == '>') || (c == '&') || (c == '"') || (c == '\'') ||
+            (c == 0) || /* a NULL byte should never be added to the output */
             (c == 10) || (c == 13) || (convertNonASCII && ((c < 32) || (c >= 127))))
         {
+            /* return on the first character that needs to be converted */
             result = OFTrue;
-            c = 0;
+            break;
         }
-    } while (c != 0);
+        ++pos;
+    }
     return result;
 }
 
@@ -769,24 +1578,28 @@ OFCondition OFStandard::convertToMarkupStream(STD_NAMESPACE ostream &out,
                                               const OFString &sourceString,
                                               const OFBool convertNonASCII,
                                               const E_MarkupMode markupMode,
-                                              const OFBool newlineAllowed)
+                                              const OFBool newlineAllowed,
+                                              const size_t maxLength)
 {
-    /* char pointer allows faster access to the string */
-    const char *str = sourceString.c_str();
+    size_t pos = 0;
+    const size_t strLen = sourceString.length();
+    /* determine maximum number of characters to be converted */
+    const size_t length = (maxLength == 0) ? strLen : ((strLen < maxLength) ? strLen : maxLength);
     /* replace HTML/XHTML/XML reserved characters */
-    while (*str != 0)
+    while (pos < length)
     {
+        const char c = sourceString.at(pos);
         /* less than */
-        if (*str == '<')
+        if (c == '<')
             out << "&lt;";
         /* greater than */
-        else if (*str == '>')
+        else if (c == '>')
             out << "&gt;";
-        /* ampers and */
-        else if (*str == '&')
+        /* ampersand */
+        else if (c == '&')
             out << "&amp;";
         /* quotation mark */
-        else if (*str == '"')
+        else if (c == '"')
         {
             /* entity "&quot;" is not defined in HTML 3.2 */
             if (markupMode == MM_HTML32)
@@ -795,7 +1608,7 @@ OFCondition OFStandard::convertToMarkupStream(STD_NAMESPACE ostream &out,
                 out << "&quot;";
         }
         /* apostrophe */
-        else if (*str == '\'')
+        else if (c == '\'')
         {
             /* entity "&apos;" is not defined in HTML */
             if ((markupMode == MM_HTML) || (markupMode == MM_HTML32))
@@ -804,19 +1617,19 @@ OFCondition OFStandard::convertToMarkupStream(STD_NAMESPACE ostream &out,
                 out << "&apos;";
         }
         /* newline: LF, CR, LF CR, CR LF */
-        else if ((*str == '\012') || (*str == '\015'))
+        else if ((c == '\012') || (c == '\015'))
         {
             if (markupMode == MM_XML)
             {
                 /* encode CR and LF exactly as specified */
-                if (*str == '\012')
+                if (c == '\012')
                     out << "&#10;";    // '\n'
                 else
                     out << "&#13;";    // '\r'
             } else {  /* HTML/XHTML mode */
                 /* skip next character if it belongs to the newline sequence */
-                if (((*str == '\012') && (*(str + 1) == '\015')) || ((*str == '\015') && (*(str + 1) == '\012')))
-                    str++;
+                if (((c == '\012') && (sourceString[pos + 1] == '\015')) || ((c == '\015') && (sourceString[pos + 1] == '\012')))
+                    ++pos;
                 if (newlineAllowed)
                 {
                     if (markupMode == MM_XHTML)
@@ -827,18 +1640,20 @@ OFCondition OFStandard::convertToMarkupStream(STD_NAMESPACE ostream &out,
                     out << "&para;";
             }
         } else {
+            const size_t charValue = OFstatic_cast(unsigned char, c);
             /* other character: ... */
-            const size_t charValue = OFstatic_cast(unsigned char, *str);
             if ((convertNonASCII || (markupMode == MM_HTML32)) && ((charValue < 32) || (charValue >= 127)))
             {
                 /* convert < #32 and >= #127 to Unicode (ISO Latin-1) */
                 out << "&#" << charValue << ";";
-            } else {
-                /* just append */
-                out << *str;
+            }
+            else if (charValue != 0)
+            {
+                /* just append (if not a NULL byte) */
+                out << c;
             }
         }
-        ++str;
+        ++pos;
     }
     return EC_Normal;
 }
@@ -848,11 +1663,12 @@ const OFString &OFStandard::convertToMarkupString(const OFString &sourceString,
                                                   OFString &markupString,
                                                   const OFBool convertNonASCII,
                                                   const E_MarkupMode markupMode,
-                                                  const OFBool newlineAllowed)
+                                                  const OFBool newlineAllowed,
+                                                  const size_t maxLength)
 {
     OFStringStream stream;
     /* call stream variant of convert to markup */
-    if (OFStandard::convertToMarkupStream(stream, sourceString, convertNonASCII, markupMode, newlineAllowed).good())
+    if (OFStandard::convertToMarkupStream(stream, sourceString, convertNonASCII, markupMode, newlineAllowed, maxLength).good())
     {
         stream << OFStringStream_ends;
         /* convert string stream into a character string */
@@ -862,6 +1678,76 @@ const OFString &OFStandard::convertToMarkupString(const OFString &sourceString,
     } else
         markupString.clear();
     return markupString;
+}
+
+
+OFBool OFStandard::checkForOctalConversion(const OFString &sourceString,
+                                           const size_t maxLength)
+{
+    OFBool result = OFFalse;
+    size_t pos = 0;
+    const size_t strLen = sourceString.length();
+    /* determine maximum number of characters to be converted */
+    const size_t length = (maxLength == 0) ? strLen : ((strLen < maxLength) ? strLen : maxLength);
+    /* check for characters to be converted */
+    while (pos < length)
+    {
+        const size_t c = OFstatic_cast(unsigned char, sourceString.at(pos));
+        if ((c < 32) || (c >= 127))
+        {
+            /* return on the first character that needs to be converted */
+            result = OFTrue;
+            break;
+        }
+        ++pos;
+    }
+    return result;
+}
+
+
+OFCondition OFStandard::convertToOctalStream(STD_NAMESPACE ostream &out,
+                                             const OFString &sourceString,
+                                             const size_t maxLength)
+{
+    size_t pos = 0;
+    const size_t strLen = sourceString.length();
+    /* determine maximum number of characters to be converted */
+    const size_t length = (maxLength == 0) ? strLen : ((strLen < maxLength) ? strLen : maxLength);
+    /* switch to octal mode for numbers */
+    out << STD_NAMESPACE oct << STD_NAMESPACE setfill('0');
+    while (pos < length)
+    {
+        const char c = sourceString.at(pos);
+        const size_t charValue = OFstatic_cast(unsigned char, c);
+        /* replace non-ASCII characters */
+        if ((charValue < 32) || (charValue >= 127))
+            out << '\\' << STD_NAMESPACE setw(3) << charValue;
+        else
+            out << c;
+        ++pos;
+    }
+    /* reset i/o manipulators */
+    out << STD_NAMESPACE dec << STD_NAMESPACE setfill(' ');
+    return EC_Normal;
+}
+
+
+const OFString &OFStandard::convertToOctalString(const OFString &sourceString,
+                                                 OFString &octalString,
+                                                 const size_t maxLength)
+{
+    OFStringStream stream;
+    /* call stream variant of convert to octal notation */
+    if (OFStandard::convertToOctalStream(stream, sourceString, maxLength).good())
+    {
+        stream << OFStringStream_ends;
+        /* convert string stream into a character string */
+        OFSTRINGSTREAM_GETSTR(stream, buffer_str)
+        octalString.assign(buffer_str);
+        OFSTRINGSTREAM_FREESTR(buffer_str)
+    } else
+        octalString.clear();
+    return octalString;
 }
 
 
@@ -1079,16 +1965,17 @@ static const double atof_powersOf10[] =
 double OFStandard::atof(const char *s, OFBool *success)
 {
     if (success) *success = OFFalse;
-    register const char *p = s;
-    register char c;
+    const char *p = s;
+    char c;
     int sign = 0;
     int expSign = 0;
     double fraction;
     int exponent = 0; // Exponent read from "EX" field.
+    int old_exponent = 0;
     const char *pExp; // Temporarily holds location of exponent in string.
 
     /* Exponent that derives from the fractional part.  Under normal
-     * circumstatnces, it is the negative of the number of digits in F.
+     * circumstances, it is the negative of the number of digits in F.
      * However, if I is very long, the last digits of I get dropped
      * (otherwise a long I with a large negative exponent could cause an
      * unnecessary overflow on I alone).  In this case, fracExp is
@@ -1109,6 +1996,16 @@ double OFStandard::atof(const char *s, OFBool *success)
         if (*p == '+') ++p;
     }
 
+    //Check for special cases like NaN
+    if ((p[0] == 'n' || p[0] == 'N') && (p[1] == 'a' || p[1] == 'A') && (p[2] == 'n' || p[2] == 'N')) {
+        if (success) *success = OFTrue;
+        return OFnumeric_limits<double>::quiet_NaN();
+    }
+
+    if ((p[0] == 'i' || p[0] == 'I') && (p[1] == 'n' || p[1] == 'N') && (p[2] == 'f' || p[2] == 'F')) {
+        if (success) *success = OFTrue;
+        return sign ? -OFnumeric_limits<double>::infinity() : OFnumeric_limits<double>::infinity();
+    }
     // Count the number of digits in the mantissa (including the decimal
     // point), and also locate the decimal point.
 
@@ -1200,8 +2097,24 @@ double OFStandard::atof(const char *s, OFBool *success)
         }
         while (isdigit(OFstatic_cast(unsigned char, *p)))
         {
+            old_exponent = exponent;
             exponent = exponent * 10 + (*p - '0');
             ++p;
+            if (exponent < old_exponent)
+            {
+              // overflow of the exponent. We cannot represent this number in an integer
+              // and also not in a double, where the exponent must not be larger than 308.
+              if (expSign)
+              {
+                // negative exponent. return 0 and leave success flag set to false
+                return 0.0;
+              }
+              else
+              {
+                // positive exponent. return plus/minus HUGE_VAL, depending on the sign bit
+                if (sign) return -HUGE_VAL; else return HUGE_VAL;
+              }
+            }
         }
     }
 
@@ -1240,7 +2153,6 @@ double OFStandard::atof(const char *s, OFBool *success)
 }
 
 #endif /* DISABLE_OFSTD_ATOF */
-
 
 /* 11-bit exponent (VAX G floating point) is 308 decimal digits */
 #define FTOA_MAXEXP          308
@@ -1281,22 +2193,14 @@ void OFStandard::ftoa(
   unsigned char fmtch = 'G';
 
   // check if val is NAN
-#ifdef HAVE_WINDOWS_H
-  if (_isnan(val))
-#else
-  if (isnan(val))
-#endif
+  if (OFMath::isnan(val))
   {
     OFStandard::strlcpy(dst, "nan", siz);
     return;
   }
 
   // check if val is infinity
-#ifdef HAVE_ISINF
-  if (isinf(val))
-#else
-  if (my_isinf(val))
-#endif
+  if (OFMath::isinf(val))
   {
     if (val < 0)
         OFStandard::strlcpy(dst, "-inf", siz);
@@ -1414,7 +2318,7 @@ static char *ftoa_exponent(char *p, int exponent, char fmtch)
     *p++ = '-';
   }
   else *p++ = '+';
-  register char *t = expbuf + FTOA_MAXEXP;
+  char *t = expbuf + FTOA_MAXEXP;
   if (exponent > 9)
   {
     do
@@ -1501,8 +2405,8 @@ static char *ftoa_round(double fract, int *expon, char *start, char *end, char c
  */
 static int ftoa_convert(double val, int prec, int flags, char *signp, char fmtch, char *startp, char *endp)
 {
-  register char *p;
-  register double fract;
+  char *p;
+  double fract;
   int dotrim = 0;
   int expcnt = 0;
   int gformat = 0;
@@ -1511,7 +2415,7 @@ static int ftoa_convert(double val, int prec, int flags, char *signp, char fmtch
   fract = modf(val, &integer);
 
   /* get an extra slot for rounding. */
-  register char *t = ++startp;
+  char *t = ++startp;
 
   /*
    * get integer portion of val; put into the end of the buffer; the
@@ -1644,7 +2548,7 @@ eformat:
          * count it as precision.
          */
         --prec;
-        fmtch -= 2;             /* G->E, g->e */
+        fmtch = OFstatic_cast(char, fmtch - 2);             /* G->E, g->e */
         gformat = 1;
         goto eformat;
       }
@@ -1699,7 +2603,7 @@ eformat:
       }
   } /* end switch */
 
-  return (t - startp);
+  return OFstatic_cast(int, t - startp);
 }
 
 void OFStandard::ftoa(
@@ -1714,22 +2618,14 @@ void OFStandard::ftoa(
   if (!dst || !siz) return;
 
   // check if val is NAN
-#ifdef HAVE_WINDOWS_H
-  if (_isnan(val))
-#else
-  if (isnan(val))
-#endif
+  if (OFMath::isnan(val))
   {
     OFStandard::strlcpy(dst, "nan", siz);
     return;
   }
 
   // check if val is infinity
-#ifdef HAVE_ISINF
-  if (isinf(val))
-#else
-  if (my_isinf(val))
-#endif
+  if (OFMath::isinf(val))
   {
     if (val < 0)
         OFStandard::strlcpy(dst, "-inf", siz);
@@ -1741,7 +2637,7 @@ void OFStandard::ftoa(
   char softsign = 0;  /* temporary negative sign for floats */
   char buf[FTOA_BUFSIZE];      /* space for %c, %[diouxX], %[eEfgG] */
   char sign = '\0';   /* sign prefix (' ', '+', '-', or \0) */
-  register int n;
+  int n;
   unsigned char fmtch = 'G';
   FTOAStringBuffer sb(FTOA_BUFSIZE+1);
 
@@ -1787,7 +2683,7 @@ void OFStandard::ftoa(
   *buf = 0;
   int size = ftoa_convert(val, prec, flags, &softsign, fmtch, buf, buf + sizeof(buf));
   if (softsign) sign = '-';
-  register char *t = *buf ? buf : buf + 1;
+  char *t = *buf ? buf : buf + 1;
 
   /* At this point, `t' points to a string which (if not flags&FTOA_LEFT_ADJUSTMENT)
    * should be padded out to `width' places.  If flags&FTOA_ZEROPAD, it should
@@ -1849,13 +2745,30 @@ unsigned int OFStandard::my_sleep(unsigned int seconds)
   return sleep(seconds);
 #elif defined(HAVE_USLEEP)
   // usleep() expects microseconds
-  (void) usleep(((unsigned long)seconds)*1000000UL);
+  (void) usleep(OFstatic_cast(unsigned long, seconds)*1000000UL);
   return 0;
 #else
   // don't know how to sleep
   return 0;
 #endif
 }
+
+void OFStandard::milliSleep(unsigned int millisecs)
+{
+#ifdef HAVE_WINDOWS_H
+  // on Win32 we use the Sleep() system call which expects milliseconds
+    Sleep(millisecs);
+#elif defined(HAVE_USLEEP)
+    // usleep() expects microseconds
+    (void) usleep(OFstatic_cast(useconds_t, millisecs * 1000UL));
+#else
+    struct timeval t;
+    t.tv_sec = millisecs / 1000;
+    t.tv_usec = (millisecs % 1000) * 1000;
+    select(0, NULL, NULL, NULL, &t);
+#endif
+}
+
 
 long OFStandard::getProcessID()
 {
@@ -1868,245 +2781,482 @@ long OFStandard::getProcessID()
 #endif
 }
 
+const unsigned int OFrandr_max = 0x7fffffff;
 
-/*
- *  $Log: ofstd.cc,v $
- *  Revision 1.66  2010-11-01 08:55:56  uli
- *  Moved variable declarations in front of their loop.
- *
- *  Revision 1.65  2010-10-20 08:09:34  uli
- *  Also made sure toupper() and tolower() get a valid argument.
- *
- *  Revision 1.64  2010-10-20 07:41:37  uli
- *  Made sure isalpha() & friends are only called with valid arguments.
- *
- *  Revision 1.63  2010-10-14 13:14:53  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.62  2010-08-19 08:43:09  uli
- *  Fixed a comparision that checks for a valid buffer.
- *
- *  Revision 1.61  2010-08-10 09:34:20  uli
- *  Fixed some unlikely problems with NULL pointers.
- *
- *  Revision 1.60  2010-06-02 12:56:54  joergr
- *  Introduced new helper function strerror() which is used as a wrapper to the
- *  various approaches found on different systems.
- *
- *  Revision 1.59  2010-06-02 12:36:48  joergr
- *  Appended missing OFStringStream_ends to the end of output streams because
- *  this is required when OFOStringStream is mapped to ostrstream.
- *
- *  Revision 1.58  2010-05-20 09:20:32  joergr
- *  Added new method for determining the size of a given file (in bytes).
- *
- *  Revision 1.57  2010-04-28 13:27:38  joergr
- *  Added type cast to integer variable in order to avoid compiler warnings
- *  reported by VisualStudio 2005.
- *  Fixed wrong use of comparison operator in if statement.
- *
- *  Revision 1.56  2010-01-21 14:38:38  joergr
- *  Added stream variant of method convertToMarkupString().
- *  Changed implementation of convertToMarkupString(). This helper function is
- *  now based on the new stream variant which is much more efficient when
- *  converting large text strings with many special characters.
- *
- *  Revision 1.55  2010-01-20 13:49:47  uli
- *  Added OFStandard::getProcessID().
- *
- *  Revision 1.54  2010-01-04 16:02:46  joergr
- *  Added new method getDirNameFromPath() and enhanced existing method
- *  getFilenameFromPath().
- *
- *  Revision 1.53  2009-09-15 10:48:37  joergr
- *  Changed implementation of string variant of encodeBase64(). This helper
- *  function is now based on the stream variant of encodeBase64() because the
- *  previous implementation had an issue with HAVE_STD_STRING defined.
- *
- *  Revision 1.52  2009-08-26 07:44:31  joergr
- *  Added parentheses around && within || in order to avoid warnings reported by
- *  gcc 4.3.2.
- *
- *  Revision 1.51  2009-08-19 10:40:54  joergr
- *  Added new string helper functions toUpper() and toLower().
- *
- *  Revision 1.50  2009-04-27 14:25:31  joergr
- *  Added comment on absolute path names e.g. in UNC syntax.
- *
- *  Revision 1.49  2009-03-13 09:46:40  joergr
- *  Added new helper function getFilenameFromPath().
- *
- *  Revision 1.48  2008-08-28 10:44:30  onken
- *  Introduced deleteFile() method.
- *
- *  Revision 1.47  2008-08-28 10:34:02  onken
- *  Added #ifdef to combineDirAndFilename() to only check for absolute paths with
- *  driver letter when on Windows.
- *
- *  Revision 1.46  2008-08-28 10:20:43  onken
- *  Modified combineDirAndFilename() to also recognize Windows absolute paths
- *  starting with a drive letter.
- *
- *  Revision 1.45  2008-07-15 09:49:38  joergr
- *  Removed unused function OFStandard::stringMatchesCharacterSet().
- *
- *  Revision 1.44  2008-04-28 12:02:49  joergr
- *  Adapted OFStandard::checkForMarkupConversion() to the new behavior of
- *  parameter "convertNonASCII" of OFStandard::convertToMarkupString().
- *
- *  Revision 1.43  2008-04-28 09:05:06  meichel
- *  OFStandard::convertToMarkupString now also converts control characters
- *    less than 32 and 127 (which does not exist in ASCII or ISO 8859)
- *    when run in "convert non-ASCII" or MM_HTML32 markup mode.
- *
- *  Revision 1.42  2008-04-18 09:11:29  joergr
- *  Added support for current directory (".") to searchDirectoryRecursively().
- *
- *  Revision 1.41  2008-03-10 12:02:57  joergr
- *  Added "ofstream.h" include in order to compile when HAVE_STL is defined.
- *
- *  Revision 1.40  2007/11/15 16:12:53  joergr
- *  Introduced new markup mode for convertToMarkupString() that is used to
- *  distinguish between HTML, HTML 3.2, XHTML and XML.
- *  Enhanced convertToMarkupString() in order to be more compliant to the HTML
- *  specification (e.g. do not use "&apos;").
- *
- *  Revision 1.39  2007/06/26 16:20:39  joergr
- *  Added new variant of encodeBase64() method that outputs directly to a stream
- *  (avoids using a memory buffer for large binary data).
- *
- *  Revision 1.38  2007/03/09 16:35:49  joergr
- *  Fixed issue with new parameter "recurse" in searchDirectoryRecursively().
- *
- *  Revision 1.37  2007/03/09 14:55:38  joergr
- *  Added optional parameter "recurse" to searchDirectoryRecursively().
- *
- *  Revision 1.36  2007/02/20 13:13:38  joergr
- *  Added function that removes a given prefix from a pathname (e.g. root dir).
- *
- *  Revision 1.35  2006/10/13 10:01:36  joergr
- *  Added new helper function that allows to check whether the conversion to an
- *  HTML/XML markup string is required.
- *
- *  Revision 1.34  2005/12/08 15:49:00  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.33  2004/08/04 12:11:52  joergr
- *  Replaced non-Unix newline characters.
- *
- *  Revision 1.32  2004/08/03 11:45:48  meichel
- *  Headers libc.h and unistd.h are now included via ofstdinc.h
- *
- *  Revision 1.31  2004/05/26 10:14:47  meichel
- *  Completed isinf() workaround for MacOS X
- *
- *  Revision 1.30  2004/05/07 11:25:38  meichel
- *  Added workaround for MacOS X where isinf() and isnan() are defined in <math.h>
- *    but not in <cmath>.
- *
- *  Revision 1.29  2004/05/03 17:19:50  meichel
- *  my_isinf() now also works on systems where finite() or isinf()
- *    are defined but not properly declared in <math.h> or <cmath>.
- *
- *  Revision 1.28  2004/04/30 15:52:33  meichel
- *  my_isinf() now also works on systems where finite() or isinf()
- *    are defined but not properly declared in <math.h> or <cmath>.
- *
- *  Revision 1.27  2004/04/16 12:47:53  joergr
- *  Renamed local function "isinf" to "my_isinf" to avoid possible conflicts.
- *
- *  Revision 1.26  2004/01/16 10:33:57  joergr
- *  Replaced OFString::resize() by ..reserve() in convertToMarkupString()
- *  because of STL problems with Metrowerks CodeWarrior 8.3 compiler.
- *
- *  Revision 1.25  2003/10/22 15:04:40  meichel
- *  Added private implementation of isinf on platforms that have finite()
- *    and isnan() but not isinf(), such as Solaris 2.5.1.
- *
- *  Revision 1.24  2003/08/12 13:11:10  joergr
- *  Improved implementation of normalizeDirName().
- *
- *  Revision 1.23  2003/08/07 11:43:12  joergr
- *  Improved implementation of combineDirAndFilename().
- *
- *  Revision 1.22  2003/07/17 14:57:34  joergr
- *  Added new function searchDirectoryRecursively().
- *
- *  Revision 1.21  2003/07/09 13:58:04  meichel
- *  Adapted type casts to new-style typecast operators defined in ofcast.h
- *
- *  Revision 1.20  2003/07/08 14:39:15  meichel
- *  Fixed bug in OFStandard::ftoa that could cause a segmentation fault
- *    if the number to be converted was NAN or infinity.
- *
- *  Revision 1.19  2003/07/03 14:23:51  meichel
- *  Minor changes to make OFStandard::sleep compile on MinGW
- *
- *  Revision 1.18  2003/06/06 09:44:01  meichel
- *  Added static sleep function in class OFStandard. This replaces the various
- *    calls to sleep(), Sleep() and usleep() throughout the toolkit.
- *
- *  Revision 1.17  2003/04/17 15:53:15  joergr
- *  Replace LF and CR by &#10; and &#13; in XML mode instead of &#182; (para).
- *  Enhanced performance of base64 encoder and decoder routines.
- *
- *  Revision 1.16  2003/03/21 13:10:42  meichel
- *  Minor code purifications for warnings reported by MSVC in Level 4
- *
- *  Revision 1.15  2003/03/12 14:57:51  joergr
- *  Added apostrophe (') to the list of characters to be replaced by the
- *  corresponding HTML/XML mnenonic.
- *
- *  Revision 1.14  2002/12/13 13:45:35  meichel
- *  Removed const from decodeBase64() return code, needed on MIPSpro
- *
- *  Revision 1.13  2002/12/09 13:10:46  joergr
- *  Renamed parameter/local variable to avoid name clash with global function
- *  exp().
- *  Added private undefined copy constructor and/or assignment operator.
- *
- *  Revision 1.12  2002/12/05 13:50:08  joergr
- *  Moved definition of ftoa() processing flags to implementation file to avoid
- *  compiler errors (e.g. on Sun CC 2.0.1).
- *
- *  Revision 1.11  2002/12/04 09:13:03  meichel
- *  Implemented a locale independent function OFStandard::ftoa() that
- *    converts double to string and offers all the flexibility of the
- *    sprintf family of functions.
- *
- *  Revision 1.10  2002/11/27 11:23:11  meichel
- *  Adapted module ofstd to use of new header file ofstdinc.h
- *
- *  Revision 1.9  2002/07/18 12:14:19  joergr
- *  Corrected typos.
- *
- *  Revision 1.8  2002/07/02 15:18:24  wilkens
- *  Added function OFStandard::stringMatchesCharacterSet(...).
- *
- *  Revision 1.7  2002/06/20 12:06:47  meichel
- *  Fixed typo in ofstd.cc
- *
- *  Revision 1.6  2002/06/20 12:02:39  meichel
- *  Implemented a locale independent function OFStandard::atof() that
- *    converts strings to double and optionally returns a status code
- *
- *  Revision 1.5  2002/05/16 15:56:20  meichel
- *  Minor fixes to make ofstd compile on NeXTStep 3.3
- *
- *  Revision 1.4  2002/05/14 08:13:27  joergr
- *  Added support for Base64 (MIME) encoding and decoding.
- *
- *  Revision 1.3  2002/04/25 09:13:55  joergr
- *  Moved helper function which converts a conventional character string to an
- *  HTML/XML mnenonic string (e.g. using "&lt;" instead of "<") from module
- *  dcmsr to ofstd.
- *
- *  Revision 1.2  2002/04/11 12:08:06  joergr
- *  Added general purpose routines to check whether a file exists, a path points
- *  to a directory or a file, etc.
- *
- *  Revision 1.1  2001/12/04 16:57:18  meichel
- *  Implemented strlcpy and strlcat routines compatible with the
- *    corresponding BSD libc routines in class OFStandard
- *
- */
+int OFrand_r(unsigned int &seed)
+{
+  unsigned long val = OFstatic_cast(unsigned long, seed);
+  val = val * 1103515245 + 12345;
+  seed = OFstatic_cast(unsigned int, val %(OFstatic_cast(unsigned long, 0x80000000)));
+  return OFstatic_cast(int, seed);
+}
+
+void OFStandard::trimString(const char*& pBegin, const char*& pEnd)
+{
+  assert(pBegin <= pEnd);
+  while(pBegin != pEnd && (*pBegin == ' ' || !*pBegin))
+    ++pBegin;
+  while(pBegin != pEnd && (*(pEnd-1) == ' ' || !*(pEnd-1)))
+    --pEnd;
+}
+
+void OFStandard::trimString( const char*& str, size_t& size )
+{
+    const char* end = str + size;
+    trimString( str, end );
+    size = end - str;
+}
+
+#define MAX_NAME 65536
+
+#ifdef HAVE_GETHOSTBYNAME_R
+#ifndef HAVE_PROTOTYPE_GETHOSTBYNAME_R
+extern "C" {
+    int gethostbyname_r(const char *name, struct hostent *ret, char *buf, size_t buflen, struct hostent **result, int *h_errnop);
+}
+#endif
+#endif
+
+#ifdef HAVE_GETHOSTBYADDR_R
+#ifndef HAVE_PROTOTYPE_GETHOSTBYADDR_R
+extern "C" {
+    int gethostbyaddr_r(const void *addr, socklen_t len, int type, struct hostent *ret, char *buf, size_t buflen, struct hostent **result, int *h_errnop);
+}
+#endif
+#endif
+
+OFString OFStandard::getHostnameByAddress(const char* addr, int len, int type)
+{
+  OFString result;
+
+#ifdef HAVE_GETADDRINFO
+  // We have getaddrinfo(). In this case we also presume that we have
+  // getnameinfo(), since both functions were introduced together.
+  // This is the preferred implementation, being thread-safe and protocol independent.
+  OFSockAddr sas;
+
+  // a DNS name must be shorter than 256 characters, so this should be enough
+  char hostname[512];
+  hostname[0] = '\0';
+
+  if (type == AF_INET)
+  {
+    if (len != sizeof(struct in_addr)) return result; // invalid address length
+    struct sockaddr_in *sa4 = sas.getSockaddr_in();
+    sa4->sin_family = AF_INET;
+    memcpy(&sa4->sin_addr, addr, len);
+  }
+  else if (type == AF_INET6)
+  {
+    if (len != sizeof(struct in6_addr)) return result; // invalid address length
+    struct sockaddr_in6 *sa6 = sas.getSockaddr_in6();
+    sa6->sin6_family = AF_INET6;
+    memcpy(&sa6->sin6_addr, addr, len);
+  }
+  else return result; // unknown network type, not supported by getnameinfo()
+
+  int err = EAI_AGAIN;
+  int rep = DCMTK_MAX_EAI_AGAIN_REPETITIONS;
+  struct sockaddr *sa = sas.getSockaddr();
+
+  // perform reverse DNS lookup. Repeat while we receive temporary failures.
+  while ((EAI_AGAIN == err) && (rep-- > 0)) err = getnameinfo(sa, sizeof(struct sockaddr_storage), hostname, 512, NULL, 0, 0);
+  if ((err == 0) && (hostname[0] != '\0')) result = hostname;
+
+#elif defined(HAVE_GETHOSTBYADDR_R)
+  // We do not have getaddrinfo(), but we have a thread-safe gethostbyaddr_r()
+
+  unsigned size = 1024;
+  char *tmp = new char[size];
+  struct hostent *he = NULL;
+  hostent buf;
+  int err = 0;
+  while ((gethostbyaddr_r( addr, len, type, &buf, tmp, size, &he, &err ) == ERANGE) && (size < MAX_NAME))
+  {
+      // increase buffer size
+      delete[] tmp;
+      size *= 2;
+      tmp = new char[size];
+  }
+  if (he && he->h_name) result = he->h_name;
+  delete[] tmp;
+
+#else
+  // Default implementation using gethostbyaddr().
+  // This should work on all Posix systems, but is not thread safe
+  // (except on Windows, which allocates the result in thread-local storage)
+
+  struct hostent *he = gethostbyaddr( addr, len, type );
+  if (he && he->h_name) result = he->h_name;
+
+#endif
+  return result;
+}
+
+
+void OFStandard::getAddressByHostname(const char *name, OFSockAddr& result)
+{
+  result.clear();
+  if (NULL == name) return;
+
+#ifdef HAVE_GETADDRINFO
+  struct addrinfo *result_list = NULL;
+  int err = EAI_AGAIN;
+  int rep = DCMTK_MAX_EAI_AGAIN_REPETITIONS;
+
+  // filter for the DNS lookup. Since DCMTK does not yet fully support IPv6,
+  // we only look for IPv4 addresses.
+  ::addrinfo hint = {};
+  hint.ai_family = AF_INET;
+
+  // perform DNS lookup. Repeat while we receive temporary failures.
+  while ((EAI_AGAIN == err) && (rep-- > 0)) err = getaddrinfo(name, NULL, &hint, &result_list);
+
+  if (0 == err)
+  {
+    if (result_list && result_list->ai_addr)
+    {
+      // DNS lookup successfully completed.
+      struct sockaddr *result_sa = result.getSockaddr();
+      memcpy(result_sa, result_list->ai_addr, result_list->ai_addrlen);
+    }
+    freeaddrinfo(result_list);
+  }
+
+#else // HAVE_GETADDRINFO
+
+#ifdef HAVE_GETHOSTBYNAME_R
+  // We do not have getaddrinfo(), but we have a thread-safe gethostbyname_r()
+
+  struct hostent *he = NULL;
+  unsigned bufsize = 1024;
+  char *buf = new char[bufsize];
+  hostent ret;
+  int err = 0;
+  while ((gethostbyname_r( name, &ret, buf, bufsize, &he, &err ) == ERANGE) && (bufsize < MAX_NAME))
+  {
+      // increase buffer size
+      delete[] buf;
+      bufsize *= 2;
+      buf = new char[bufsize];
+  }
+
+#else // HAVE_GETHOSTBYNAME_R
+
+  // Default implementation using gethostbyname().
+  // This should work on all Posix systems, but is not thread safe
+  // (except on Windows, which allocates the result in thread-local storage)
+
+  struct hostent *he = gethostbyname(name);
+
+#endif // HAVE_GETHOSTBYNAME_R
+
+  if (he)
+  {
+    if (he->h_addrtype == AF_INET)
+    {
+      result.setFamily(AF_INET);
+      struct sockaddr_in *result_sa = result.getSockaddr_in();
+      // copy IP address into result struct
+      memcpy (&result_sa->sin_addr, he->h_addr, he->h_length);
+    }
+    else if (he->h_addrtype == AF_INET6)
+    {
+      result.setFamily(AF_INET6);
+      struct sockaddr_in6 *result_sa = result.getSockaddr_in6();
+      memcpy (&result_sa->sin6_addr, he->h_addr, he->h_length);
+    }
+    // else we have an unsupported protocol type
+    // and simply leave the result variable empty
+  }
+
+#ifdef HAVE_GETHOSTBYNAME_R
+  delete[] buf;
+#endif
+
+#endif // HAVE_GETADDRINFO
+
+}
+
+
+
+#ifdef HAVE_GRP_H
+OFStandard::OFGroup OFStandard::getGrNam( const char* name )
+{
+#ifdef HAVE_GETGRNAM_R
+    unsigned size = 32;
+    char* tmp = new char[size];
+    group* res = NULL;
+    group buf;
+    while( getgrnam_r( name, &buf, tmp, size, &res ) == ERANGE )
+    {
+        delete[] tmp;
+        if( size >= MAX_NAME )
+            return NULL;
+        tmp = new char[size*=2];
+    }
+    OFGroup g( res );
+    delete[] tmp;
+    return g;
+#elif defined HAVE_GETGRNAM
+    return OFGroup( getgrnam( name ) );
+#else
+    return OFGroup( NULL );
+#endif
+}
+#endif // HAVE_GRP_H
+
+#ifdef HAVE_PWD_H
+OFStandard::OFPasswd OFStandard::getPwNam( const char* name )
+{
+#ifdef HAVE_GETPWNAM_R
+    unsigned size = 32;
+    char* tmp = new char[size];
+    passwd* res = NULL;
+    passwd buf;
+    while( getpwnam_r( name, &buf, tmp, size, &res ) == ERANGE )
+    {
+        delete[] tmp;
+        if( size >= MAX_NAME )
+            return NULL;
+        tmp = new char[size*=2];
+    }
+    OFPasswd p( res );
+    delete[] tmp;
+    return p;
+#elif defined HAVE_GETPWNAM
+    return OFPasswd( getpwnam( name ) );
+#else
+    return OFPasswd( NULL );
+#endif
+}
+#endif // HAVE_PWD_H
+
+#ifdef HAVE_GRP_H
+OFStandard::OFGroup::OFGroup()
+: gr_name()
+, gr_passwd()
+, gr_mem()
+, gr_gid()
+, ok( OFFalse )
+{
+}
+
+OFStandard::OFGroup::OFGroup( group* const g )
+: gr_name()
+, gr_passwd()
+, gr_mem()
+, gr_gid()
+, ok( g != NULL )
+{
+    if( ok )
+    {
+        gr_name   = g->gr_name;
+        gr_passwd = g->gr_passwd;
+        gr_gid    = g->gr_gid;
+        for( char** m = g->gr_mem; *m; ++m )
+            gr_mem.push_back( *m );
+    }
+}
+
+OFBool OFStandard::OFGroup::operator!() const { return !ok; }
+OFStandard::OFGroup::operator OFBool() const { return ok; }
+
+#endif // #ifdef HAVE_GRP_H
+
+#ifdef HAVE_PWD_H
+OFStandard::OFPasswd::OFPasswd()
+: pw_name()
+, pw_passwd()
+, pw_gecos()
+, pw_dir()
+, pw_shell()
+, pw_uid()
+, pw_gid()
+, ok( OFFalse )
+{
+}
+
+OFStandard::OFPasswd::OFPasswd( passwd* const p )
+: pw_name()
+, pw_passwd()
+, pw_gecos()
+, pw_dir()
+, pw_shell()
+, pw_uid()
+, pw_gid()
+, ok( p != NULL )
+{
+    if( ok )
+    {
+        pw_name   = p->pw_name;
+        pw_passwd = p->pw_passwd;
+        pw_uid    = p->pw_uid;
+        pw_gid    = p->pw_gid;
+#ifdef HAVE_PASSWD_GECOS
+        pw_gecos  = p->pw_gecos;
+#endif
+        pw_dir    = p->pw_dir;
+        pw_shell  = p->pw_shell;
+    }
+}
+
+OFBool OFStandard::OFPasswd::operator!() const { return !ok; }
+OFStandard::OFPasswd::operator OFBool() const { return ok; }
+
+#endif // HAVE_PWD_H
+
+OFCondition OFStandard::dropPrivileges()
+{
+#if defined(HAVE_SETUID) && defined(HAVE_GETUID)
+  if ((setuid(getuid()) != 0) && (errno != EPERM))
+  {
+    /* setuid returning nonzero means that the setuid() operation has failed.
+     * An errno code of EPERM means that the application was never running with root
+     * privileges, i.e. was not installed with setuid root, which is safe and harmless.
+     * Other error codes (in particular EAGAIN) signal a problem. Most likely the
+     * calling user has already reached the maximum number of permitted processes.
+     * In this case the application should rather terminate than continue with
+     * full root privileges.
+     */
+    return EC_setuidFailed;
+  }
+#endif
+  return EC_Normal;
+}
+
+
+#ifndef HAVE_CXX11
+DCMTK_OFSTD_EXPORT OFnullptr_t OFnullptr;
+DCMTK_OFSTD_EXPORT OFnullopt_t OFnullopt;
+#endif
+
+
+#ifndef HAVE_STL_TUPLE
+static const OFignore_t OFignore_value;
+DCMTK_OFSTD_EXPORT const OFignore_t& OFignore = OFignore_value;
+OFtuple<> OFmake_tuple() { return OFtuple<>(); }
+OFtuple<> OFtie() { return OFtuple<>(); }
+#endif
+
+
+OFString OFStandard::getUserName()
+{
+#ifdef _WIN32
+    WKSTA_USER_INFO_0 *userinfo;
+    if( NetWkstaUserGetInfo( OFnullptr, 0, OFreinterpret_cast( LPBYTE*, &userinfo ) ) != NERR_Success )
+        return "<no-user-information-available>";
+    // Convert the Unicode full name to ANSI.
+    const WCHAR* const name = OFstatic_cast( WCHAR*, userinfo->wkui0_username );
+    OFVector<char> buf( wcslen( name ) * 2 );
+    WideCharToMultiByte
+    (
+        CP_ACP,
+        0,
+        name,
+        -1,
+        &*buf.begin(),
+        OFstatic_cast(int, buf.size()),
+        OFnullptr,
+        OFnullptr
+    );
+    return &*buf.begin();
+#elif defined(HAVE_GETLOGIN_R)
+    // use getlogin_r instead of getlogin
+    char buf[513];
+    if( getlogin_r( buf, 512 ) != 0 )
+        return "<no-utmp-entry>";
+    buf[512] = 0;
+    return buf;
+#elif defined(HAVE_GETLOGIN)
+    // thread unsafe
+    if( const char* s = getlogin() )
+        return s;
+    return "<no-utmp-entry>";
+#elif defined(HAVE_CUSERID)
+    char buf[L_cuserid];
+    return cuserid( buf );
+#else
+    return "<unknown-user>";
+#endif
+}
+
+OFString OFStandard::getHostName()
+{
+#ifdef HAVE_UNAME
+    struct utsname n;
+    uname( &n );
+    return n.nodename;
+#elif defined(HAVE_GETHOSTNAME)
+    char buf[513];
+    gethostname( buf, 512 );
+    buf[512] = 0;
+    return buf;
+#else
+    return "localhost";
+#endif
+}
+
+void OFStandard::initializeNetwork()
+{
+#ifdef HAVE_WINSOCK_H
+    WSAData winSockData;
+    /* we need at least version 1.1 */
+    WORD winSockVersionNeeded = MAKEWORD( 1, 1 );
+    WSAStartup(winSockVersionNeeded, &winSockData);
+#endif
+}
+
+void OFStandard::shutdownNetwork()
+{
+#ifdef HAVE_WINSOCK_H
+    WSACleanup();
+#endif
+}
+
+OFerror_code OFStandard::getLastSystemErrorCode()
+{
+#ifdef _WIN32
+    return OFerror_code( GetLastError(), OFsystem_category() );
+#else
+    return OFerror_code( errno, OFsystem_category() );
+#endif
+}
+
+OFerror_code OFStandard::getLastNetworkErrorCode()
+{
+#ifdef HAVE_WINSOCK_H
+    return OFerror_code( WSAGetLastError(), OFsystem_category() );
+#else
+    return OFerror_code( errno, OFsystem_category() );
+#endif
+}
+
+
+void OFStandard::forceSleep(Uint32 seconds)
+{
+    OFTimer timer;
+    double elapsed = timer.getDiff();
+    while (elapsed < OFstatic_cast(double, seconds))
+    {
+        // Use ceiling since otherwise we could wait too short
+        OFStandard::sleep(OFstatic_cast(unsigned int, ceil(seconds - elapsed)));
+        elapsed = timer.getDiff();
+    }
+}
+
+#include DCMTK_DIAGNOSTIC_IGNORE_STRICT_ALIASING_WARNING
+
+// black magic:
+// The C++ standard says that std::in_place should not be called as a function,
+// but the linker says we still need a function body. Normally, we would mark
+// it as [[noreturn]] and be done, but that's not available pre C++11.
+// Therefore, we need a return statement to silence 'missing return statement...'
+// style warnings. However, OFin_place_tag is a forward declared struct with
+// no actual definition, so, we cannot return an actual OFin_place_tag object.
+// Instead, we cast some pointer to it although that is actually bullshit, but
+// the code will never be executed anyway. Prior versions of this code returned
+// a casted nullptr, but some compilers are just too smart and return a warning
+// for that, so, now we cast a pointer to OFnullptr into an OFin_place_tag
+// instead to silence the warnings.
+DCMTK_OFSTD_EXPORT OFin_place_tag OFin_place() { return *reinterpret_cast<const OFin_place_tag*>(&OFnullptr); }

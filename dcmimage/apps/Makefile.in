@@ -18,31 +18,35 @@ dcmdatadir = $(top_srcdir)/../dcmdata
 dcmimgledir = $(top_srcdir)/../dcmimgle
 
 LOCALINCLUDES = -I$(ofstddir)/include -I$(oflogdir)/include \
-                -I$(dcmdatadir)/include -I$(dcmimgledir)/include
+	-I$(dcmdatadir)/include -I$(dcmimgledir)/include
 LIBDIRS = -L$(top_srcdir)/libsrc -L$(ofstddir)/libsrc -L$(oflogdir)/libsrc \
-          -L$(dcmdatadir)/libsrc -L$(dcmimgledir)/libsrc
-LOCALLIBS = -ldcmimage -ldcmimgle -ldcmdata -loflog -lofstd $(TIFFLIBS) $(PNGLIBS) $(ZLIBLIBS)
+	-L$(dcmdatadir)/libsrc -L$(dcmimgledir)/libsrc
+LOCALLIBS = -ldcmimage -ldcmimgle -ldcmdata -loflog -lofstd $(TIFFLIBS) $(PNGLIBS) \
+	$(ZLIBLIBS) $(CHARCONVLIBS) $(MATHLIBS)
 
-objs = dcm2pnm.o dcmquant.o dcmscale.o
-progs = dcm2pnm dcmquant dcmscale
+objs = dcm2pnm.o dcmquant.o dcmscale.o dcmicmp.o
+progs = dcm2pnm dcmquant dcmscale dcmicmp
 
 
 all: $(progs)
 
 dcm2pnm: dcm2pnm.o
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(LIBDIRS) -o $@ $@.o $(LOCALLIBS) $(MATHLIBS) $(LIBS)
+	$(CXX) $(CXXFLAGS) $(LIBDIRS) $(LDFLAGS) -o $@ $@.o $(LOCALLIBS) $(LIBS)
 
 dcmquant: dcmquant.o
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(LIBDIRS) -o $@ $@.o $(LOCALLIBS) $(MATHLIBS) $(LIBS)
+	$(CXX) $(CXXFLAGS) $(LIBDIRS) $(LDFLAGS) -o $@ $@.o $(LOCALLIBS) $(LIBS)
 
 dcmscale: dcmscale.o
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(LIBDIRS) -o $@ $@.o $(LOCALLIBS) $(MATHLIBS) $(LIBS)
+	$(CXX) $(CXXFLAGS) $(LIBDIRS) $(LDFLAGS) -o $@ $@.o $(LOCALLIBS) $(LIBS)
+
+dcmicmp: dcmicmp.o
+	$(CXX) $(CXXFLAGS) $(LIBDIRS) $(LDFLAGS) -o $@ $@.o $(LOCALLIBS) $(LIBS)
 
 
 install: all
 	$(configdir)/mkinstalldirs $(DESTDIR)$(bindir)
 	for prog in $(progs); do \
-		$(INSTALL_PROGRAM) $$prog$(BINEXT) $(DESTDIR)$(bindir) && strip $(DESTDIR)$(bindir)/$$prog$(BINEXT) ;\
+		$(INSTALL_PROGRAM) $$prog$(BINEXT) $(DESTDIR)$(bindir) && $(STRIP) $(DESTDIR)$(bindir)/$$prog$(BINEXT) ;\
 	done
 
 

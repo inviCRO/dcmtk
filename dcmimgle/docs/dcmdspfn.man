@@ -6,13 +6,13 @@
 \page dcmdspfn dcmdspfn: Export standard display curves to a text file
 \endif
 
-\section synopsis SYNOPSIS
+\section dcmdspfn_synopsis SYNOPSIS
 
 \verbatim
 dcmdspfn [options]
 \endverbatim
 
-\section description DESCRIPTION
+\section dcmdspfn_description DESCRIPTION
 
 Command line program converts a DCMTK monitor / camera / printer / scanner
 characteristics file to tabbed text file describing the characteristic curve
@@ -20,17 +20,17 @@ characteristics file to tabbed text file describing the characteristic curve
 display.  The 256 values of each curve can be visualized by a common spread
 sheet program.  Above that the display curve (without CC and PSC) can also be
 computed for a specified luminance/OD range (min/max) and a certain number of
-Device Driving Levels (DDL).
+Digital Driving Levels (DDL).
 
-\section parameters PARAMETERS
+\section dcmdspfn_parameters PARAMETERS
 
 \verbatim
 dcmfile-in  DICOM input filename to be dumped
 \endverbatim
 
-\section options OPTIONS
+\section dcmdspfn_options OPTIONS
 
-\subsection general_options general options
+\subsection dcmdspfn_general_options general options
 \verbatim
   -h   --help
          print this help text and exit
@@ -58,7 +58,7 @@ dcmfile-in  DICOM input filename to be dumped
          use config file f for the logger
 \endverbatim
 
-\subsection input_options input options (mutually exclusive)
+\subsection dcmdspfn_input_options input options (mutually exclusive)
 \verbatim
   +Im  --monitor-file  [f]ilename: string
          text file describing the monitor characteristics
@@ -80,7 +80,7 @@ dcmfile-in  DICOM input filename to be dumped
          automatically converted to luminance
 \endverbatim
 
-\subsection creation_options creation options
+\subsection dcmdspfn_creation_options creation options
 \verbatim
   +Ca  --ambient-light  [a]mbient light: float
          ambient light value (cd/m^2, default: file f)
@@ -95,7 +95,7 @@ dcmfile-in  DICOM input filename to be dumped
          Dmax value (default: off, only with +Ip and +Io)
 
   +Cd  --ddl-count  [n]umber of DDLs: integer
-         number of Device Driving Levels
+         number of Digital Driving Levels
          (default: 256, only with --lum/od-range)
 
   +Cf  --curve-fitting  [n]umber: integer
@@ -103,7 +103,7 @@ dcmfile-in  DICOM input filename to be dumped
          (0..99, default: file setting or cubic spline)
 \endverbatim
 
-\subsection output_options output options
+\subsection dcmdspfn_output_options output options
 \verbatim
   +Og  --gsdf  [f]ilename: string
          write GSDF curve data to file f
@@ -112,7 +112,7 @@ dcmfile-in  DICOM input filename to be dumped
          write CIELAB curve data to file f
 \endverbatim
 
-\section notes NOTES
+\section dcmdspfn_notes NOTES
 
 The output file describing the CC, GSDF or CIELAB and PSC for an 8 bit display
 system (monitor, camera, printer or scanner) is a simple text file.  Lines
@@ -122,9 +122,9 @@ tool \b dconvlum.
 
 The ambient light value possibly defined in the characteristics file is also
 used for the calculation.  In this case the value is part of the file comment
-header as well as the number of DDL (device driving level) values, the
+header as well as the number of DDL (digital driving level) values, the
 absolute luminance range (measured in candela per square meter) and the range
-of the JND index (just noticable difference) in case of GSDF.  Alternatively,
+of the JND index (just noticeable difference) in case of GSDF.  Alternatively,
 the ambient light value can be specified as a command line option.  When
 setting the two luminance values instead of reading a monitor characteristic
 file as input the luminance range is linearly divided by the number of DDLs.
@@ -142,7 +142,7 @@ The \e data folder contains sample characteristics file for monitors,
 cameras, printers and scanners.  See DICOM standard part 14 for more details
 on display calibration and Barten's model (including GSDF).
 
-\section logging LOGGING
+\section dcmdspfn_logging LOGGING
 
 The level of logging output of the various command line tools and underlying
 libraries can be specified by the user.  By default, only errors and warnings
@@ -159,9 +159,9 @@ rotation), to syslog (Unix) or the event log (Windows) option \e --log-config
 can be used.  This configuration file also allows for directing only certain
 messages to a particular output stream and for filtering certain messages
 based on the module or application where they are generated.  An example
-configuration file is provided in <em>\<etcdir\>/logger.cfg</em>).
+configuration file is provided in <em>\<etcdir\>/logger.cfg</em>.
 
-\section command_line COMMAND LINE
+\section dcmdspfn_command_line COMMAND LINE
 
 All command line tools use the following notation for parameters: square
 brackets enclose optional values (0-1), three trailing dots indicate that
@@ -170,7 +170,7 @@ multiple values are allowed (1-n), a combination of both means 0 to n values.
 Command line options are distinguished from parameters by a leading '+' or '-'
 sign, respectively.  Usually, order and position of command line options are
 arbitrary (i.e. they can appear anywhere).  However, if options are mutually
-exclusive the rightmost appearance is used.  This behaviour conforms to the
+exclusive the rightmost appearance is used.  This behavior conforms to the
 standard evaluation rules of common Unix shells.
 
 In addition, one or more command files can be specified using an '@' sign as a
@@ -179,23 +179,23 @@ is replaced by the content of the corresponding text file (multiple
 whitespaces are treated as a single separator unless they appear between two
 quotation marks) prior to any further evaluation.  Please note that a command
 file cannot contain another command file.  This simple but effective approach
-allows to summarize common combinations of options/parameters and avoids
+allows one to summarize common combinations of options/parameters and avoids
 longish and confusing command lines (an example is provided in file
 <em>\<datadir\>/dumppat.txt</em>).
 
-\section files FILES
+\section dcmdspfn_files FILES
 
 <em>\<datadir\>/camera.lut</em> - sample characteristics file of a camera
 \n<em>\<datadir\>/monitor.lut</em> - sample characteristics file of a monitor
 \n<em>\<datadir\>/printer.lut</em> - sample characteristics file of a printer
 \n<em>\<datadir\>/scanner.lut</em> - sample characteristics file of a scanner
 
-\section see_also SEE ALSO
+\section dcmdspfn_see_also SEE ALSO
 
 <b>dconvlum</b>(1), <b>dcod2lum</b>(1)
 
-\section copyright COPYRIGHT
+\section dcmdspfn_copyright COPYRIGHT
 
-Copyright (C) 1999-2010 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany.
+Copyright (C) 1999-2022 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany.
 
 */

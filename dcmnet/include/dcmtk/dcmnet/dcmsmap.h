@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2011, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -20,13 +20,6 @@
  *    template <class T> class DcmSimpleMap
  *    these template classes implement a simple map of key-value pairs.
  *    The template type must be copy constructable.
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:22 $
- *  CVS/RCS Revision: $Revision: 1.7 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -65,6 +58,14 @@ public:
   /// destructor
   ~DcmKeyValuePair()
   {
+  }
+
+  /** return key of key-value pair
+   *  @return key as const reference
+   */
+  const OFString& key() const
+  {
+    return key_;
   }
 
   /** return value of key-value pair
@@ -198,35 +199,3 @@ private:
 };
 
 #endif
-
-/*
- * CVS/RCS Log
- * $Log: dcmsmap.h,v $
- * Revision 1.7  2010-10-14 13:17:22  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.6  2005/12/08 16:02:17  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.5  2004/05/05 12:57:56  meichel
- * Simplified template class DcmSimpleMap<T>, needed for Sun CC 2.0.1
- *
- * Revision 1.4  2003/07/11 13:42:17  joergr
- * Added workaround to get rid of "implicit typename" warnings on gcc 3.x
- * (introduced macro OFLIST_TYPENAME).
- *
- * Revision 1.3  2003/07/03 15:56:19  meichel
- * Introduced workaround for "implicit typename" warning on gcc 3.x when
- *   compiling with HAVE_STL.
- *
- * Revision 1.2  2003/06/18 08:16:17  meichel
- * Added comparison operators to keep MSVC5 compiler happy
- *
- * Revision 1.1  2003/06/10 14:27:33  meichel
- * Initial release of class DcmAssociationConfiguration and support
- *   classes. This class maintains a list of association negotiation
- *   profiles that can be addressed by symbolic keys. The profiles may
- *   be read from a configuration file.
- *
- *
- */

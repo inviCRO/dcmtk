@@ -1,10 +1,11 @@
+// -*- C++ -*-
 // Module:  LOG4CPLUS
-// File:    socketappender.h
+// File:    socketap.h
 // Created: 5/2003
 // Author:  Tad E. Smith
 //
 //
-// Copyright 2003-2009 Tad E. Smith
+// Copyright 2003-2010 Tad E. Smith
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,19 +21,33 @@
 
 /** @file */
 
-#ifndef _LOG4CPLUS_SOCKET_APPENDER_HEADER_
-#define _LOG4CPLUS_SOCKET_APPENDER_HEADER_
+#ifndef DCMTK_LOG4CPLUS_SOCKET_APPENDER_HEADER_
+#define DCMTK_LOG4CPLUS_SOCKET_APPENDER_HEADER_
 
 #include "dcmtk/oflog/config.h"
+
+#if defined (DCMTK_LOG4CPLUS_HAVE_PRAGMA_ONCE)
+#pragma once
+#endif
+
 #include "dcmtk/oflog/appender.h"
 #include "dcmtk/oflog/helpers/socket.h"
-#include "dcmtk/oflog/helpers/syncprims.h"
+#include "dcmtk/oflog/thread/syncprim.h"
+#include "dcmtk/oflog/thread/threads.h"
 
 
-#define LOG4CPLUS_MAX_MESSAGE_SIZE (8*1024)
+namespace dcmtk
+{
+namespace log4cplus
+{
+ 
 
+#ifndef DCMTK_OFLOG_UNICODE
+    size_t const DCMTK_LOG4CPLUS_MAX_MESSAGE_SIZE = 8*1024;
+#else
+    size_t const DCMTK_LOG4CPLUS_MAX_MESSAGE_SIZE = 2*8*1024;
+#endif
 
-namespace log4cplus {
 
     /**
      * Sends {@link spi::InternalLoggingEvent} objects to a remote a log server.
@@ -66,7 +81,7 @@ namespace log4cplus {
      *   then the rate of event production, then the client can only
      *   progress at the network rate. In particular, if the network link
      *   to the the server is down, the client will be blocked.
-     *
+     * 
      *   <li>On the other hand, if the network link is up, but the server
      *   is down, the client will not be blocked when making log requests
      *   but the log events will be lost due to server unavailability.
@@ -85,12 +100,12 @@ namespace log4cplus {
      *
      * </dl>
      */
-    class LOG4CPLUS_EXPORT SocketAppender : public Appender {
+    class DCMTK_LOG4CPLUS_EXPORT SocketAppender : public Appender {
     public:
       // Ctors
-        SocketAppender(const log4cplus::tstring& host, int port,
+        SocketAppender(const log4cplus::tstring& host, unsigned short port, 
                        const log4cplus::tstring& serverName = tstring());
-        SocketAppender(const log4cplus::helpers::Properties & properties, log4cplus::tstring& error);
+        SocketAppender(const log4cplus::helpers::Properties & properties);
 
       // Dtor
         ~SocketAppender();
@@ -106,16 +121,15 @@ namespace log4cplus {
       // Data
         log4cplus::helpers::Socket socket;
         log4cplus::tstring host;
-        int port;
+        unsigned int port;
         log4cplus::tstring serverName;
 
-#if ! defined (LOG4CPLUS_SINGLE_THREADED)
-        class LOG4CPLUS_EXPORT ConnectorThread;
+#if ! defined (DCMTK_LOG4CPLUS_SINGLE_THREADED)
+        class DCMTK_LOG4CPLUS_EXPORT ConnectorThread;
         friend class ConnectorThread;
 
-        class LOG4CPLUS_EXPORT ConnectorThread
+        class DCMTK_LOG4CPLUS_EXPORT ConnectorThread
             : public thread::AbstractThread
-            , public helpers::LogLogUser
         {
         public:
             ConnectorThread (SocketAppender &);
@@ -143,15 +157,17 @@ namespace log4cplus {
     };
 
     namespace helpers {
-        LOG4CPLUS_EXPORT
-        SocketBuffer convertToBuffer(const log4cplus::spi::InternalLoggingEvent& event,
-                                     const log4cplus::tstring& serverName);
+        DCMTK_LOG4CPLUS_EXPORT
+        void convertToBuffer (SocketBuffer & buffer,
+            const log4cplus::spi::InternalLoggingEvent& event,
+            const log4cplus::tstring& serverName);
 
-        LOG4CPLUS_EXPORT
+        DCMTK_LOG4CPLUS_EXPORT
         log4cplus::spi::InternalLoggingEvent readFromBuffer(SocketBuffer& buffer);
     } // end namespace helpers
 
 } // end namespace log4cplus
+} // end namespace dcmtk
 
-#endif // _LOG4CPLUS_SOCKET_APPENDER_HEADER_
+#endif // DCMTK_LOG4CPLUS_SOCKET_APPENDER_HEADER_
 

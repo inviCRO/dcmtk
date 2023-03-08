@@ -1,2 +1,2 @@
 # declare installation files
-INSTALL_FILES(${INSTALL_DATDIR} FILES philips.lut)
+install(FILES philips.lut DESTINATION "${CMAKE_INSTALL_DATADIR}/dcmtk" COMPONENT data)

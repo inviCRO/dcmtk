@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2010, OFFIS e.V.
+ *  Copyright (C) 2010-2015, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose:
  *    classes: DSRGraphicData3DItem, DSRGraphicData3DList
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:32 $
- *  CVS/RCS Revision: $Revision: 1.2 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -43,7 +36,7 @@
 
 /** Class for graphic data (3D) items
  */
-class DSRGraphicData3DItem
+class DCMTK_DCMSR_EXPORT DSRGraphicData3DItem
 {
   public:
 
@@ -92,7 +85,7 @@ class DSRGraphicData3DItem
 
 /** Class for graphic data (3D) lists
  */
-class DSRGraphicData3DList
+class DCMTK_DCMSR_EXPORT DSRGraphicData3DList
   : public DSRListOfItems<DSRGraphicData3DItem>
 {
 
@@ -132,9 +125,11 @@ class DSRGraphicData3DList
 
     /** read list of graphic data
      ** @param  dataset  DICOM dataset from which the list should be read
+     *  @param  flags    flag used to customize the reading process (see DSRTypes::RF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
-    OFCondition read(DcmItem &dataset);
+    OFCondition read(DcmItem &dataset,
+                     const size_t flags);
 
     /** write list of graphic data
      ** @param  dataset  DICOM dataset to which the list should be written
@@ -180,17 +175,3 @@ class DSRGraphicData3DList
 
 
 #endif
-
-
-/*
- *  CVS/RCS Log:
- *  $Log: dsrsc3gr.h,v $
- *  Revision 1.2  2010-10-14 13:16:32  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.1  2010-09-28 14:08:14  joergr
- *  Added support for Colon CAD SR which requires a new value type (SCOORD3D).
- *
- *
- *
- */

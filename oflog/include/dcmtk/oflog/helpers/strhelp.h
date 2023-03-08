@@ -1,3 +1,4 @@
+// -*- C++ -*-
 // Module:  Log4CPLUS
 // File:    stringhelper.h
 // Created: 3/2003
@@ -20,31 +21,38 @@
 
 /** @file */
 
-#ifndef LOG4CPLUS_HELPERS_STRINGHELPER_HEADER_
-#define LOG4CPLUS_HELPERS_STRINGHELPER_HEADER_
+#ifndef DCMTK_LOG4CPLUS_HELPERS_STRINGHELPER_HEADER_
+#define DCMTK_LOG4CPLUS_HELPERS_STRINGHELPER_HEADER_
 
 #include "dcmtk/oflog/config.h"
+
+#if defined (DCMTK_LOG4CPLUS_HAVE_PRAGMA_ONCE)
+#pragma once
+#endif
+
 #include "dcmtk/oflog/tstring.h"
-#include "dcmtk/ofstd/oflist.h"
+#include "dcmtk/ofstd/ofvector.h"
 
 //#include <algorithm>
 //#include <limits>
-//#include <iterator>
 
 
+namespace dcmtk {
 namespace log4cplus {
     namespace helpers {
 
         /**
-         * Returns <code>s</code> in upper case.
+         * @param s the value to be converted into uppercase
+         * @returns <code>s</code> in upper case.
          */
-        LOG4CPLUS_EXPORT log4cplus::tstring toUpper(const log4cplus::tstring& s);
+        DCMTK_LOG4CPLUS_EXPORT log4cplus::tstring toUpper(const log4cplus::tstring& s);
 
 
         /**
-         * Returns <code>s</code> in lower case.
+         * @param s the value to be converted into lowercase
+         * @returns <code>s</code> in upper case.
          */
-        LOG4CPLUS_EXPORT log4cplus::tstring toLower(const log4cplus::tstring& s);
+        DCMTK_LOG4CPLUS_EXPORT log4cplus::tstring toLower(const log4cplus::tstring& s);
 
 
         /**
@@ -56,15 +64,20 @@ namespace log4cplus {
          * <b>Example:</b>
          * <pre>
          *   string s = // Set string with '.' as delimiters
-         *   list<log4cplus::tstring> tokens;
+         *   list<tstring> tokens;
          *   tokenize(s, '.', back_insert_iterator<list<string> >(tokens));
          * </pre>
+         * @param s the string to be tokenized
+         * @param c the delimiter to be used to tokenized
+         * @param result the resulting tokens
+         * @param collapseTokens when false, multiple adjacent delimiters
+         * will result in zero length tokens.
          */
         template <class StringType>
         inline
         void
         tokenize(const StringType& s, typename StringType::value_type c,
-            OFList<StringType>& result, bool collapseTokens = true)
+            OFVector<StringType>& result, bool collapseTokens = true)
         {
             typedef typename StringType::size_type size_type;
             size_type const slen = s.length();
@@ -97,9 +110,6 @@ namespace log4cplus {
                 // integer overflow of an signed type is undefined behavior :(
                 // This code is based upon http://www.fefe.de/intof.html
 
-                // True if intType is unsigned
-                const OFBool isUnsigned = (OFstatic_cast(intType, -1) < 0) ? OFFalse : OFTrue;
-
                 // If intType is a signed type, halfMaxSigned is intType_MAX / 2
                 const intType halfMaxSigned = OFstatic_cast(intType, 1) << (sizeof(intType) * 8 - 2);
 
@@ -110,7 +120,7 @@ namespace log4cplus {
                 const intType minSigned = OFstatic_cast(intType, -1) - maxSigned;
 
                 // This is the minimum value that intType can represent;
-                const intType minVal = isUnsigned ? 0 : minSigned;
+                const intType minVal = (OFstatic_cast(intType, -1) < 0) ? minSigned : 0;
 
                 //if (value == (STD_NAMESPACE numeric_limits<intType>::min) ())
                 if (value == minVal)
@@ -120,11 +130,18 @@ namespace log4cplus {
                     intType const mod = 0-(a + value);
                     value = 0-r;
 
-                    *(it - 1) = OFstatic_cast(tchar, LOG4CPLUS_TEXT('0') + mod);
+                    *(it - 1) = OFstatic_cast(tchar, DCMTK_LOG4CPLUS_TEXT('0') + mod);
                     --it;
                 }
                 else
                     value = 0-value;
+            }
+
+            static inline
+            bool
+            is_negative (intType val)
+            {
+                return val < 0;
             }
         };
 
@@ -134,18 +151,22 @@ namespace log4cplus {
         void
         convertIntegerToString (tstring & str, intType value)
         {
-            if (value == 0)
-                str = LOG4CPLUS_TEXT("0");
-            // We can't use (value < 0) because that could cause a compiler
-            // warning for unsigned types.
-            bool const negative = !(value > 0 || value == 0);
-
             const size_t buffer_size = 30; // More than enough space, even for 64 bit integers
                 // = intTypeLimits::digits10 + 2;
             tchar buffer[buffer_size];
             tchar * it = &buffer[buffer_size];
             tchar const * const buf_end = it;
 
+            if (value == 0)
+            {
+                --it;
+                *it = DCMTK_LOG4CPLUS_TEXT('0');
+            }
+
+            // We can't use (value < 0) because that could cause a compiler
+            // warning for unsigned types.
+            const OFBool isUnsigned = (OFstatic_cast(intType, -1) < 0) ? OFFalse : OFTrue;
+            bool const negative = !(value > 0 || isUnsigned || value == 0);
             if (negative)
                 ConvertIntegerToStringHelper<intType>::step1(it, value);
 
@@ -153,16 +174,16 @@ namespace log4cplus {
             {
                 intType mod = value % 10;
                 value = value / 10;
-                *(it - 1) = OFstatic_cast(tchar, LOG4CPLUS_TEXT('0') + mod);
+                *(it - 1) = OFstatic_cast(tchar, DCMTK_LOG4CPLUS_TEXT('0') + mod);
             }
 
             if (negative)
             {
                 --it;
-                *it = LOG4CPLUS_TEXT('-');
+                *it = DCMTK_LOG4CPLUS_TEXT('-');
             }
 
-            str.assign (OFstatic_cast(tchar const *, it), buf_end - it);
+            str.assign (OFstatic_cast(tchar const *, it), buf_end);
         }
 
 
@@ -179,5 +200,6 @@ namespace log4cplus {
     } // namespace helpers
 
 } // namespace log4cplus
+} // end namespace dcmtk
 
-#endif // LOG4CPLUS_HELPERS_STRINGHELPER_HEADER_
+#endif // DCMTK_LOG4CPLUS_HELPERS_STRINGHELPER_HEADER_

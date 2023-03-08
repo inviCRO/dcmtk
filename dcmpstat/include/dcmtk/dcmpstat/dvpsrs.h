@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2012, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose:
  *    classes: DVPSReferencedSeries
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:36 $
- *  CVS/RCS Revision: $Revision: 1.14 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DVPSRS_H
@@ -41,7 +34,7 @@
  *  of the Referenced Series Sequence in a Presentation State object.
  */
 
-class DVPSReferencedSeries
+class DCMTK_DCMPSTAT_EXPORT DVPSReferencedSeries
 {
 public:
   /// default constructor
@@ -106,7 +99,7 @@ public:
   /** remove image reference from this series reference if present.
    *  If an image reference with a SOP instance UID corresponding to the
    *  passed UID is found, it is removed from this series reference.
-   *  @param uid a pointer to the image SOP instance UID.
+   *  @param sopinstanceuid a pointer to the image SOP instance UID.
    */
   void removeImageReference(const char *sopinstanceuid);
 
@@ -200,54 +193,3 @@ private:
 };
 
 #endif
-
-/*
- *  $Log: dvpsrs.h,v $
- *  Revision 1.14  2010-10-14 13:16:36  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.13  2010-10-07 14:31:36  joergr
- *  Removed leading underscore characters from preprocessor symbols (reserved).
- *
- *  Revision 1.12  2010-03-01 09:08:49  uli
- *  Removed some unnecessary include directives in the headers.
- *
- *  Revision 1.11  2009-11-24 14:12:57  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.10  2009-09-30 10:42:38  uli
- *  Make dcmpstat's include headers self-sufficient by including all
- *  needed headers directly and stop using dctk.h
- *
- *  Revision 1.9  2005-12-08 16:04:01  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.8  2001/09/26 15:36:15  meichel
- *  Adapted dcmpstat to class OFCondition
- *
- *  Revision 1.7  2001/06/01 15:50:21  meichel
- *  Updated copyright header
- *
- *  Revision 1.6  2000/06/02 16:00:51  meichel
- *  Adapted all dcmpstat classes to use OFConsole for log and error output
- *
- *  Revision 1.5  2000/03/08 16:28:56  meichel
- *  Updated copyright header.
- *
- *  Revision 1.4  1999/07/22 16:39:10  meichel
- *  Adapted dcmpstat data structures and API to supplement 33 letter ballot text.
- *
- *  Revision 1.3  1999/01/15 17:33:04  meichel
- *  added methods to DVPresentationState allowing to access the image
- *    references in the presentation state.  Also added methods allowing to
- *    get the width and height of the attached image.
- *
- *  Revision 1.2  1998/12/14 16:10:33  meichel
- *  Implemented Presentation State interface for graphic layers,
- *    text and graphic annotations, presentation LUTs.
- *
- *  Revision 1.1  1998/11/27 14:50:32  meichel
- *  Initial Release.
- *
- *
- */

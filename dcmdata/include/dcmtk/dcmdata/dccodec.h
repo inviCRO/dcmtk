@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2010, OFFIS e.V.
+ *  Copyright (C) 1997-2020, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Andreas Barth
  *
  *  Purpose: Interface of abstract class DcmCodec and the class DcmCodecStruct
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:40 $
- *  CVS/RCS Revision: $Revision: 1.24 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -46,7 +39,7 @@ class DcmTagKey;
  *  describes the settings (modes of operations) for one
  *  particular codec (DcmCodec) object.
  */
-class DcmCodecParameter
+class DCMTK_DCMDATA_EXPORT DcmCodecParameter
 {
 public:
     /// default constructor
@@ -59,7 +52,7 @@ public:
     virtual ~DcmCodecParameter() {}
 
     /** this methods creates a copy of type DcmCodecParameter *
-     *  it must be overweritten in every subclass.
+     *  it must be overwritten in every subclass.
      *  @return copy of this object
      */
     virtual DcmCodecParameter *clone() const = 0;
@@ -82,7 +75,7 @@ public:
  *  to create the desired transfer syntax.  If no suitable codec
  *  is found, the write operation fails.
  */
-class DcmCodec
+class DCMTK_DCMDATA_EXPORT DcmCodec
 {
 public:
   /// default constructor
@@ -99,6 +92,10 @@ public:
    *  @param cp codec parameters for this codec
    *  @param objStack stack pointing to the location of the pixel data
    *    element in the current dataset.
+   *  @param removeOldRep boolean flag that should be set to false before this method call
+   *    and will be set to true if the codec modifies the DICOM dataset such
+   *    that the pixel data of the original representation may not be usable
+   *    anymore.
    *  @return EC_Normal if successful, an error code otherwise.
    */
   virtual OFCondition decode(
@@ -106,7 +103,8 @@ public:
     DcmPixelSequence * pixSeq,
     DcmPolymorphOBOW& uncompressedPixelData,
     const DcmCodecParameter * cp,
-    const DcmStack& objStack) const = 0;
+    const DcmStack & objStack,
+    OFBool& removeOldRep) const = 0;
 
   /** decompresses a single frame from the given pixel sequence and
    *  stores the result in the given buffer.
@@ -156,6 +154,10 @@ public:
    *  @param cp codec parameters for this codec
    *  @param objStack stack pointing to the location of the pixel data
    *    element in the current dataset.
+   *  @param removeOldRep boolean flag that should be set to false before this method call
+   *    and will be set to true if the codec modifies the DICOM dataset such
+   *    that the pixel data of the original representation may not be usable
+   *    anymore.
    *  @return EC_Normal if successful, an error code otherwise.
    */
   virtual OFCondition encode(
@@ -164,7 +166,8 @@ public:
     const DcmRepresentationParameter * toRepParam,
     DcmPixelSequence * & pixSeq,
     const DcmCodecParameter *cp,
-    DcmStack & objStack) const = 0;
+    DcmStack & objStack,
+    OFBool& removeOldRep) const = 0;
 
   /** transcodes (re-compresses) the given compressed DICOM image and stores
    *  the result in the given toPixSeq element.
@@ -178,6 +181,10 @@ public:
    *  @param cp codec parameters for this codec
    *  @param objStack stack pointing to the location of the pixel data
    *    element in the current dataset.
+   *  @param removeOldRep boolean flag that should be set to false before this method call
+   *    and will be set to true if the codec modifies the DICOM dataset such
+   *    that the pixel data of the original representation may not be usable
+   *    anymore.
    *  @return EC_Normal if successful, an error code otherwise.
    */
   virtual OFCondition encode(
@@ -187,7 +194,8 @@ public:
     const DcmRepresentationParameter * toRepParam,
     DcmPixelSequence * & toPixSeq,
     const DcmCodecParameter * cp,
-    DcmStack & objStack) const = 0;
+    DcmStack & objStack,
+    OFBool& removeOldRep) const = 0;
 
   /** checks if this codec is able to convert from the
    *  given current transfer syntax to the given new
@@ -296,7 +304,7 @@ public:
  *  All operations on the list are protected by a read/write lock
  *  and, therefore, are safe for multi-thread applications.
  */
-class DcmCodecList
+class DCMTK_DCMDATA_EXPORT DcmCodecList
 {
 
 public:
@@ -352,6 +360,10 @@ public:
    *  @param uncompressedPixelData uncompressed pixel data stored in this element
    *  @param pixelStack stack pointing to the location of the pixel data
    *    element in the current dataset.
+   *  @param removeOldRep boolean flag that should be set to false before this method call
+   *    and will be set to true if the codec modifies the DICOM dataset such
+   *    that the pixel data of the original representation may not be usable
+   *    anymore.
    *  @return EC_Normal if successful, an error code otherwise.
    */
   static OFCondition decode(
@@ -359,7 +371,8 @@ public:
     const DcmRepresentationParameter * fromParam,
     DcmPixelSequence * fromPixSeq,
     DcmPolymorphOBOW& uncompressedPixelData,
-    DcmStack & pixelStack);
+    DcmStack & pixelStack,
+    OFBool& removeOldRep);
 
   /** looks for a codec that is able to decode from the given transfer syntax
    *  and calls the decodeFrame() method of the codec.  A read lock on the list of
@@ -412,6 +425,10 @@ public:
    *    allocated on heap) returned in this parameter upon success.
    *  @param pixelStack stack pointing to the location of the pixel data
    *    element in the current dataset.
+   *  @param removeOldRep boolean flag that should be set to false before this method call
+   *    and will be set to true if the codec modifies the DICOM dataset such
+   *    that the pixel data of the original representation may not be usable
+   *    anymore.
    *  @return EC_Normal if successful, an error code otherwise.
    */
   static OFCondition encode(
@@ -421,7 +438,8 @@ public:
     const E_TransferSyntax toRepType,
     const DcmRepresentationParameter * toRepParam,
     DcmPixelSequence * & pixSeq,
-    DcmStack & pixelStack);
+    DcmStack & pixelStack,
+    OFBool& removeOldRep);
 
   /** looks for a codec that is able to transcode (re-compresses)
    *  from the given transfer syntax to the given transfer syntax
@@ -438,6 +456,10 @@ public:
    *    allocated on heap) returned in this parameter upon success.
    *  @param pixelStack stack pointing to the location of the pixel data
    *    element in the current dataset.
+   *  @param removeOldRep boolean flag that should be set to false before this method call
+   *    and will be set to true if the codec modifies the DICOM dataset such
+   *    that the pixel data of the original representation may not be usable
+   *    anymore.
    *  @return EC_Normal if successful, an error code otherwise.
    */
   static OFCondition encode(
@@ -447,7 +469,8 @@ public:
     const E_TransferSyntax toRepType,
     const DcmRepresentationParameter * toRepParam,
     DcmPixelSequence * & toPixSeq,
-    DcmStack & pixelStack);
+    DcmStack & pixelStack,
+    OFBool& removeOldRep);
 
   /** looks for a codec that claims to be able to convert
    *  between the given transfer syntaxes.
@@ -511,6 +534,8 @@ private:
 
 #ifdef WITH_THREADS
   /// read/write lock guarding access to singleton list
+  /// @remark this member is only available if DCMTK is compiled with thread
+  /// support enabled.
   static OFReadWriteLock codecLock;
 #endif
 
@@ -521,104 +546,3 @@ private:
 
 
 #endif
-
-/*
-** CVS/RCS Log:
-** $Log: dccodec.h,v $
-** Revision 1.24  2010-10-14 13:15:40  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.23  2010-10-04 14:26:21  joergr
-** Fixed issue with codec registry when compiled on Linux x86_64 with "configure
-** --disable-threads" (replaced "#ifdef _REENTRANT" by "#ifdef WITH_THREADS").
-**
-** Revision 1.22  2010-03-01 09:08:44  uli
-** Removed some unnecessary include directives in the headers.
-**
-** Revision 1.21  2009-11-17 16:36:51  joergr
-** Added new method that allows for determining the color model of the
-** decompressed image.
-**
-** Revision 1.20  2009-11-04 09:58:07  uli
-** Switched to logging mechanism provided by the "new" oflog module
-**
-** Revision 1.19  2008-05-29 10:46:13  meichel
-** Implemented new method DcmPixelData::getUncompressedFrame
-**   that permits frame-wise access to compressed and uncompressed
-**   objects without ever loading the complete object into main memory.
-**   For this new method to work with compressed images, all classes derived from
-**   DcmCodec need to implement a new method decodeFrame(). For now, only
-**   dummy implementations returning an error code have been defined.
-**
-** Revision 1.18  2005/12/09 14:48:14  meichel
-** Added missing virtual destructors
-**
-** Revision 1.17  2005/12/08 16:28:01  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.16  2004/08/24 14:54:18  meichel
-**  Updated compression helper methods. Image type is not set to SECONDARY
-**   any more, support for the purpose of reference code sequence added.
-**
-** Revision 1.15  2003/06/12 13:35:23  joergr
-** Fixed inconsistent API documentation reported by Doxygen.
-**
-** Revision 1.14  2002/05/24 14:51:41  meichel
-** Moved helper methods that are useful for different compression techniques
-**   from module dcmjpeg to module dcmdata
-**
-** Revision 1.13  2002/02/27 14:21:20  meichel
-** Declare dcmdata read/write locks only when compiled in multi-thread mode
-**
-** Revision 1.12  2001/11/12 16:29:51  meichel
-** Added dummy friend class declaration to singleton class DcmCodecList
-**   to keep gcc from squawking.
-**
-** Revision 1.11  2001/11/08 16:19:39  meichel
-** Changed interface for codec registration. Now everything is thread-safe
-**   and multiple codecs can be registered for a single transfer syntax (e.g.
-**   one encoder and one decoder).
-**
-** Revision 1.10  2001/09/25 17:19:07  meichel
-** Updated abstract class DcmCodecParameter for use with dcmjpeg.
-**   Added new function deregisterGlobalCodec().
-**
-** Revision 1.9  2001/06/01 15:48:34  meichel
-** Updated copyright header
-**
-** Revision 1.8  2001/05/25 09:53:51  meichel
-** Modified DcmCodec::decode() interface, required for future dcmjpeg module.
-**
-** Revision 1.7  2000/09/27 08:19:54  meichel
-** Minor changes in DcmCodec interface, required for future dcmjpeg module.
-**
-** Revision 1.6  2000/04/14 16:09:12  meichel
-** Made function DcmCodec and related functions thread safe.
-**   registerGlobalCodec() should not be called anymore from the constructor
-**   of global objects.
-**
-** Revision 1.5  2000/03/08 16:26:11  meichel
-** Updated copyright header.
-**
-** Revision 1.4  1999/03/31 09:24:31  meichel
-** Updated copyright header in module dcmdata
-**
-** Revision 1.3  1998/07/15 15:48:43  joergr
-** Removed several compiler warnings reported by gcc 2.8.1 with
-** additional options, e.g. missing copy constructors and assignment
-** operators, initialization of member variables in the body of a
-** constructor instead of the member initialization list, hiding of
-** methods by use of identical names, uninitialized member variables,
-** missing const declaration of char pointers. Replaced tabs by spaces.
-**
-** Revision 1.2  1997/07/24 13:07:45  andreas
-** - Make DcmCodec:canChangeCoding abstract
-**
-** Revision 1.1  1997/07/21 07:54:57  andreas
-** - New environment for encapsulated pixel representations. DcmPixelData
-**   can contain different representations and uses codecs to convert
-**   between them. Codecs are derived from the DcmCodec class. New error
-**   codes are introduced for handling of representations. New internal
-**   value representation (only for ident()) for PixelData
-**
-*/

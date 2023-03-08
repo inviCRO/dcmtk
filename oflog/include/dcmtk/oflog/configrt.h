@@ -1,10 +1,11 @@
+// -*- C++ -*-
 // Module:  Log4CPLUS
-// File:    configurator.h
+// File:    configrt.h
 // Created: 3/2003
 // Author:  Tad E. Smith
 //
 //
-// Copyright 2003-2009 Tad E. Smith
+// Copyright 2003-2010 Tad E. Smith
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,50 +21,74 @@
 
 /** @file */
 
-#ifndef _CONFIGURATOR_HEADER_
-#define _CONFIGURATOR_HEADER_
+#ifndef DCMTK_LOG4CPLUS_CONFIGURATOR_HEADER_
+#define DCMTK_LOG4CPLUS_CONFIGURATOR_HEADER_
 
 #include "dcmtk/oflog/config.h"
+
+#if defined (DCMTK_LOG4CPLUS_HAVE_PRAGMA_ONCE)
+#pragma once
+#endif
+
 #include "dcmtk/oflog/appender.h"
-#include "dcmtk/oflog/hierarchy.h"
 #include "dcmtk/oflog/logger.h"
-#include "dcmtk/oflog/helpers/lloguser.h"
 #include "dcmtk/oflog/helpers/pointer.h"
 #include "dcmtk/oflog/helpers/property.h"
 
-//#include <map>
+#include "dcmtk/ofstd/ofmap.h"
 
 
+namespace dcmtk
+{
 namespace log4cplus
 {
+    class Hierarchy;
+
 
     /**
      * Provides configuration from an external file.  See configure() for
      * the expected format.
-     *
+     * 
      * <em>All option values admit variable substitution.</em> For
      * example, if <code>userhome</code> environment property is set to
      * <code>/home/xyz</code> and the File option is set to the string
      * <code>${userhome}/test.log</code>, then File option will be
      * interpreted as the string <code>/home/xyz/test.log</code>.
-     *
+     * 
      * The syntax of variable substitution is similar to that of UNIX
      * shells. The string between an opening <b>&quot;${&quot;</b> and
      * closing <b>&quot;}&quot;</b> is interpreted as a key. Its value is
      * searched in the environment properties.  The corresponding value replaces
      * the ${variableName} sequence.
      */
-    class LOG4CPLUS_EXPORT PropertyConfigurator
-        : protected log4cplus::helpers::LogLogUser
+    class DCMTK_LOG4CPLUS_EXPORT PropertyConfigurator
     {
     public:
         enum PCFlags
         {
-            fRecursiveExpansion = 0x0001,
-            fShadowEnvironment  = 0x0002,
-            fAllowEmptyVars     = 0x0004
-        };
+            fRecursiveExpansion   = (1 << 0)
+            , fShadowEnvironment  = (1 << 1)
+            , fAllowEmptyVars     = (1 << 2)
 
+            // These encoding related options occupy 2 bits of the flags
+            // and are mutually exclusive. These flags are synchronized with
+            // PFlags in Properties.
+
+            , fEncodingShift      = 3
+            , fEncodingMask       = 0x3
+            , fUnspecEncoding     = (0 << fEncodingShift)
+#if defined (DCMTK_LOG4CPLUS_HAVE_CODECVT_UTF8_FACET) && defined (DCMTK_OFLOG_UNICODE)
+            , fUTF8               = (1 << fEncodingShift)
+#endif
+#if (defined (DCMTK_LOG4CPLUS_HAVE_CODECVT_UTF16_FACET) || defined (_WIN32)) \
+    && defined (DCMTK_OFLOG_UNICODE)
+            , fUTF16              = (2 << fEncodingShift)
+#endif
+#if defined (DCMTK_LOG4CPLUS_HAVE_CODECVT_UTF32_FACET) && defined (DCMTK_OFLOG_UNICODE)
+            , fUTF32              = (3 << fEncodingShift)
+#endif
+        };
+        
         // ctor and dtor
         PropertyConfigurator(const log4cplus::tstring& propertyFile,
             Hierarchy& h = Logger::getDefaultHierarchy(), unsigned flags = 0);
@@ -259,7 +284,7 @@ namespace log4cplus
         void configureLogger(log4cplus::Logger logger, const log4cplus::tstring& config);
         void configureAppenders();
         void configureAdditivity();
-
+        
         virtual Logger getLogger(const log4cplus::tstring& name);
         virtual void addAppender(Logger &logger, log4cplus::SharedAppenderPtr& appender);
 
@@ -269,10 +294,10 @@ namespace log4cplus
       // Data
         Hierarchy& h;
         log4cplus::tstring propertyFilename;
-        log4cplus::helpers::Properties properties;
+        log4cplus::helpers::Properties properties; 
         AppenderMap appenders;
         unsigned flags;
-
+        
     private:
       // Disable copy
         PropertyConfigurator(const PropertyConfigurator&);
@@ -286,12 +311,14 @@ namespace log4cplus
      * configuration see PropertyConfigurator. BasicConfigurator
      * automatically attaches ConsoleAppender to
      * <code>rootLogger</code>, with output going to standard output,
-     * using DEBUG LogLevel value.
+     * using DEBUG LogLevel value. The additional parameter
+     * logToStdErr may redirect the output to standard error.
      */
-    class LOG4CPLUS_EXPORT BasicConfigurator : public PropertyConfigurator {
+    class DCMTK_LOG4CPLUS_EXPORT BasicConfigurator : public PropertyConfigurator {
     public:
       // ctor and dtor
-        BasicConfigurator(Hierarchy& h = Logger::getDefaultHierarchy());
+        BasicConfigurator(Hierarchy& h = Logger::getDefaultHierarchy(),
+            bool logToStdErr = false);
         virtual ~BasicConfigurator();
 
         /**
@@ -303,21 +330,25 @@ namespace log4cplus
          * config.configure();
          * </pre></code>
          */
-        static void doConfigure(Hierarchy& h = Logger::getDefaultHierarchy());
+        static void doConfigure(Hierarchy& h = Logger::getDefaultHierarchy(),
+            bool logToStdErr = false);
 
+        //! Property name for disable override.
+        static log4cplus::tstring const DISABLE_OVERRIDE_KEY;
+        
     private:
       // Disable copy
         BasicConfigurator(const BasicConfigurator&);
         BasicConfigurator& operator=(BasicConfigurator&);
     };
+   
 
-
-#if !defined(LOG4CPLUS_SINGLE_THREADED)
+#if !defined(DCMTK_LOG4CPLUS_SINGLE_THREADED)
     // Forward Declarations
     class ConfigurationWatchDogThread;
-
-
-    class LOG4CPLUS_EXPORT ConfigureAndWatchThread {
+    
+    
+    class DCMTK_LOG4CPLUS_EXPORT ConfigureAndWatchThread {
     public:
       // ctor and dtor
         ConfigureAndWatchThread(const log4cplus::tstring& propertyFile,
@@ -328,13 +359,14 @@ namespace log4cplus
       // Disallow copying of instances of this class
        ConfigureAndWatchThread(const ConfigureAndWatchThread&);
        ConfigureAndWatchThread& operator=(const ConfigureAndWatchThread&);
-
+       
       // Data
        ConfigurationWatchDogThread * watchDogThread;
     };
 #endif
 
 } // end namespace log4cplus
+} // end namespace dcmtk
 
-#endif // _CONFIGURATOR_HEADER_
+#endif // DCMTK_LOG4CPLUS_CONFIGURATOR_HEADER_
 

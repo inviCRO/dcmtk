@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 2003-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -15,27 +15,16 @@
  *
  *  Author:  Marco Eichelberg
  *
- *  Purpose: 
+ *  Purpose:
  *    class DcmAssociationConfigurationFile
- * 
- *  Last Update:      $Author: uli $
- *  Update Date:      $Date: 2010-10-20 08:09:34 $
- *  CVS/RCS Revision: $Revision: 1.7 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
 #include "dcmtk/config/osconfig.h"
 #include "dcmtk/dcmnet/dcasccff.h"
-#include "dcmtk/dcmnet/dcasccfg.h" /* for class DcmAssociationConfiguration */
+#include "dcmtk/dcmnet/dcasccfg.h"  /* for class DcmAssociationConfiguration */
 #include "dcmtk/dcmdata/dcerror.h"  /* for EC_IllegalCall */
-#include "dcmtk/ofstd/ofconfig.h" /* for class OFConfigFile */
-
-#define INCLUDE_CCTYPE
-#include "dcmtk/ofstd/ofstdinc.h"
-
+#include "dcmtk/ofstd/ofconfig.h"   /* for class OFConfigFile */
 
 /* config file keys for the association configuration */
 
@@ -65,7 +54,7 @@ OFCondition DcmAssociationConfigurationFile::initialize(
   {
     OFString s("unable to open configuration file: ");
     s += filename;
-    return makeOFCondition(OFM_dcmnet, 1042, OF_error, s.c_str());    
+    return makeOFCondition(OFM_dcmnet, 1042, OF_error, s.c_str());
   }
 
   OFConfigFile config(cfgfile);
@@ -103,7 +92,7 @@ OFCondition DcmAssociationConfigurationFile::parseTransferSyntaxes(
     OFString s("cannot find section [[");
     s += L2_TRANSFERSYNTAXES;
     s += "]] in config file";
-    return makeOFCondition(OFM_dcmnet, 1050, OF_error, s.c_str());      
+    return makeOFCondition(OFM_dcmnet, 1050, OF_error, s.c_str());
   }
 
   char buf[64];
@@ -118,7 +107,7 @@ OFCondition DcmAssociationConfigurationFile::parseTransferSyntaxes(
   {
     key = config.get_keyword(1);
     counter = 0;
-    found = OFTrue;    
+    found = OFTrue;
     while (found)
     {
       sprintf(buf, "%s%u", L0_TRANSFERSYNTAX_X, ++counter);
@@ -145,7 +134,7 @@ OFCondition DcmAssociationConfigurationFile::parsePresentationContexts(
     OFString s("cannot find section [[");
     s += L2_PRESENTATIONCONTEXTS;
     s += "]] in config file";
-    return makeOFCondition(OFM_dcmnet, 1051, OF_error, s.c_str());      
+    return makeOFCondition(OFM_dcmnet, 1051, OF_error, s.c_str());
   }
 
   char buf[64];
@@ -166,14 +155,14 @@ OFCondition DcmAssociationConfigurationFile::parsePresentationContexts(
   {
     key = config.get_keyword(1);
     counter = 0;
-    found = OFTrue;    
+    found = OFTrue;
     while (found)
     {
       sprintf(buf, "%s%u", L0_PRESENTATIONCONTEXT_X, ++counter);
       value = config.get_entry(buf);
       if (value)
-      {       
-        // value must consist of abstract syntax and transfer syntax, separated by '\\'         
+      {
+        // value must consist of abstract syntax and transfer syntax, separated by '\\'
         abstractSyntaxUID = value;
         len = abstractSyntaxUID.size();
         separator = abstractSyntaxUID.find("\\");
@@ -182,9 +171,9 @@ OFCondition DcmAssociationConfigurationFile::parsePresentationContexts(
           OFString s("syntax error: missing '\\' in entry ");
           s += buf;
           s += " in config file";
-          return makeOFCondition(OFM_dcmnet, 1052, OF_error, s.c_str());      
+          return makeOFCondition(OFM_dcmnet, 1052, OF_error, s.c_str());
         }
-        
+
         // do name mangling for transfer syntax key
         transferSyntaxKey.clear();
         i = separator;
@@ -194,7 +183,7 @@ OFCondition DcmAssociationConfigurationFile::parsePresentationContexts(
           if (! isspace(c)) transferSyntaxKey += (char) (toupper(c));
         }
 
-        // finally cut abstract syntax name           
+        // finally cut abstract syntax name
         abstractSyntaxUID.erase(separator);
 
         result = cfg.addPresentationContext(key, abstractSyntaxUID.c_str(), transferSyntaxKey.c_str());
@@ -236,14 +225,14 @@ OFCondition DcmAssociationConfigurationFile::parseRoleSelectionItems(
   {
     key = config.get_keyword(1);
     counter = 0;
-    found = OFTrue;    
+    found = OFTrue;
     while (found)
     {
       sprintf(buf, "%s%u", L0_ROLE_X, ++counter);
       value = config.get_entry(buf);
       if (value)
-      {       
-        // value must consist of abstract syntax and role, separated by '\\'         
+      {
+        // value must consist of abstract syntax and role, separated by '\\'
         abstractSyntaxUID = value;
         len = abstractSyntaxUID.size();
         separator = abstractSyntaxUID.find("\\");
@@ -252,9 +241,9 @@ OFCondition DcmAssociationConfigurationFile::parseRoleSelectionItems(
           OFString s("syntax error: missing '\\' in entry ");
           s += buf;
           s += " in config file";
-          return makeOFCondition(OFM_dcmnet, 1054, OF_error, s.c_str());      
+          return makeOFCondition(OFM_dcmnet, 1054, OF_error, s.c_str());
         }
-        
+
         // do name mangling for role key
         roleKey.clear();
         i = separator;
@@ -264,7 +253,7 @@ OFCondition DcmAssociationConfigurationFile::parseRoleSelectionItems(
           roleKey += (char) (toupper(TO_UCHAR(c)));
         }
 
-        // finally cut abstract syntax name           
+        // finally cut abstract syntax name
         abstractSyntaxUID.erase(separator);
 
         // check role key
@@ -285,7 +274,7 @@ OFCondition DcmAssociationConfigurationFile::parseRoleSelectionItems(
           OFString s("syntax error: unknown role key in entry ");
           s += buf;
           s += " in config file";
-          result = makeOFCondition(OFM_dcmnet, 1055, OF_error, s.c_str());      
+          result = makeOFCondition(OFM_dcmnet, 1055, OF_error, s.c_str());
         }
 
         if (result.bad()) return result;
@@ -329,13 +318,13 @@ OFCondition DcmAssociationConfigurationFile::parseExtendedNegotiationItems(
   {
     key = config.get_keyword(1);
     counter = 0;
-    found = OFTrue;    
+    found = OFTrue;
     while (found)
     {
       sprintf(buf, "%s%u", L0_EXTENDEDNEGOTIATION_X, ++counter);
       value = config.get_entry(buf);
       if (value)
-      {       
+      {
         // value must consist of abstract syntax and extended negotiation data, separated by '\\'
         abstractSyntaxUID = value;
         len = abstractSyntaxUID.size();
@@ -345,7 +334,7 @@ OFCondition DcmAssociationConfigurationFile::parseExtendedNegotiationItems(
           OFString s("syntax error: missing '\\' in entry ");
           s += buf;
           s += " in config file";
-          return makeOFCondition(OFM_dcmnet, 1057, OF_error, s.c_str());      
+          return makeOFCondition(OFM_dcmnet, 1057, OF_error, s.c_str());
         }
 
         if (len - separator > 2048)
@@ -353,9 +342,9 @@ OFCondition DcmAssociationConfigurationFile::parseExtendedNegotiationItems(
           OFString s("extended negotiation data too long, cannot handle > 1024 bytes in entry ");
           s += buf;
           s += " in config file";
-          return makeOFCondition(OFM_dcmnet, 1058, OF_error, s.c_str());      
+          return makeOFCondition(OFM_dcmnet, 1058, OF_error, s.c_str());
         }
-        
+
         // do hex to binary conversion for raw data
         tempString.clear();
         i = separator + 1;
@@ -386,12 +375,12 @@ OFCondition DcmAssociationConfigurationFile::parseExtendedNegotiationItems(
             OFString s("parse error in extended negotiation data in entry ");
             s += buf;
             s += " in config file";
-            return makeOFCondition(OFM_dcmnet, 1059, OF_error, s.c_str());      
+            return makeOFCondition(OFM_dcmnet, 1059, OF_error, s.c_str());
           }
           i += 2;
         }
 
-        // finally cut abstract syntax name           
+        // finally cut abstract syntax name
         abstractSyntaxUID.erase(separator);
 
         result = cfg.addExtendedNegotiation(key, abstractSyntaxUID.c_str(), raw, (Uint32) rawSize);
@@ -416,7 +405,7 @@ OFCondition DcmAssociationConfigurationFile::parseProfiles(
     OFString s("cannot find section [[");
     s += L2_PROFILES;
     s += "]] in config file";
-    return makeOFCondition(OFM_dcmnet, 1060, OF_error, s.c_str());      
+    return makeOFCondition(OFM_dcmnet, 1060, OF_error, s.c_str());
   }
 
   const char *key = NULL;
@@ -441,7 +430,7 @@ OFCondition DcmAssociationConfigurationFile::parseProfiles(
       s += "  entry in section ";
       s += key;
       s += " in config file";
-      return makeOFCondition(OFM_dcmnet, 1061, OF_error, s.c_str());      
+      return makeOFCondition(OFM_dcmnet, 1061, OF_error, s.c_str());
     }
     role = config.get_entry(L0_SCPSCUROLESELECTION);
     extneg = config.get_entry(L0_EXTENDEDNEGOTIATION);
@@ -489,35 +478,5 @@ OFCondition DcmAssociationConfigurationFile::parseProfiles(
 
   return result;
 }
+
 #undef TO_UCHAR
-
-
-/*
- * CVS/RCS Log
- * $Log: dcasccff.cc,v $
- * Revision 1.7  2010-10-20 08:09:34  uli
- * Also made sure toupper() and tolower() get a valid argument.
- *
- * Revision 1.6  2010-10-20 07:41:35  uli
- * Made sure isalpha() & friends are only called with valid arguments.
- *
- * Revision 1.5  2010-10-14 13:14:27  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.4  2005/12/08 15:44:26  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.3  2003/08/11 18:31:46  joergr
- * Included "ctype" header file required for gcc 3.2.3 on Debian Linux.
- *
- * Revision 1.2  2003/06/18 11:53:42  meichel
- * Fixed bug in association configuration file parser
- *
- * Revision 1.1  2003/06/10 14:30:15  meichel
- * Initial release of class DcmAssociationConfiguration and support
- *   classes. This class maintains a list of association negotiation
- *   profiles that can be addressed by symbolic keys. The profiles may
- *   be read from a configuration file.
- *
- *
- */

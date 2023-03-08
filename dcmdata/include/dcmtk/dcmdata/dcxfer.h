@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: Handling of transfer syntaxes
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:43 $
- *  CVS/RCS Revision: $Revision: 1.24 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCXFER_H
@@ -32,6 +25,12 @@
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 #include "dcmtk/dcmdata/dctypes.h"
 #include "dcmtk/dcmdata/dcvr.h"
+
+// include this file in doxygen documentation
+
+/** @file dcxfer.h
+ *  @brief definition and handling of transfer syntaxes
+ */
 
 /** enumeration of all DICOM transfer syntaxes known to the toolkit
  */
@@ -47,65 +46,81 @@ typedef enum {
     /// Explicit VR Big Endian
     EXS_BigEndianExplicit = 3,
     /// JPEG Baseline (lossy)
-    EXS_JPEGProcess1TransferSyntax = 4,
+    EXS_JPEGProcess1 = 4,
     /// JPEG Extended Sequential (lossy, 8/12 bit)
-    EXS_JPEGProcess2_4TransferSyntax = 5,
+    EXS_JPEGProcess2_4 = 5,
     /// JPEG Extended Sequential (lossy, 8/12 bit), arithmetic coding
-    EXS_JPEGProcess3_5TransferSyntax = 6,
+    EXS_JPEGProcess3_5 = 6,
     /// JPEG Spectral Selection, Non-Hierarchical (lossy, 8/12 bit)
-    EXS_JPEGProcess6_8TransferSyntax = 7,
+    EXS_JPEGProcess6_8 = 7,
     /// JPEG Spectral Selection, Non-Hierarchical (lossy, 8/12 bit), arithmetic coding
-    EXS_JPEGProcess7_9TransferSyntax = 8,
+    EXS_JPEGProcess7_9 = 8,
     /// JPEG Full Progression, Non-Hierarchical (lossy, 8/12 bit)
-    EXS_JPEGProcess10_12TransferSyntax = 9,
+    EXS_JPEGProcess10_12 = 9,
     /// JPEG Full Progression, Non-Hierarchical (lossy, 8/12 bit), arithmetic coding
-    EXS_JPEGProcess11_13TransferSyntax = 10,
+    EXS_JPEGProcess11_13 = 10,
     /// JPEG Lossless with any selection value
-    EXS_JPEGProcess14TransferSyntax = 11,
+    EXS_JPEGProcess14 = 11,
     /// JPEG Lossless with any selection value, arithmetic coding
-    EXS_JPEGProcess15TransferSyntax = 12,
+    EXS_JPEGProcess15 = 12,
     /// JPEG Extended Sequential, Hierarchical (lossy, 8/12 bit)
-    EXS_JPEGProcess16_18TransferSyntax = 13,
+    EXS_JPEGProcess16_18 = 13,
     /// JPEG Extended Sequential, Hierarchical (lossy, 8/12 bit), arithmetic coding
-    EXS_JPEGProcess17_19TransferSyntax = 14,
+    EXS_JPEGProcess17_19 = 14,
     /// JPEG Spectral Selection, Hierarchical (lossy, 8/12 bit)
-    EXS_JPEGProcess20_22TransferSyntax = 15,
+    EXS_JPEGProcess20_22 = 15,
     /// JPEG Spectral Selection, Hierarchical (lossy, 8/12 bit), arithmetic coding
-    EXS_JPEGProcess21_23TransferSyntax = 16,
+    EXS_JPEGProcess21_23 = 16,
     /// JPEG Full Progression, Hierarchical (lossy, 8/12 bit)
-    EXS_JPEGProcess24_26TransferSyntax = 17,
+    EXS_JPEGProcess24_26 = 17,
     /// JPEG Full Progression, Hierarchical (lossy, 8/12 bit), arithmetic coding
-    EXS_JPEGProcess25_27TransferSyntax = 18,
+    EXS_JPEGProcess25_27 = 18,
     /// JPEG Lossless, Hierarchical
-    EXS_JPEGProcess28TransferSyntax = 19,
+    EXS_JPEGProcess28 = 19,
     /// JPEG Lossless, Hierarchical, arithmetic coding
-    EXS_JPEGProcess29TransferSyntax = 20,
+    EXS_JPEGProcess29 = 20,
     /// JPEG Lossless, Selection Value 1
-    EXS_JPEGProcess14SV1TransferSyntax = 21,
+    EXS_JPEGProcess14SV1 = 21,
     /// Run Length Encoding (lossless)
     EXS_RLELossless = 22,
-    /// JPEG-LS (lossless)
-    EXS_JPEGLSLossless = 23,
-    /// JPEG-LS (lossless or near-lossless mode)
-    EXS_JPEGLSLossy = 24,
     /// Deflated Explicit VR Little Endian
-    EXS_DeflatedLittleEndianExplicit = 25,
+    EXS_DeflatedLittleEndianExplicit = 23,
+    /// JPEG-LS (lossless)
+    EXS_JPEGLSLossless = 24,
+    /// JPEG-LS (lossless or near-lossless mode)
+    EXS_JPEGLSLossy = 25,
     /// JPEG 2000 (lossless)
     EXS_JPEG2000LosslessOnly = 26,
     /// JPEG 2000 (lossless or lossy)
     EXS_JPEG2000 = 27,
-    /// MPEG2 Main Profile at Main Level
-    EXS_MPEG2MainProfileAtMainLevel = 28,
-    /// MPEG2 Main Profile at High Level
-    EXS_MPEG2MainProfileAtHighLevel = 29,
     /// JPEG 2000 part 2 multi-component extensions (lossless)
-    EXS_JPEG2000MulticomponentLosslessOnly = 30,
+    EXS_JPEG2000MulticomponentLosslessOnly = 28,
     /// JPEG 2000 part 2 multi-component extensions (lossless or lossy)
-    EXS_JPEG2000Multicomponent = 31,
+    EXS_JPEG2000Multicomponent = 29,
     /// JPIP Referenced
-    EXS_JPIPReferenced = 32,
+    EXS_JPIPReferenced = 30,
     /// JPIP Referenced Deflate
-    EXS_JPIPReferencedDeflate = 33
+    EXS_JPIPReferencedDeflate = 31,
+    /// MPEG2 Main Profile at Main Level
+    EXS_MPEG2MainProfileAtMainLevel = 32,
+    /// MPEG2 Main Profile at High Level
+    EXS_MPEG2MainProfileAtHighLevel = 33,
+    /// MPEG4 High Profile / Level 4.1
+    EXS_MPEG4HighProfileLevel4_1 = 34,
+    /// MPEG4 BD-compatible High Profile / Level 4.1
+    EXS_MPEG4BDcompatibleHighProfileLevel4_1 = 35,
+    /// MPEG4 High Profile / Level 4.2 For 2D Video
+    EXS_MPEG4HighProfileLevel4_2_For2DVideo = 36,
+    /// MPEG4 High Profile / Level 4.2 For 3D Video
+    EXS_MPEG4HighProfileLevel4_2_For3DVideo = 37,
+    /// MPEG4 Stereo High Profile / Level 4.2
+    EXS_MPEG4StereoHighProfileLevel4_2 = 38,
+    /// HEVC/H.265 Main Profile / Level 5.1
+    EXS_HEVCMainProfileLevel5_1 = 39,
+    /// HEVC/H.265 Main 10 Profile / Level 5.1
+    EXS_HEVCMain10ProfileLevel5_1 = 40,
+    /// Private GE Little Endian Implicit with big endian pixel data
+    EXS_PrivateGE_LEI_WithBigEndianPixelData = 41
 } E_TransferSyntax;
 
 /** enumeration of byte orders
@@ -150,7 +165,8 @@ typedef enum
     /// unsupported stream compression
   , ESC_unsupported = 1
 #ifdef WITH_ZLIB
-    /// zlib stream compression
+    /// zlib stream compression.
+    /// This enum value only available if DCMTK is compiled with ZLIB support enabled.
   , ESC_zlib = 2
 #endif
 } E_StreamCompression;
@@ -158,7 +174,7 @@ typedef enum
 
 /** a class that allows for a lookup of Transfer Syntax properties and readable descriptions
  */
-class DcmXfer
+class DCMTK_DCMDATA_EXPORT DcmXfer
 {
 public:
     /** constructor
@@ -188,6 +204,9 @@ public:
 
     /// return byte order for this transfer syntax
     inline E_ByteOrder getByteOrder() const { return byteOrder; }
+
+    /// return byte order for this transfer syntax
+    inline E_ByteOrder getPixelDataByteOrder() const { return pixelDataByteOrder; }
 
     /// return name string for this transfer syntax
     inline const char* getXferName() const { return xferName; }
@@ -236,14 +255,47 @@ public:
      */
     inline Uint32 getJPEGProcess12Bit() const { return JPEGProcess12;}
 
-    /// return true if transfer syntax is retired, false otherwise
+    /** check whether transfer syntax uses a lossy compression
+     *  @return true if transfer syntax uses a lossy compression, false otherwise
+     */
+    inline OFBool isLossy() const
+    {
+        return lossy;
+    }
+
+    /** check whether transfer syntax uses a lossless compression or no compression
+     *  @return true if transfer syntax uses a lossless compression or no compression,
+     *    false otherwise
+     */
+    inline OFBool isLossless() const
+    {
+        return !lossy;
+    }
+
+    /** check whether transfer syntax is retired
+     *  @return true if transfer syntax is retired, false otherwise
+     */
     inline OFBool isRetired() const
     {
         return retired;
     }
 
-    /// return stream compression type for this transfer syntax
-    inline E_StreamCompression getStreamCompression() const { return streamCompression;}
+    /** get stream compression type for this transfer syntax
+     *  @return stream compression type for this transfer syntax
+     */
+    inline E_StreamCompression getStreamCompression() const
+    {
+        return streamCompression;
+    }
+
+    /** check whether transfer syntax uses (0028,7FE0) Pixel Data Provider URL
+     *  to reference pixel data
+     *  @return true if transfer syntax uses URL reference to pixel data
+     */
+    inline OFBool isReferenced() const
+    {
+        return referenced;
+    }
 
     /** return the number of bytes needed to describe the tag, length, VR
      *  and any reserved fields for this transfer syntax when encoding the
@@ -266,6 +318,9 @@ private:
     /// transfer syntax byte order
     E_ByteOrder         byteOrder;
 
+    /// transfer syntax byte order for pixel data
+    E_ByteOrder         pixelDataByteOrder;
+
     /// transfer syntax VR encoding (implicit/explicit)
     E_VRType            vrType;
 
@@ -278,11 +333,17 @@ private:
     /// 12-bit lossy JPEG process ID for this transfer syntax, 0 if not applicable
     Uint32              JPEGProcess12;
 
+    /// flag indicating whether this transfer syntax uses a lossy compression
+    OFBool              lossy;
+
     /// flag indicating whether this transfer syntax has been retired from DICOM
     OFBool              retired;
 
     /// transfer syntax stream compression type
     E_StreamCompression streamCompression;
+
+    /// flag indicating whether this transfer syntax uses a pixel data URL reference
+    OFBool              referenced;
 
 };
 
@@ -290,68 +351,6 @@ private:
  *  is currently executing on. This is runtime and not compile time information
  *  because of "fat" binaries that can be executed on multiple CPU types (e.g. NeXTStep)
  */
-extern const E_ByteOrder gLocalByteOrder;
+extern DCMTK_DCMDATA_EXPORT const E_ByteOrder gLocalByteOrder;
 
 #endif // DCXFER_H
-
-/*
- * CVS/RCS Log:
- * $Log: dcxfer.h,v $
- * Revision 1.24  2010-10-14 13:15:43  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.23  2010-09-15 08:46:16  joergr
- * Added definition of XML encoding transfer syntax (Supplement 114) and JPIP
- * referenced transfer syntaxes (Supplement 106).
- *
- * Revision 1.22  2010-09-02 12:12:43  joergr
- * Added support for "MPEG2 Main Profile @ High Level" transfer syntax.
- *
- * Revision 1.21  2008-06-23 12:09:13  joergr
- * Fixed inconsistencies in Doxygen API documentation.
- *
- * Revision 1.20  2008-04-23 06:39:37  meichel
- * Added new method DcmXfer::isRetired that returns true for
- *   retired transfer syntaxes.
- *
- * Revision 1.19  2007/11/29 14:30:19  meichel
- * Write methods now handle large raw data elements (such as pixel data)
- *   without loading everything into memory. This allows very large images to
- *   be sent over a network connection, or to be copied without ever being
- *   fully in memory.
- *
- * Revision 1.18  2005/12/08 16:29:17  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.17  2005/10/25 08:55:32  meichel
- * Updated list of UIDs and added support for new transfer syntaxes
- *   and storage SOP classes.
- *
- * Revision 1.16  2004/04/06 18:01:50  joergr
- * Updated data dictionary, UIDs and transfer syntaxes for the latest Final Text
- * Supplements (42 and 47) and Correction Proposals (CP 25).
- *
- * Revision 1.15  2002/08/27 16:55:41  meichel
- * Initial release of new DICOM I/O stream classes that add support for stream
- *   compression (deflated little endian explicit VR transfer syntax)
- *
- * Revision 1.14  2001/11/08 16:17:30  meichel
- * Updated data dictionary, UIDs and transfer syntaxes for DICOM 2001 edition.
- *
- * Revision 1.13  2001/06/01 15:48:55  meichel
- * Updated copyright header
- *
- * Revision 1.12  2001/01/17 10:20:36  meichel
- * Added toolkit support for JPEG-LS transfer syntaxes
- *
- * Revision 1.11  2000/04/14 16:01:23  meichel
- * Minor changes for thread safety.
- *
- * Revision 1.10  2000/03/08 16:26:28  meichel
- * Updated copyright header.
- *
- * Revision 1.9  1999/03/31 09:25:13  meichel
- * Updated copyright header in module dcmdata
- *
- *
- */

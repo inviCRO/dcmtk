@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1993-2010, OFFIS e.V.
+ *  Copyright (C) 1993-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: class DcmQueryRetrieveProcessTable
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:41 $
- *  CVS/RCS Revision: $Revision: 1.5 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCMQRPTB_H
@@ -33,9 +26,7 @@
 #include "dcmtk/ofstd/oftypes.h"
 #include "dcmtk/ofstd/ofstring.h"
 #include "dcmtk/dcmnet/assoc.h"
-
-#define INCLUDE_CTIME
-#include "dcmtk/ofstd/ofstdinc.h"
+#include "dcmtk/dcmqrdb/qrdefine.h"
 
 BEGIN_EXTERN_C
 #ifdef HAVE_SYS_TIME_H
@@ -51,11 +42,11 @@ class DcmQueryRetrieveProcessSlot;
  *  certain key parameters such as the peer hostname, AE titles, read/write access
  *  are stored along with the process ID.
  */
-class DcmQueryRetrieveProcessTable
+class DCMTK_DCMQRDB_EXPORT DcmQueryRetrieveProcessTable
 {
 public:
   /// default constructor
-  DcmQueryRetrieveProcessTable() { }
+  DcmQueryRetrieveProcessTable() : table_() { }
 
   /// destructor
   virtual ~DcmQueryRetrieveProcessTable();
@@ -84,6 +75,7 @@ public:
    *  given aetitle. Used to enforce an ad-hoc rule that allows only
    *  one parallel association to negotiate storage presentation contexts
    *  for each storage area (aetitle)
+   *  @param calledAETitle the given aetitle
    */
   OFBool haveProcessWithWriteAccess(const char *calledAETitle) const;
 
@@ -100,27 +92,3 @@ private:
 
 
 #endif
-
-/*
- * CVS Log
- * $Log: dcmqrptb.h,v $
- * Revision 1.5  2010-10-14 13:16:41  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.4  2009-11-24 10:10:42  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.3  2009-08-21 09:50:07  joergr
- * Replaced tabs by spaces and updated copyright date.
- *
- * Revision 1.2  2005/12/08 16:04:26  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.1  2005/03/30 13:34:50  meichel
- * Initial release of module dcmqrdb that will replace module imagectn.
- *   It provides a clear interface between the Q/R DICOM front-end and the
- *   database back-end. The imagectn code has been re-factored into a minimal
- *   class structure.
- *
- *
- */

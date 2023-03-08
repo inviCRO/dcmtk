@@ -1,6 +1,6 @@
-//
-// (C) Jan de Vaan 2007-2010, all rights reserved. See the accompanying "License.txt" for licensed use.
-//
+// 
+// (C) Jan de Vaan 2007-2010, all rights reserved. See the accompanying "License.txt" for licensed use. 
+// 
 
 
 #ifndef CHARLS_CONFIG
@@ -14,9 +14,8 @@
 #    define assert(t) { }
 #  endif
 #else
-#define INCLUDE_CASSERT
-#include "dcmtk/ofstd/ofstdinc.h"
-#define ASSERT(t) assert(t)
+  #include <cassert>
+ #define ASSERT(t) assert(t)
 #endif
 
 #if defined(_WIN32)
@@ -26,8 +25,8 @@
 
 #endif
 
-// Typedef used by Charls for the default integral type.
-// charls will work correct with 64 or 32 bit.
+// Typedef used by Charls for the default integral type. 
+// charls will work correctly with 64 or 32 bit. 
 typedef long LONG;
 
 enum constants
@@ -50,7 +49,7 @@ typedef unsigned short USHORT;
 #    endif
 #  elif defined(__GNUC__) && (__GNUC__ > 3 || __GNUC__ == 3 && __GNUC_MINOR__ > 0)
 #    define inlinehint inline
-#  else
+#  else 
 #    define inlinehint inline
 #  endif
 #endif

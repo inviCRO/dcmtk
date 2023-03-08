@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose:
  *    classes: DVConfiguration
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:36 $
- *  CVS/RCS Revision: $Revision: 1.34 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -33,9 +26,10 @@
 
 #include "dcmtk/config/osconfig.h"   /* make sure OS specific configuration is included first */
 #include "dcmtk/ofstd/ofstring.h"   /* for class OFString */
+#include "dcmtk/oflog/oflog.h"         /* for OFLogger::LogLevel */
 #include "dcmtk/dcmdata/dctypes.h"    /* for Uint32 */
 #include "dcmtk/dcmpstat/dvpstyp.h"    /* for DVPS enums */
-#include "dcmtk/oflog/oflog.h"         /* for OFLogger::LogLevel */
+#include "dcmtk/dcmpstat/dpdefine.h"
 
 class OFConfigFile;
 
@@ -43,7 +37,7 @@ class OFConfigFile;
  *  This class manages the configuration file content used by the
  *  presentation state viewer.
  */
-class DVConfiguration
+class DCMTK_DCMPSTAT_EXPORT DVConfiguration
 {
  public:
 
@@ -197,24 +191,13 @@ class DVConfiguration
    */
   const char *getTargetPrivateKeyPassword(const char *targetID);
 
-  /** returns the number of distinct values (separated by backslash characters)
-   *  in the CIPHERSUITES entry for the storage peer with the given
+  /** returns the TLSPROFILE entry for the storage peer with the given
    *  target ID from the configuration file.
    *  @param targetID communication target ID, must be one of the target
    *    identifiers returned by getTargetID().
-   *  @return number of values if entry present in the config file, 0 otherwise.
+   *  @return entry if present in the config file, NULL otherwise.
    */
-  Uint32 getTargetNumberOfCipherSuites(const char *targetID);
-
-  /** returns one value from the CIPHERSUITES entry for the storage peer
-   *  with the given target ID from the configuration file.
-   *  @param targetID communication target ID, must be one of the target
-   *    identifiers returned by getTargetID().
-   *  @param idx index of the value, must be < getTargetNumberOfCipherSuites(targetID)
-   *  @param value the result is both stored in this object and returned as return value.
-   *  @return value if present, NULL otherwise.
-   */
-  const char *getTargetCipherSuite(const char *targetID, Uint32 idx, OFString& value);
+  const char *getTargetTLSProfile(const char *targetID);
 
   /** returns the PEERAUTHENTICATION entry for the communication partner with the given
    *  target ID from the configuration file.
@@ -1100,124 +1083,3 @@ private:
 };
 
 #endif
-
-/*
- *  CVS/RCS Log:
- *  $Log: dvpscf.h,v $
- *  Revision 1.34  2010-10-14 13:16:36  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.33  2009-11-24 14:12:57  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.32  2005-12-08 16:03:36  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.31  2003/04/29 10:13:56  meichel
- *  Moved configuration file parser from module dcmpstat to ofstd and renamed
- *    class to OFConfigFile. Cleaned up implementation (no more friend declarations).
- *
- *  Revision 1.30  2002/11/29 13:16:31  meichel
- *  Introduced new command line option --timeout for controlling the
- *    connection request timeout.
- *
- *  Revision 1.29  2002/11/25 18:27:39  meichel
- *  Converted compile time option to leniently handle space padded UIDs
- *    in the Storage Service Class into command line / config file option.
- *
- *  Revision 1.28  2001/06/01 15:50:12  meichel
- *  Updated copyright header
- *
- *  Revision 1.27  2000/11/13 14:20:54  joergr
- *  Updated comments.
- *
- *  Revision 1.26  2000/11/13 11:52:41  meichel
- *  Added support for user logins and certificates.
- *
- *  Revision 1.25  2000/11/13 10:42:39  joergr
- *  Added support for Structured Reporting "templates".
- *
- *  Revision 1.24  2000/10/10 12:23:40  meichel
- *  Added extensions for TLS encrypted communication
- *
- *  Revision 1.23  2000/06/21 15:40:57  meichel
- *  Added DICOMscope support for calling the Presentation State Checker.
- *
- *  Revision 1.22  2000/06/07 14:16:21  joergr
- *  Added configuration file entry "LogLevel" to filter log messages.
- *
- *  Revision 1.21  2000/06/07 13:17:45  meichel
- *  added binary and textual log facilities to Print SCP.
- *
- *  Revision 1.20  2000/06/06 09:42:48  joergr
- *  Moved configuration file entry "LogDirectory" from "[PRINT]" to new
- *  (more general) section "[APPLICATION]".
- *
- *  Revision 1.19  2000/06/05 16:22:27  joergr
- *  Implemented log message methods.
- *
- *  Revision 1.18  2000/06/02 16:00:43  meichel
- *  Adapted all dcmpstat classes to use OFConsole for log and error output
- *
- *  Revision 1.17  2000/06/02 13:53:54  joergr
- *  Implemented start/terminatePrintServer methods.
- *
- *  Revision 1.16  2000/06/02 12:41:51  joergr
- *  Corrected wrong interface descriptions.
- *
- *  Revision 1.15  2000/05/31 12:56:37  meichel
- *  Added initial Print SCP support
- *
- *  Revision 1.14  2000/05/30 13:40:02  joergr
- *  Removed methods which were already marked as "retired".
- *  Added new section to the config file describing the query/retrieve server
- *  settings.
- *
- *  Revision 1.13  2000/03/08 16:28:49  meichel
- *  Updated copyright header.
- *
- *  Revision 1.12  1999/11/03 13:05:32  meichel
- *  Added support for transmitting annotations in the film session label.
- *    Added support for dump tool launched from DVInterface.
- *
- *  Revision 1.11  1999/10/20 10:47:14  joergr
- *  Added support for a down-scaled preview image of the current DICOM image
- *  (e.g. useful for online-windowing or print preview).
- *
- *  Revision 1.10  1999/10/19 14:46:02  meichel
- *  added support for the Basic Annotation Box SOP Class
- *    as well as access methods for Max Density and Min Density.
- *
- *  Revision 1.9  1999/10/13 14:11:56  meichel
- *  Added config file entries and access methods
- *    for user-defined VOI presets, log directory, verbatim logging
- *    and an explicit list of image display formats for each printer.
- *
- *  Revision 1.8  1999/10/07 17:21:46  meichel
- *  Reworked management of Presentation LUTs in order to create tighter
- *    coupling between Softcopy and Print.
- *
- *  Revision 1.7  1999/10/01 13:32:36  joergr
- *  Added new option to config file: AlwaysDeleteTerminateJobs.
- *
- *  Revision 1.6  1999/09/24 15:24:29  meichel
- *  Added support for CP 173 (Presentation LUT clarifications)
- *
- *  Revision 1.5  1999/09/23 17:37:13  meichel
- *  Added support for Basic Film Session options to dcmpstat print code.
- *
- *  Revision 1.4  1999/09/15 17:43:26  meichel
- *  Implemented print job dispatcher code for dcmpstat, adapted dcmprtsv
- *    and dcmpsprt applications.
- *
- *  Revision 1.3  1999/09/13 15:19:09  meichel
- *  Added implementations for a number of further print API methods.
- *
- *  Revision 1.2  1999/09/10 12:46:45  meichel
- *  Added implementations for a number of print API methods.
- *
- *  Revision 1.1  1999/09/08 16:42:02  meichel
- *  Moved configuration file evaluation to separate class.
- *
- *
- */

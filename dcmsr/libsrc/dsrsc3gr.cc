@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2010, OFFIS e.V.
+ *  Copyright (C) 2010-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -11,34 +11,34 @@
  *    D-26121 Oldenburg, Germany
  *
  *
- *  Module:  dcmsr
+ *  Module: dcmsr
  *
- *  Author:  Joerg Riesmeier
+ *  Author: Joerg Riesmeier
  *
  *  Purpose:
  *    classes: DSRGraphicData3DList
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:41 $
- *  CVS/RCS Revision: $Revision: 1.3 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
+
 #include "dcmtk/dcmsr/dsrsc3gr.h"
+
+#include "dcmtk/dcmdata/dcdeftag.h"
+#include "dcmtk/dcmdata/dcvrfl.h"
+
 #include "dcmtk/ofstd/ofstd.h"
 
-#ifdef HAVE_EXPLICIT_TEMPLATE_SPECIALIZATION
-#define EXPLICIT_SPECIALIZATION template<>
-#else
-#define EXPLICIT_SPECIALIZATION
-#endif
 
-EXPLICIT_SPECIALIZATION const DSRGraphicData3DItem DSRListOfItems<DSRGraphicData3DItem>::EmptyItem(0,0,0);
+// global empty item object so it gets initialized and cleaned up by the linker
+const DSRGraphicData3DItem DSRGraphicData3DEmptyItem(0, 0, 0);
+
+template<>
+const DSRGraphicData3DItem& DSRgetEmptyItem<DSRGraphicData3DItem>()
+{
+    return DSRGraphicData3DEmptyItem;
+}
 
 
 DSRGraphicData3DList::DSRGraphicData3DList()
@@ -76,11 +76,11 @@ OFCondition DSRGraphicData3DList::print(STD_NAMESPACE ostream &stream,
     while (iterator != endPos)
     {
         /* need to convert float to avoid problems with decimal point ('.' or ',') */
-        OFStandard::ftoa(buffer, sizeof(buffer), (*iterator).XCoord);
+        OFStandard::ftoa(buffer, sizeof(buffer), (*iterator).XCoord, 0, 0, 9 /* FLT_DECIMAL_DIG for DICOM FL */);
         stream << buffer << tripletSeparator;
-        OFStandard::ftoa(buffer, sizeof(buffer), (*iterator).YCoord);
+        OFStandard::ftoa(buffer, sizeof(buffer), (*iterator).YCoord, 0, 0, 9 /* FLT_DECIMAL_DIG for DICOM FL */);
         stream << buffer << tripletSeparator;
-        OFStandard::ftoa(buffer, sizeof(buffer), (*iterator).ZCoord);
+        OFStandard::ftoa(buffer, sizeof(buffer), (*iterator).ZCoord, 0, 0, 9 /* FLT_DECIMAL_DIG for DICOM FL */);
         stream << buffer;
         iterator++;
         if (iterator != endPos)
@@ -97,7 +97,8 @@ OFCondition DSRGraphicData3DList::print(STD_NAMESPACE ostream &stream,
 }
 
 
-OFCondition DSRGraphicData3DList::read(DcmItem &dataset)
+OFCondition DSRGraphicData3DList::read(DcmItem &dataset,
+                                       const size_t /*flags*/)
 {
     /* get floating point string from dataset */
     DcmFloatingPointSingle delem(DCM_GraphicData);
@@ -238,19 +239,3 @@ OFCondition DSRGraphicData3DList::putString(const char *stringValue)
     }
     return result;
 }
-
-
-/*
- *  CVS/RCS Log:
- *  $Log: dsrsc3gr.cc,v $
- *  Revision 1.3  2010-10-14 13:14:41  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.2  2010-09-29 15:16:50  joergr
- *  Enhanced checking and reporting of standard violations in write() methods.
- *
- *  Revision 1.1  2010-09-28 14:07:28  joergr
- *  Added support for Colon CAD SR which requires a new value type (SCOORD3D).
- *
- *
- */

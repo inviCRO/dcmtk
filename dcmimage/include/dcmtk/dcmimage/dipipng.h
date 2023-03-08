@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2003-2010, OFFIS e.V.
+ *  Copyright (C) 2003-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: Implements PNG interface for plugable image formats
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:29 $
- *  CVS/RCS Revision: $Revision: 1.7 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -35,8 +28,8 @@
 #ifdef WITH_LIBPNG
 
 #include "dcmtk/ofstd/ofstring.h"
-
 #include "dcmtk/dcmimgle/diplugin.h"
+#include "dcmtk/dcmimage/dicdefin.h"
 
 
 /*------------------------*
@@ -53,6 +46,8 @@ class DiImage;
 /** describes the different types of interlace supported by
  *  the PNG plugin.  Enumeration depends on capabilities
  *  of underlying PNG library (libpng).
+ *  @remark this enum is only available if DCMTK is compiled with
+ *  PNG (libpng) support enabled.
  */
 enum DiPNGInterlace
 {
@@ -64,7 +59,9 @@ enum DiPNGInterlace
 };
 
 /** describes the different types of metainfo written to
- *  the png file
+ *  the png file.
+ *  @remark this enum is only available if DCMTK is compiled with
+ *  PNG (libpng) support enabled.
  */
 enum DiPNGMetainfo
 {
@@ -81,8 +78,10 @@ enum DiPNGMetainfo
  *---------------------*/
 
 /** Implementation of a PNG plugin for the dcmimgle/dcmimage library
+ *  @remark This class is only available if DCMTK is compiled with
+ *  PNG (libpng) support enabled.
  */
-class DiPNGPlugin
+class DCMTK_DCMIMAGE_EXPORT DiPNGPlugin
   : public DiPluginFormat
 {
 
@@ -116,6 +115,11 @@ class DiPNGPlugin
      */
     void setMetainfoType(DiPNGMetainfo minfo);
 
+    /* set bits per sample for PNG creation
+     * @param bpp bits per sample (8 or 16)
+     */
+    void setBitsPerSample(const int bpp);
+
     /** get version information of the PNG library.
      *  Typical output format: "LIBPNG, Version 3.5.7"
      *  @return name and version number of the PNG library
@@ -130,36 +134,10 @@ class DiPNGPlugin
 
     /// PNG metainfo type
     DiPNGMetainfo metainfoType;
+
+    /// bits per sample (8 or 16, default: 8)
+    int bitsPerSample;
 };
 
 #endif
 #endif
-
-
-/*
- * CVS/RCS Log:
- * $Log: dipipng.h,v $
- * Revision 1.7  2010-10-14 13:16:29  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.6  2010-03-01 09:08:46  uli
- * Removed some unnecessary include directives in the headers.
- *
- * Revision 1.5  2005-12-08 16:01:42  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.4  2004/04/07 12:06:28  joergr
- * Removed comma at end of enumerator list.
- *
- * Revision 1.3  2003/12/23 12:09:24  joergr
- * Updated documentation to get rid of doxygen warnings.
- *
- * Revision 1.2  2003/12/17 18:18:08  joergr
- * Removed leading underscore characters from preprocessor symbols (reserved
- * symbols).
- *
- * Revision 1.1  2003/02/11 13:18:38  meichel
- * Added PNG export option to dcm2pnm and dcmj2pnm
- *
- *
- */

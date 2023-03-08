@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2012, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose:
  *    classes: DVPSGraphicObject
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:36 $
- *  CVS/RCS Revision: $Revision: 1.10 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DVPSGR_H
@@ -33,6 +26,7 @@
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 #include "dcmtk/dcmdata/dctk.h"
 #include "dcmtk/dcmpstat/dvpstyp.h"
+#include "dcmtk/dcmpstat/dpdefine.h"
 
 /** an item of the graphic object sequence in a presentation state (internal use only).
  *  This class manages the data structures comprising one item
@@ -40,7 +34,7 @@
  *  in the Graphic Annotation Sequence in a Presentation State object.
  */
 
-class DVPSGraphicObject
+class DCMTK_DCMPSTAT_EXPORT DVPSGraphicObject
 {
 public:
   /// default constructor
@@ -121,7 +115,7 @@ public:
   OFCondition setGraphicType(DVPSGraphicType gtype);
 
   /** sets the graphic filled status for the graphic object
-   *  @param isFilled OFTrue if graphic is filled, OFFalse otherwise.
+   *  @param filled OFTrue if graphic is filled, OFFalse otherwise.
    *  @return EC_Normal if successful, an error code otherwise.
    */
   OFCondition setFilled(OFBool filled);
@@ -144,39 +138,3 @@ private:
 };
 
 #endif
-
-/*
- *  $Log: dvpsgr.h,v $
- *  Revision 1.10  2010-10-14 13:16:36  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.9  2010-10-07 14:31:35  joergr
- *  Removed leading underscore characters from preprocessor symbols (reserved).
- *
- *  Revision 1.8  2009-11-24 14:12:57  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.7  2005-12-08 16:03:47  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.6  2001/09/26 15:36:11  meichel
- *  Adapted dcmpstat to class OFCondition
- *
- *  Revision 1.5  2001/06/01 15:50:16  meichel
- *  Updated copyright header
- *
- *  Revision 1.4  2000/06/02 16:00:47  meichel
- *  Adapted all dcmpstat classes to use OFConsole for log and error output
- *
- *  Revision 1.3  2000/03/08 16:28:52  meichel
- *  Updated copyright header.
- *
- *  Revision 1.2  1998/12/14 16:10:30  meichel
- *  Implemented Presentation State interface for graphic layers,
- *    text and graphic annotations, presentation LUTs.
- *
- *  Revision 1.1  1998/11/27 14:50:28  meichel
- *  Initial Release.
- *
- *
- */

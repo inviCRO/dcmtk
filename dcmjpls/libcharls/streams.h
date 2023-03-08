@@ -1,6 +1,6 @@
-//
-// (C) Jan de Vaan 2007-2010, all rights reserved. See the accompanying "License.txt" for licensed use.
-//
+// 
+// (C) Jan de Vaan 2007-2010, all rights reserved. See the accompanying "License.txt" for licensed use. 
+// 
 #ifndef CHARLS_STREAMS
 #define CHARLS_STREAMS
 
@@ -10,7 +10,7 @@
 
 
 
-// This file defines JPEG-LS streams: The header and the actual pixel data. Header markers have fixed length, the pixeldata not.
+// This file defines JPEG-LS streams: The header and the actual pixel data. Header markers have fixed length, the pixeldata not. 
 
 
 
@@ -19,7 +19,7 @@ class JpegSegment;
 enum JPEGLS_ColorXForm
 {
 	// default (RGB)
-	COLORXFORM_NONE = 0,
+	COLORXFORM_NONE = 0,	
 
 	// Color transforms as defined by HP
 	COLORXFORM_HP1,
@@ -30,7 +30,7 @@ enum JPEGLS_ColorXForm
 	COLORXFORM_RGB_AS_YUV_LOSSY,
 	COLORXFORM_MATRIX
 };
-
+	
 //
 // JLSOutputStream: minimal implementation to write JPEG header streams
 //
@@ -48,24 +48,30 @@ public:
 	void AddLSE(const JlsCustomParameters* pcustom);
 	void AddColorTransform(int i);
 	size_t GetBytesWritten()
-		{ return _cbyteOffset; }
+		{ return _cbytesWritten; }
 
-	size_t GetLength()
-		{ return _cbyteLength - _cbyteOffset; }
+	size_t Write(BYTE **ptr, size_t *size, size_t offset);
 
-	size_t Write(BYTE* pdata, size_t cbyteLength);
+	BYTE **get_pos() { return _position; }
 
-	void EnableCompare(bool bCompare)
+	size_t *get_size() { return _size; }
+
+	size_t get_offset() { return _current_offset; }
+
+	void EnableCompare(bool bCompare) 
 	{ _bCompare = bCompare; }
 private:
-	BYTE* GetPos() const
-		{ return _pdata + _cbyteOffset; }
-
 	void WriteByte(BYTE val)
-	{
-		ASSERT(!_bCompare || _pdata[_cbyteOffset] == val);
+	{ 
+		ASSERT(!_bCompare || (*_position)[_current_offset] == val);
+		
+		if (_current_offset == *_size) {
+			*_position = re_alloc(*_position, _size);
+		}
 
-		_pdata[_cbyteOffset++] = val;
+		(*_position)[_current_offset++] = val;
+
+		_cbytesWritten++;
 	}
 
 	void WriteBytes(const OFVector<BYTE>& rgbyte)
@@ -73,7 +79,7 @@ private:
 		for (size_t i = 0; i < rgbyte.size(); ++i)
 		{
 			WriteByte(rgbyte[i]);
-		}
+		}		
 	}
 
 	void WriteWord(USHORT val)
@@ -82,33 +88,42 @@ private:
 		WriteByte(BYTE(val % 0x100));
 	}
 
-
-    void Seek(size_t byteCount)
-		{ _cbyteOffset += byteCount; }
+	void seek(size_t n)
+	{
+		_cbytesWritten += n;
+		_current_offset += n;
+	}
 
 	bool _bCompare;
 
 private:
-	BYTE* _pdata;
-	size_t _cbyteOffset;
-	size_t _cbyteLength;
+	static BYTE *re_alloc(BYTE *old_ptr, size_t *old_size)
+	{
+		size_t new_size = *old_size * 2;
+#ifdef HAVE_STD__NOTHROW
+		BYTE *new_ptr = new BYTE[new_size];
+#else
+		BYTE *new_ptr = new BYTE[new_size];
+#endif
+		if (new_ptr == NULL) {
+			throw alloc_fail();
+		}
+
+		OFBitmanipTemplate<BYTE>::copyMem(old_ptr, new_ptr, *old_size);
+
+		delete[] old_ptr;
+
+		*old_size = new_size;
+
+		return new_ptr;
+	}
+
+	BYTE **_position;
+	size_t *_size;
+	size_t _current_offset;
+	size_t _cbytesWritten;
 	LONG _icompLast;
 	OFVector<JpegSegment*> _segments;
-};
-
-
-
-struct Presets : public JlsCustomParameters
-{
-public:
-	Presets()
-	{
-		MAXVAL = 0;
-		T1 = 0;
-		T2 = 0;
-		T3 = 0;
-		RESET = 0;
-	}
 };
 
 
@@ -118,20 +133,20 @@ public:
 class JLSInputStream
 {
 public:
-	JLSInputStream(const BYTE* pdata, LONG cbyteLength);
+	JLSInputStream(const BYTE* pdata, size_t cbyteLength);
 
 	size_t GetBytesRead()
 		{ return _cbyteOffset; }
 
 	const JlsParameters& GetMetadata() const
-		{ return _info; }
+		{ return _info; } 
 
 	const JlsCustomParameters& GetCustomPreset() const
-	{ return _info.custom; }
+	{ return _info.custom; } 
 
-	void Read(void* pvoid, LONG cbyteAvailable);
+	void Read(void* pvoid, size_t cbyteAvailable);
 	void ReadHeader();
-
+	
 	void EnableCompare(bool bCompare)
 		{ _bCompare = bCompare;	}
 
@@ -140,8 +155,8 @@ public:
 	void SetRect(JlsRect rect) { _rect = rect; }
 
 private:
-	void ReadPixels(void* pvoid, LONG cbyteAvailable);
-	void ReadScan(void*);
+	void ReadPixels(void* pvoid, size_t cbyteAvailable);
+	void ReadScan(void*);	
 	void ReadStartOfScan();
 	void ReadPresetParameters();
 	void ReadComment();
@@ -155,7 +170,7 @@ private:
 	// Color Transform Application Markers & Code Stream (HP extension)
 	void ReadColorSpace();
 	void ReadColorXForm();
-
+	
 private:
 	const BYTE* _pdata;
 	size_t _cbyteOffset;

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1996-2010, OFFIS e.V.
+ *  Copyright (C) 1996-2019, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Thomas Wilkens
  *
  *  Purpose: Class for connecting to a file-based data source.
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:39 $
- *  CVS/RCS Revision: $Revision: 1.17 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -43,7 +36,7 @@ class DcmItem;
 /** This class encapsulates data structures and operations for connecting to a file-based
  *  data source in the framework of the DICOM basic worklist management service.
  */
-class WlmDataSourceFileSystem : public WlmDataSource
+class DCMTK_DCMWLM_EXPORT WlmDataSourceFileSystem : public WlmDataSource
 {
   protected:
     /// manager for file system interaction
@@ -110,12 +103,12 @@ class WlmDataSourceFileSystem : public WlmDataSource
     ~WlmDataSourceFileSystem();
 
       /** Connects to the data source.
-       * @return Indicates if the connection was established succesfully.
+       * @return Indicates if the connection was established successfully.
        */
     OFCondition ConnectToDataSource();
 
       /** Disconnects from the data source.
-       * @return Indicates if the disconnection was completed succesfully.
+       * @return Indicates if the disconnection was completed successfully.
        */
     OFCondition DisconnectFromDataSource();
 
@@ -197,89 +190,3 @@ class WlmDataSourceFileSystem : public WlmDataSource
 };
 
 #endif
-
-/*
-** CVS Log
-** $Log: wldsfs.h,v $
-** Revision 1.17  2010-10-14 13:16:39  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.16  2006/12/15 14:49:21  onken
-** Removed excessive use char* and C-array in favour of OFString and
-** OFList. Simplified some implementation details.
-**
-** Revision 1.15  2005/12/08 16:05:41  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.14  2005/05/04 11:33:17  wilkens
-** Modified handling of the attributes ScheduledProcedureStepDescription/
-** ScheduledProtocolCodeSequence and RequestedProcedureDescription/
-** RequestedProcedureCodeSequence in wlmscpfs: in case one of the two attributes
-** does not contain any information in a C-Find RSP message which is about to be
-** sent to an SCU, the empty attribute will be removed from the C-Find RSP message
-** before the message is sent, in order not to send an invalid RSP message.
-** Added two command line options --enable-file-reject (default) and
-** --disable-file-reject to wlmscpfs: these options can be used to enable or
-** disable a file rejection mechanism which makes sure only complete worklist files
-** will be used during the matching process. A worklist file is considered to be
-** complete if it contains all necessary type 1 information which the SCP might
-** have to return to an SCU in a C-Find response message.
-**
-** Revision 1.13  2004/05/26 10:36:53  meichel
-** Fixed minor bug in worklist server regarding failed read locks.
-**
-** Revision 1.12  2004/01/07 08:32:28  wilkens
-** Added new sequence type return key attributes to wlmscpfs. Fixed bug that for
-** equally named attributes in sequences always the same value will be returned.
-** Added functionality that also more than one item will be returned in sequence
-** type return key attributes.
-**
-** Revision 1.11  2003/08/21 13:38:55  wilkens
-** Moved declaration and initialization of member variables matchingDatasets and
-** NumOfMatchingDatasets to base class.
-**
-** Revision 1.10  2003/07/02 09:17:55  wilkens
-** Updated documentation to get rid of doxygen warnings.
-**
-** Revision 1.9  2002/12/16 11:08:34  wilkens
-** Added missing #include "osconfig.h" to certain files.
-**
-** Revision 1.8  2002/12/09 13:40:49  joergr
-** Renamed parameter to avoid name clash with global function index().
-**
-** Revision 1.7  2002/08/12 10:56:08  wilkens
-** Made some modifications in in order to be able to create a new application
-** which contains both wlmscpdb and ppsscpdb and another application which
-** contains both wlmscpfs and ppsscpfs.
-**
-** Revision 1.6  2002/08/05 09:09:57  wilkens
-** Modfified the project's structure in order to be able to create a new
-** application which contains both wlmscpdb and ppsscpdb.
-**
-** Revision 1.4  2002/07/17 13:10:17  wilkens
-** Corrected some minor logical errors in the wlmscpdb sources and completely
-** updated the wlmscpfs so that it does not use the original wlistctn sources
-** any more but standard wlm sources which are now used by all three variants
-** of wlmscps.
-**
-** Revision 1.3  2002/06/10 11:24:54  wilkens
-** Made some corrections to keep gcc 2.95.3 quiet.
-**
-** Revision 1.2  2002/04/18 14:19:53  wilkens
-** Modified Makefiles. Updated latest changes again. These are the latest
-** sources. Added configure file.
-**
-** Revision 1.3  2002/01/08 17:45:34  joergr
-** Reformatted source files (replaced Windows newlines by Unix ones, replaced
-** tabulator characters by spaces, etc.)
-**
-** Revision 1.2  2002/01/08 16:47:53  joergr
-** Added preliminary database support using OTL interface library (modified by
-** MC/JR on 2001-12-21).
-**
-** Revision 1.1  2002/01/08 16:30:59  joergr
-** Added new module "dcmwlm" developed by Thomas Wilkens (initial release for
-** Windows, dated 2001-12-20).
-**
-**
-*/

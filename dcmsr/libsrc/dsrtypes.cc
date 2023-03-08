@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2000-2010, OFFIS e.V.
+ *  Copyright (C) 2000-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -11,19 +11,12 @@
  *    D-26121 Oldenburg, Germany
  *
  *
- *  Module:  dcmsr
+ *  Module: dcmsr
  *
- *  Author:  Joerg Riesmeier
+ *  Author: Joerg Riesmeier
  *
  *  Purpose:
  *    classes: DSRTypes
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-11-05 11:06:57 $
- *  CVS/RCS Revision: $Revision: 1.73 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -59,91 +52,120 @@
 #include "dcmtk/dcmsr/dsrspecc.h"
 #include "dcmtk/dcmsr/dsrmaccc.h"
 #include "dcmtk/dcmsr/dsrimpcc.h"
+#include "dcmtk/dcmsr/dsrc3dcc.h"
+#include "dcmtk/dcmsr/dsrrrdcc.h"
+#include "dcmtk/dcmsr/dsracqcc.h"
+#include "dcmtk/dcmsr/dsrsaecc.h"
+#include "dcmtk/dcmsr/dsrprdcc.h"
+#include "dcmtk/dcmsr/dsrpficc.h"
+#include "dcmtk/dcmsr/dsrplicc.h"
+#include "dcmtk/dcmsr/dsrrsdcc.h"
+
+#include "dcmtk/dcmdata/dcuid.h"
+#include "dcmtk/dcmdata/dcvrda.h"
+#include "dcmtk/dcmdata/dcvrdt.h"
+#include "dcmtk/dcmdata/dcvrpn.h"
+#include "dcmtk/dcmdata/dcvrtm.h"
 
 #include "dcmtk/ofstd/ofstd.h"
-
-#define INCLUDE_CSTDIO
-#define INCLUDE_CCTYPE
-#include "dcmtk/ofstd/ofstdinc.h"
-
 
 /*---------------------------------*
  *  constant definitions (part 1)  *
  *---------------------------------*/
 
 /* read flags */
-const size_t DSRTypes::RF_readDigitalSignatures          = 1 <<  0;
-const size_t DSRTypes::RF_acceptUnknownRelationshipType  = 1 <<  1;
-const size_t DSRTypes::RF_ignoreRelationshipConstraints  = 1 <<  2;
-const size_t DSRTypes::RF_ignoreContentItemErrors        = 1 <<  3;
-const size_t DSRTypes::RF_skipInvalidContentItems        = 1 <<  4;
-const size_t DSRTypes::RF_showCurrentlyProcessedItem     = 1 <<  5;
+const size_t DSRTypes::RF_readDigitalSignatures             = 1 <<  0;
+const size_t DSRTypes::RF_acceptUnknownRelationshipType     = 1 <<  1;
+const size_t DSRTypes::RF_acceptInvalidContentItemValue     = 1 <<  2;
+const size_t DSRTypes::RF_ignoreRelationshipConstraints     = 1 <<  3;
+const size_t DSRTypes::RF_ignoreContentItemErrors           = 1 <<  4;
+const size_t DSRTypes::RF_skipInvalidContentItems           = 1 <<  5;
+const size_t DSRTypes::RF_showCurrentlyProcessedItem        = 1 <<  6;
 
 /* renderHTML flags */
-const size_t DSRTypes::HF_neverExpandChildrenInline      = 1 <<  0;
-const size_t DSRTypes::HF_alwaysExpandChildrenInline     = 1 <<  1;
-const size_t DSRTypes::HF_renderInlineCodes              = 1 <<  2;
-const size_t DSRTypes::HF_useCodeDetailsTooltip          = 1 <<  3;
-const size_t DSRTypes::HF_renderConceptNameCodes         = 1 <<  4;
-const size_t DSRTypes::HF_renderNumericUnitCodes         = 1 <<  5;
-const size_t DSRTypes::HF_useCodeMeaningAsUnit           = 1 <<  6;
-const size_t DSRTypes::HF_renderPatientTitle             = 1 <<  7;
-const size_t DSRTypes::HF_renderNoDocumentHeader         = 1 <<  8;
-const size_t DSRTypes::HF_renderDcmtkFootnote            = 1 <<  9;
-const size_t DSRTypes::HF_renderFullData                 = 1 << 10;
-const size_t DSRTypes::HF_renderSectionTitlesInline      = 1 << 11;
-const size_t DSRTypes::HF_copyStyleSheetContent          = 1 << 12;
-const size_t DSRTypes::HF_HTML32Compatibility            = 1 << 13;
-const size_t DSRTypes::HF_XHTML11Compatibility           = 1 << 14;
-const size_t DSRTypes::HF_addDocumentTypeReference       = 1 << 15;
-const size_t DSRTypes::HF_omitGeneratorMetaElement       = 1 << 16;
+const size_t DSRTypes::HF_neverExpandChildrenInline         = 1 <<  0;
+const size_t DSRTypes::HF_alwaysExpandChildrenInline        = 1 <<  1;
+const size_t DSRTypes::HF_renderInlineCodes                 = 1 <<  2;
+const size_t DSRTypes::HF_useCodeDetailsTooltip             = 1 <<  3;
+const size_t DSRTypes::HF_renderConceptNameCodes            = 1 <<  4;
+const size_t DSRTypes::HF_renderNumericUnitCodes            = 1 <<  5;
+const size_t DSRTypes::HF_useCodeMeaningAsUnit              = 1 <<  6;
+const size_t DSRTypes::HF_renderPatientTitle                = 1 <<  7;
+const size_t DSRTypes::HF_renderNoDocumentHeader            = 1 <<  8;
+const size_t DSRTypes::HF_renderDcmtkFootnote               = 1 <<  9;
+const size_t DSRTypes::HF_renderFullData                    = 1 << 10;
+const size_t DSRTypes::HF_renderSectionTitlesInline         = 1 << 11;
+const size_t DSRTypes::HF_copyStyleSheetContent             = 1 << 12;
+const size_t DSRTypes::HF_HTML32Compatibility               = 1 << 13;
+const size_t DSRTypes::HF_XHTML11Compatibility              = 1 << 14;
+const size_t DSRTypes::HF_addDocumentTypeReference          = 1 << 15;
+const size_t DSRTypes::HF_omitGeneratorMetaElement          = 1 << 16;
 /* internal */
-const size_t DSRTypes::HF_renderItemsSeparately          = 1 << 17;
-const size_t DSRTypes::HF_renderItemInline               = 1 << 18;
-const size_t DSRTypes::HF_currentlyInsideAnnex           = 1 << 19;
-const size_t DSRTypes::HF_createFootnoteReferences       = 1 << 20;
-const size_t DSRTypes::HF_convertNonASCIICharacters      = 1 << 21;
+const size_t DSRTypes::HF_renderItemsSeparately             = 1 << 17;
+const size_t DSRTypes::HF_renderItemInline                  = 1 << 18;
+const size_t DSRTypes::HF_currentlyInsideAnnex              = 1 << 19;
+const size_t DSRTypes::HF_createFootnoteReferences          = 1 << 20;
+const size_t DSRTypes::HF_convertNonASCIICharacters         = 1 << 21;
 /* shortcuts */
-const size_t DSRTypes::HF_renderAllCodes                 = DSRTypes::HF_renderInlineCodes |
-                                                           DSRTypes::HF_renderConceptNameCodes |
-                                                           DSRTypes::HF_renderNumericUnitCodes;
-const size_t DSRTypes::HF_internalUseOnly                = DSRTypes::HF_renderItemsSeparately |
-                                                           DSRTypes::HF_renderItemInline |
-                                                           DSRTypes::HF_currentlyInsideAnnex |
-                                                           DSRTypes::HF_createFootnoteReferences |
-                                                           DSRTypes::HF_convertNonASCIICharacters;
+const size_t DSRTypes::HF_renderAllCodes                    = DSRTypes::HF_renderInlineCodes |
+                                                              DSRTypes::HF_renderConceptNameCodes |
+                                                              DSRTypes::HF_renderNumericUnitCodes;
+const size_t DSRTypes::HF_internalUseOnly                   = DSRTypes::HF_renderItemsSeparately |
+                                                              DSRTypes::HF_renderItemInline |
+                                                              DSRTypes::HF_currentlyInsideAnnex |
+                                                              DSRTypes::HF_createFootnoteReferences |
+                                                              DSRTypes::HF_convertNonASCIICharacters;
 
 /* read/writeXML flags */
-const size_t DSRTypes::XF_writeEmptyTags                 = 1 << 0;
-const size_t DSRTypes::XF_writeTemplateIdentification    = 1 << 1;
-const size_t DSRTypes::XF_alwaysWriteItemIdentifier      = 1 << 2;
-const size_t DSRTypes::XF_codeComponentsAsAttribute      = 1 << 3;
-const size_t DSRTypes::XF_relationshipTypeAsAttribute    = 1 << 4;
-const size_t DSRTypes::XF_valueTypeAsAttribute           = 1 << 5;
-const size_t DSRTypes::XF_templateIdentifierAsAttribute  = 1 << 6;
-const size_t DSRTypes::XF_useDcmsrNamespace              = 1 << 7;
-const size_t DSRTypes::XF_addSchemaReference             = 1 << 8;
-const size_t DSRTypes::XF_validateSchema                 = 1 << 9;
-const size_t DSRTypes::XF_templateElementEnclosesItems   = 1 << 10;
+const size_t DSRTypes::XF_writeEmptyTags                    = 1 << 0;
+const size_t DSRTypes::XF_writeTemplateIdentification       = 1 << 1;
+const size_t DSRTypes::XF_alwaysWriteItemIdentifier         = 1 << 2;
+const size_t DSRTypes::XF_codeComponentsAsAttribute         = 1 << 3;
+const size_t DSRTypes::XF_relationshipTypeAsAttribute       = 1 << 4;
+const size_t DSRTypes::XF_valueTypeAsAttribute              = 1 << 5;
+const size_t DSRTypes::XF_templateIdentifierAsAttribute     = 1 << 6;
+const size_t DSRTypes::XF_useDcmsrNamespace                 = 1 << 7;
+const size_t DSRTypes::XF_addSchemaReference                = 1 << 8;
+const size_t DSRTypes::XF_validateSchema                    = 1 << 9;
+const size_t DSRTypes::XF_templateElementEnclosesItems      = 1 << 10;
+const size_t DSRTypes::XF_addCommentsForIncludedTemplate    = 1 << 11;
+const size_t DSRTypes::XF_acceptEmptyStudySeriesInstanceUID = 1 << 12;
 /* shortcuts */
-const size_t DSRTypes::XF_encodeEverythingAsAttribute    = DSRTypes::XF_codeComponentsAsAttribute |
-                                                           DSRTypes::XF_relationshipTypeAsAttribute |
-                                                           DSRTypes::XF_valueTypeAsAttribute |
-                                                           DSRTypes::XF_templateIdentifierAsAttribute;
+const size_t DSRTypes::XF_encodeEverythingAsAttribute       = DSRTypes::XF_codeComponentsAsAttribute |
+                                                              DSRTypes::XF_relationshipTypeAsAttribute |
+                                                              DSRTypes::XF_valueTypeAsAttribute |
+                                                              DSRTypes::XF_templateIdentifierAsAttribute;
 
 /* print flags */
-const size_t DSRTypes::PF_printItemPosition              = 1 << 0;
-const size_t DSRTypes::PF_shortenLongItemValues          = 1 << 1;
-const size_t DSRTypes::PF_printSOPInstanceUID            = 1 << 2;
-const size_t DSRTypes::PF_printConceptNameCodes          = 1 << 3;
-const size_t DSRTypes::PF_printNoDocumentHeader          = 1 << 4;
-const size_t DSRTypes::PF_printTemplateIdentification    = 1 << 5;
-const size_t DSRTypes::PF_printAllCodes                  = DSRTypes::PF_printConceptNameCodes;
+const size_t DSRTypes::PF_printItemPosition                 = 1 << 0;
+const size_t DSRTypes::PF_shortenLongItemValues             = 1 << 1;
+const size_t DSRTypes::PF_printSOPInstanceUID               = 1 << 2;
+const size_t DSRTypes::PF_printConceptNameCodes             = 1 << 3;
+const size_t DSRTypes::PF_printNoDocumentHeader             = 1 << 4;
+const size_t DSRTypes::PF_printTemplateIdentification       = 1 << 5;
+const size_t DSRTypes::PF_useANSIEscapeCodes                = 1 << 6;
+const size_t DSRTypes::PF_printLongSOPClassName             = 1 << 7;
+const size_t DSRTypes::PF_printSOPClassUID                  = 1 << 8;
+const size_t DSRTypes::PF_printInvalidCodes                 = 1 << 9;
+const size_t DSRTypes::PF_printNodeID                       = 1 << 10;
+const size_t DSRTypes::PF_indicateEnhancedEncodingMode      = 1 << 11;
+const size_t DSRTypes::PF_printAnnotation                   = 1 << 12;
+const size_t DSRTypes::PF_hideIncludedTemplateNodes         = 1 << 13;
+const size_t DSRTypes::PF_dontCountIncludedTemplateNodes    = 1 << 14;
+const size_t DSRTypes::PF_printEmptyCodes                   = 1 << 15;
+/* shortcuts */
+const size_t DSRTypes::PF_printAllCodes                     = DSRTypes::PF_printConceptNameCodes;
 
 /* checkByReferenceRelationships modes */
-const size_t DSRTypes::CM_updatePositionString           = 1 << 0;
-const size_t DSRTypes::CM_updateNodeID                   = 1 << 1;
-const size_t DSRTypes::CM_resetReferenceTargetFlag       = 1 << 2;
+const size_t DSRTypes::CM_updatePositionString              = 1 << 0;
+const size_t DSRTypes::CM_updateNodeID                      = 1 << 1;
+const size_t DSRTypes::CM_resetReferenceTargetFlag          = 1 << 2;
+
+/* checkByReferenceRelationships bit masks (avoid conflicts!) */
+const size_t DSRTypes::CB_maskPrintFlags                    = DSRTypes::PF_dontCountIncludedTemplateNodes;
+const size_t DSRTypes::CB_maskReadFlags                     = DSRTypes::RF_acceptUnknownRelationshipType |
+                                                              DSRTypes::RF_ignoreRelationshipConstraints |
+                                                              DSRTypes::RF_showCurrentlyProcessedItem;
 
 
 /*---------------------*
@@ -154,7 +176,7 @@ struct S_DocumentTypeNameMap
 {
     DSRTypes::E_DocumentType Type;
     const char *SOPClassUID;
-    OFBool EnhancedEquipmentModule;
+    size_t ExtendedModules;
     const char *Modality;
     const char *ReadableName;
 };
@@ -174,6 +196,14 @@ struct S_ValueTypeNameMap
     const char *DefinedTerm;
     const char *XMLTagName;
     const char *ReadableName;
+};
+
+
+struct S_PresentationStateTypeNameMap
+{
+    DSRTypes::E_PresentationStateType Type;
+    const char *SOPClassUID;
+    const char *ShortName;
 };
 
 
@@ -243,52 +273,76 @@ struct S_CharacterSetNameMap
  *---------------------------------*/
 
 // conditions
-const OFConditionConst ECC_UnknownDocumentType              (OFM_dcmsr,  1, OF_error, "Unknown Document Type");
-const OFConditionConst ECC_InvalidDocument                  (OFM_dcmsr,  2, OF_error, "Invalid Document");
-const OFConditionConst ECC_InvalidDocumentTree              (OFM_dcmsr,  3, OF_error, "Invalid Document Tree");
-const OFConditionConst ECC_MandatoryAttributeMissing        (OFM_dcmsr,  4, OF_error, "Mandatory Attribute missing");
-const OFConditionConst ECC_InvalidValue                     (OFM_dcmsr,  5, OF_error, "Invalid Value");
-const OFConditionConst ECC_UnsupportedValue                 (OFM_dcmsr,  6, OF_error, "Unsupported Value");
-const OFConditionConst ECC_UnknownValueType                 (OFM_dcmsr,  7, OF_error, "Unknown Value Type");
-const OFConditionConst ECC_UnknownRelationshipType          (OFM_dcmsr,  8, OF_error, "Unknown Relationship Type");
-const OFConditionConst ECC_InvalidByValueRelationship       (OFM_dcmsr,  9, OF_error, "Invalid by-value Relationship");
-const OFConditionConst ECC_InvalidByReferenceRelationship   (OFM_dcmsr, 10, OF_error, "Invalid by-reference Relationship");
-const OFConditionConst ECC_SOPInstanceNotFound              (OFM_dcmsr, 11, OF_error, "SOP Instance not found");
-const OFConditionConst ECC_DifferentSOPClassesForAnInstance (OFM_dcmsr, 12, OF_error, "Different SOP Classes for an Instance");
-const OFConditionConst ECC_CodingSchemeNotFound             (OFM_dcmsr, 13, OF_error, "Coding Scheme Designator not found");
-const OFConditionConst ECC_CorruptedXMLStructure            (OFM_dcmsr, 14, OF_error, "Corrupted XML structure");
+makeOFConditionConst(SR_EC_UnknownDocumentType,                 OFM_dcmsr,  1, OF_error, "Unknown Document Type");
+makeOFConditionConst(SR_EC_InvalidDocument,                     OFM_dcmsr,  2, OF_error, "Invalid Document");
+makeOFConditionConst(SR_EC_InvalidDocumentTree,                 OFM_dcmsr,  3, OF_error, "Invalid Document Tree");
+makeOFConditionConst(SR_EC_MandatoryAttributeMissing,           OFM_dcmsr,  4, OF_error, "Mandatory Attribute missing");
+makeOFConditionConst(SR_EC_InvalidValue,                        OFM_dcmsr,  5, OF_error, "Invalid Value");
+makeOFConditionConst(SR_EC_UnsupportedValue,                    OFM_dcmsr,  6, OF_error, "Unsupported Value");
+makeOFConditionConst(SR_EC_UnknownValueType,                    OFM_dcmsr,  7, OF_error, "Unknown Value Type");
+makeOFConditionConst(SR_EC_UnknownRelationshipType,             OFM_dcmsr,  8, OF_error, "Unknown Relationship Type");
+makeOFConditionConst(SR_EC_InvalidByValueRelationship,          OFM_dcmsr,  9, OF_error, "Invalid by-value Relationship");
+makeOFConditionConst(SR_EC_InvalidByReferenceRelationship,      OFM_dcmsr, 10, OF_error, "Invalid by-reference Relationship");
+makeOFConditionConst(SR_EC_SOPInstanceNotFound,                 OFM_dcmsr, 11, OF_error, "SOP Instance not found");
+makeOFConditionConst(SR_EC_DifferentSOPClassesForAnInstance,    OFM_dcmsr, 12, OF_error, "Different SOP Classes for an Instance");
+makeOFConditionConst(SR_EC_CodingSchemeNotFound,                OFM_dcmsr, 13, OF_error, "Coding Scheme Designator not found");
+makeOFConditionConst(SR_EC_CorruptedXMLStructure,               OFM_dcmsr, 14, OF_error, "Corrupted XML structure");
+makeOFConditionConst(SR_EC_RepresentationNotAvailable,          OFM_dcmsr, 15, OF_error, "Representation not available");
+makeOFConditionConst(SR_EC_CannotCreateIconImage,               OFM_dcmsr, 16, OF_error, "Cannot create Icon Image");
+makeOFConditionConst(SR_EC_CannotAddContentItem,                OFM_dcmsr, 17, OF_error, "Cannot add Content Item");
+makeOFConditionConst(SR_EC_InvalidConceptName,                  OFM_dcmsr, 18, OF_error, "Invalid Concept Name");
+makeOFConditionConst(SR_EC_CannotInsertSubTree,                 OFM_dcmsr, 19, OF_error, "Cannot insert Subtree");
+makeOFConditionConst(SR_EC_CannotChangeRelationshipType,        OFM_dcmsr, 20, OF_error, "Cannot change Relationship Type");
+makeOFConditionConst(SR_EC_IncompatibleDocumentTree,            OFM_dcmsr, 21, OF_error, "Incompatible Document Tree");
+makeOFConditionConst(SR_EC_ContentItemNotFound,                 OFM_dcmsr, 22, OF_error, "Content Item not found");
+makeOFConditionConst(SR_EC_CannotRemoveSubTree,                 OFM_dcmsr, 23, OF_error, "Cannot remove Subtree");
+makeOFConditionConst(SR_EC_EmptyDocumentTree,                   OFM_dcmsr, 24, OF_error, "Empty Document Tree");
+makeOFConditionConst(SR_EC_InvalidContentItem,                  OFM_dcmsr, 25, OF_error, "Invalid Content Item");
+makeOFConditionConst(SR_EC_CannotUseTemplateIdentification,     OFM_dcmsr, 26, OF_error, "Cannot use Template Identification");
+makeOFConditionConst(SR_EC_NonExtensibleTemplate,               OFM_dcmsr, 27, OF_error, "Non-extensible Template");
+makeOFConditionConst(SR_EC_NonExtensibleContextGroup,           OFM_dcmsr, 28, OF_error, "Non-extensible Context Group");
+makeOFConditionConst(SR_EC_CodedEntryNotInContextGroup,         OFM_dcmsr, 29, OF_error, "Coded Entry not in Context Group");
+makeOFConditionConst(SR_EC_CodedEntryInStandardContextGroup,    OFM_dcmsr, 30, OF_ok,    "Coded Entry in Context Group (Standard)");
+makeOFConditionConst(SR_EC_CodedEntryIsExtensionOfContextGroup, OFM_dcmsr, 31, OF_ok,    "Coded Entry in Context Group (Extension)");
+makeOFConditionConst(SR_EC_ValueSetConstraintViolated,          OFM_dcmsr, 32, OF_error, "Value Set Constraint violated");
+makeOFConditionConst(SR_EC_InvalidTemplateStructure,            OFM_dcmsr, 33, OF_error, "Invalid Template Structure");
+makeOFConditionConst(SR_EC_CannotProcessIncludedTemplates,      OFM_dcmsr, 34, OF_error, "Cannot process Document Tree with included Templates");
 
-const OFCondition SR_EC_UnknownDocumentType                 (ECC_UnknownDocumentType);
-const OFCondition SR_EC_InvalidDocument                     (ECC_InvalidDocument);
-const OFCondition SR_EC_InvalidDocumentTree                 (ECC_InvalidDocumentTree);
-const OFCondition SR_EC_MandatoryAttributeMissing           (ECC_MandatoryAttributeMissing);
-const OFCondition SR_EC_InvalidValue                        (ECC_InvalidValue);
-const OFCondition SR_EC_UnsupportedValue                    (ECC_UnsupportedValue);
-const OFCondition SR_EC_UnknownValueType                    (ECC_UnknownValueType);
-const OFCondition SR_EC_UnknownRelationshipType             (ECC_UnknownRelationshipType);
-const OFCondition SR_EC_InvalidByValueRelationship          (ECC_InvalidByValueRelationship);
-const OFCondition SR_EC_InvalidByReferenceRelationship      (ECC_InvalidByReferenceRelationship);
-const OFCondition SR_EC_SOPInstanceNotFound                 (ECC_SOPInstanceNotFound);
-const OFCondition SR_EC_DifferentSOPClassesForAnInstance    (ECC_DifferentSOPClassesForAnInstance);
-const OFCondition SR_EC_CodingSchemeNotFound                (ECC_CodingSchemeNotFound);
-const OFCondition SR_EC_CorruptedXMLStructure               (ECC_CorruptedXMLStructure);
+// NOTE:
+// error codes 1000 and above are reserved for the submodule "cmr"
 
+
+/* extended IOD modules (only used internally) */
+const size_t EM_EnhancedEquipment = 1 << 0;
+const size_t EM_Timezone          = 1 << 1;
+const size_t EM_Synchronization   = 1 << 2;
+const size_t EM_KeyObjectDocument = 1 << 3;
 
 static const S_DocumentTypeNameMap DocumentTypeNameMap[] =
 {
-    {DSRTypes::DT_invalid,                             "",                                             OFFalse, "",   "invalid document type"},
-    {DSRTypes::DT_BasicTextSR,                         UID_BasicTextSRStorage,                         OFFalse, "SR", "Basic Text SR"},
-    {DSRTypes::DT_EnhancedSR,                          UID_EnhancedSRStorage,                          OFFalse, "SR", "Enhanced SR"},
-    {DSRTypes::DT_ComprehensiveSR,                     UID_ComprehensiveSRStorage,                     OFFalse, "SR", "Comprehensive SR"},
-    {DSRTypes::DT_KeyObjectSelectionDocument,          UID_KeyObjectSelectionDocumentStorage,          OFFalse, "KO", "Key Object Selection Document"},
-    {DSRTypes::DT_MammographyCadSR,                    UID_MammographyCADSRStorage,                    OFFalse, "SR", "Mammography CAD SR"},
-    {DSRTypes::DT_ChestCadSR,                          UID_ChestCADSRStorage,                          OFFalse, "SR", "Chest CAD SR"},
-    {DSRTypes::DT_ColonCadSR,                          UID_ColonCADSRStorage,                          OFTrue,  "SR", "Colon CAD SR"},
-    {DSRTypes::DT_ProcedureLog,                        UID_ProcedureLogStorage,                        OFFalse, "SR", "Procedure Log"},
-    {DSRTypes::DT_XRayRadiationDoseSR,                 UID_XRayRadiationDoseSRStorage,                 OFTrue,  "SR", "X-Ray Radiation Dose SR"},
-    {DSRTypes::DT_SpectaclePrescriptionReport,         UID_SpectaclePrescriptionReportStorage,         OFTrue,  "SR", "Spectacle Prescription Report"},
-    {DSRTypes::DT_MacularGridThicknessAndVolumeReport, UID_MacularGridThicknessAndVolumeReportStorage, OFTrue,  "SR", "Macular Grid Thickness and Volume Report"},
-    {DSRTypes::DT_ImplantationPlanSRDocument,          UID_ImplantationPlanSRDocumentStorage,          OFTrue,  "SR", "Implantation Plan SR Document"}
+    {DSRTypes::DT_invalid,                               "",                                                  0,                                                                "",   "invalid document type"},
+    {DSRTypes::DT_BasicTextSR,                           UID_BasicTextSRStorage,                              0,                                                                "SR", "Basic Text SR"},
+    {DSRTypes::DT_EnhancedSR,                            UID_EnhancedSRStorage,                               0,                                                                "SR", "Enhanced SR"},
+    {DSRTypes::DT_ComprehensiveSR,                       UID_ComprehensiveSRStorage,                          0,                                                                "SR", "Comprehensive SR"},
+    {DSRTypes::DT_KeyObjectSelectionDocument,            UID_KeyObjectSelectionDocumentStorage,               EM_KeyObjectDocument,                                             "KO", "Key Object Selection Document"},
+    {DSRTypes::DT_MammographyCadSR,                      UID_MammographyCADSRStorage,                         0,                                                                "SR", "Mammography CAD SR"},
+    {DSRTypes::DT_ChestCadSR,                            UID_ChestCADSRStorage,                               0,                                                                "SR", "Chest CAD SR"},
+    {DSRTypes::DT_ColonCadSR,                            UID_ColonCADSRStorage,                               EM_EnhancedEquipment,                                             "SR", "Colon CAD SR"},
+    {DSRTypes::DT_ProcedureLog,                          UID_ProcedureLogStorage,                             EM_Synchronization,                                               "SR", "Procedure Log"},
+    {DSRTypes::DT_XRayRadiationDoseSR,                   UID_XRayRadiationDoseSRStorage,                      EM_EnhancedEquipment,                                             "SR", "X-Ray Radiation Dose SR"},
+    {DSRTypes::DT_EnhancedXRayRadiationDoseSR,           UID_EnhancedXRayRadiationDoseSRStorage,              EM_EnhancedEquipment,                                             "SR", "Enhanced X-Ray Radiation Dose SR"},
+    {DSRTypes::DT_SpectaclePrescriptionReport,           UID_SpectaclePrescriptionReportStorage,              EM_EnhancedEquipment,                                             "SR", "Spectacle Prescription Report"},
+    {DSRTypes::DT_MacularGridThicknessAndVolumeReport,   UID_MacularGridThicknessAndVolumeReportStorage,      EM_EnhancedEquipment,                                             "SR", "Macular Grid Thickness and Volume Report"},
+    {DSRTypes::DT_ImplantationPlanSRDocument,            UID_ImplantationPlanSRDocumentStorage,               EM_EnhancedEquipment,                                             "SR", "Implantation Plan SR Document"},
+    {DSRTypes::DT_Comprehensive3DSR,                     UID_Comprehensive3DSRStorage,                        0,                                                                "SR", "Comprehensive 3D SR"},
+    {DSRTypes::DT_RadiopharmaceuticalRadiationDoseSR,    UID_RadiopharmaceuticalRadiationDoseSRStorage,       EM_EnhancedEquipment,                                             "SR", "Radiopharmaceutical Radiation Dose SR"},
+    {DSRTypes::DT_ExtensibleSR,                          UID_ExtensibleSRStorage,                             EM_EnhancedEquipment,                                             "SR", "Extensible SR"},
+    {DSRTypes::DT_AcquisitionContextSR,                  UID_AcquisitionContextSRStorage,                     EM_EnhancedEquipment,                                             "SR", "Acquisition Context SR"},
+    {DSRTypes::DT_SimplifiedAdultEchoSR,                 UID_SimplifiedAdultEchoSRStorage,                    EM_EnhancedEquipment | EM_Timezone,                               "SR", "Simplified Adult Echo SR"},
+    {DSRTypes::DT_PatientRadiationDoseSR,                UID_PatientRadiationDoseSRStorage,                   EM_EnhancedEquipment,                                             "SR", "Patient Radiation Dose SR"},
+    {DSRTypes::DT_PerformedImagingAgentAdministrationSR, UID_PerformedImagingAgentAdministrationSRStorage,    EM_EnhancedEquipment | EM_Synchronization,                        "SR", "Performed Imaging Agent Administration SR"},
+    {DSRTypes::DT_PlannedImagingAgentAdministrationSR,   UID_PlannedImagingAgentAdministrationSRStorage,      EM_EnhancedEquipment,                                             "SR", "Planned Imaging Agent Administration SR"},
+    {DSRTypes::DT_RenditionSelectionDocument,            UID_RenditionSelectionDocumentRealTimeCommunication, EM_EnhancedEquipment | EM_Synchronization | EM_KeyObjectDocument, "KO", "Rendition Selection Document"}
 };
 
 
@@ -296,7 +350,7 @@ static const S_RelationshipTypeNameMap RelationshipTypeNameMap[] =
 {
     {DSRTypes::RT_invalid,       "",                "invalid relationship type"},
     {DSRTypes::RT_unknown,       "",                "unknown relationship type"},
-    {DSRTypes::RT_isRoot,        "",                ""},
+    {DSRTypes::RT_isRoot,        "",                "(is root)"},
     {DSRTypes::RT_contains,      "CONTAINS",        "contains"},
     {DSRTypes::RT_hasObsContext, "HAS OBS CONTEXT", "has obs context"},
     {DSRTypes::RT_hasAcqContext, "HAS ACQ CONTEXT", "has acq context"},
@@ -309,23 +363,41 @@ static const S_RelationshipTypeNameMap RelationshipTypeNameMap[] =
 
 static const S_ValueTypeNameMap ValueTypeNameMap[] =
 {
-    {DSRTypes::VT_invalid,     "",               "item",      "invalid/unknown value type"},
-    {DSRTypes::VT_Text,        "TEXT",           "text",      "Text"},
-    {DSRTypes::VT_Code,        "CODE",           "code",      "Code"},
-    {DSRTypes::VT_Num,         "NUM",            "num",       "Number"},
-    {DSRTypes::VT_DateTime,    "DATETIME",       "datetime",  "Date/Time"},
-    {DSRTypes::VT_Date,        "DATE",           "date",      "Date"},
-    {DSRTypes::VT_Time,        "TIME",           "time",      "Time"},
-    {DSRTypes::VT_UIDRef,      "UIDREF",         "uidref",    "UID Reference"},
-    {DSRTypes::VT_PName,       "PNAME",          "pname",     "Person Name"},
-    {DSRTypes::VT_SCoord,      "SCOORD",         "scoord",    "Spatial Coordinates"},
-    {DSRTypes::VT_SCoord3D,    "SCOORD3D",       "scoord3d",  "Spatial Coordinates (3D)"},
-    {DSRTypes::VT_TCoord,      "TCOORD",         "tcoord",    "Temporal Coordinates"},
-    {DSRTypes::VT_Composite,   "COMPOSITE",      "composite", "Composite Object"},
-    {DSRTypes::VT_Image,       "IMAGE",          "image",     "Image"},
-    {DSRTypes::VT_Waveform,    "WAVEFORM",       "waveform",  "Waveform"},
-    {DSRTypes::VT_Container,   "CONTAINER",      "container", "Container"},
-    {DSRTypes::VT_byReference, "(by-reference)", "reference", "(by-reference)"}
+    {DSRTypes::VT_invalid,          "",                "item",       "invalid/unknown value type"},
+    {DSRTypes::VT_Text,             "TEXT",            "text",       "Text"},
+    {DSRTypes::VT_Code,             "CODE",            "code",       "Code"},
+    {DSRTypes::VT_Num,              "NUM",             "num",        "Number"},
+    {DSRTypes::VT_DateTime,         "DATETIME",        "datetime",   "Date/Time"},
+    {DSRTypes::VT_Date,             "DATE",            "date",       "Date"},
+    {DSRTypes::VT_Time,             "TIME",            "time",       "Time"},
+    {DSRTypes::VT_UIDRef,           "UIDREF",          "uidref",     "UID Reference"},
+    {DSRTypes::VT_PName,            "PNAME",           "pname",      "Person Name"},
+    {DSRTypes::VT_SCoord,           "SCOORD",          "scoord",     "Spatial Coordinates"},
+    {DSRTypes::VT_SCoord3D,         "SCOORD3D",        "scoord3d",   "Spatial Coordinates (3D)"},
+    {DSRTypes::VT_TCoord,           "TCOORD",          "tcoord",     "Temporal Coordinates"},
+    {DSRTypes::VT_Composite,        "COMPOSITE",       "composite",  "Composite Object"},
+    {DSRTypes::VT_Image,            "IMAGE",           "image",      "Image"},
+    {DSRTypes::VT_Waveform,         "WAVEFORM",        "waveform",   "Waveform"},
+    {DSRTypes::VT_Container,        "CONTAINER",       "container",  "Container"},
+    {DSRTypes::VT_byReference,      "(by-reference)",  "reference",  "(by-reference)"},
+    {DSRTypes::VT_includedTemplate, "(incl-template)", "INCL-TEMPL", "(included template)"}     // the XML name should never be used!
+};
+
+
+static const S_PresentationStateTypeNameMap PresentationStateTypeNameMap[] =
+{
+    {DSRTypes::PT_invalid,                  "",                                                             "invalid/unknown presentation state type"},
+    {DSRTypes::PT_Grayscale,                UID_GrayscaleSoftcopyPresentationStateStorage,                  "GSPS"},
+    {DSRTypes::PT_Color,                    UID_ColorSoftcopyPresentationStateStorage,                      "CSPS"},
+    {DSRTypes::PT_PseudoColor,              UID_PseudoColorSoftcopyPresentationStateStorage,                "PCSPS"},
+    {DSRTypes::PT_Blending,                 UID_BlendingSoftcopyPresentationStateStorage,                   "BSPS"},
+    {DSRTypes::PT_XAXRFGrayscale,           UID_XAXRFGrayscaleSoftcopyPresentationStateStorage,             "XGSPS"},
+    {DSRTypes::PT_GrayscalePlanarMPR,       UID_GrayscalePlanarMPRVolumetricPresentationStateStorage,       "GP-VPS"},
+    {DSRTypes::PT_CompositingPlanarMPR,     UID_CompositingPlanarMPRVolumetricPresentationStateStorage,     "CP-VPS"},
+    {DSRTypes::PT_AdvancedBlending,         UID_AdvancedBlendingPresentationStateStorage,                   "ABPS"},
+    {DSRTypes::PT_VolumeRendering,          UID_VolumeRenderingVolumetricPresentationStateStorage,          "VR-VPS"},
+    {DSRTypes::PT_SegmentedVolumeRendering, UID_SegmentedVolumeRenderingVolumetricPresentationStateStorage, "SVR-VPS"},
+    {DSRTypes::PT_MultipleVolumeRendering,  UID_MultipleVolumeRenderingVolumetricPresentationStateStorage,  "MVR-VPS"}
 };
 
 
@@ -354,7 +426,7 @@ static const S_GraphicType3DNameMap GraphicType3DNameMap[] =
 
 static const S_TemporalRangeTypeNameMap TemporalRangeTypeNameMap[] =
 {
-    {DSRTypes::TRT_invalid,      "",             ""},
+    {DSRTypes::TRT_invalid,      "",             "invalid/unknown temporal range type"},
     {DSRTypes::TRT_Point,        "POINT",        "Point"},
     {DSRTypes::TRT_Multipoint,   "MULTIPOINT",   "Multiple Points"},
     {DSRTypes::TRT_Segment,      "SEGMENT",      "Segment"},
@@ -398,22 +470,34 @@ static const S_VerificationFlagNameMap VerificationFlagNameMap[] =
 
 static const S_CharacterSetNameMap CharacterSetNameMap[] =
 {
-    // columns: enum, DICOM, HTML, XML (if "?" a warning is reported)
-    {DSRTypes::CS_invalid,  "",           "",           ""},
-    {DSRTypes::CS_ASCII,    "ISO_IR 6",   "",           "UTF-8"},
-    {DSRTypes::CS_Latin1,   "ISO_IR 100", "ISO-8859-1", "ISO-8859-1"},
-    {DSRTypes::CS_Latin2,   "ISO_IR 101", "ISO-8859-2", "ISO-8859-2"},
-    {DSRTypes::CS_Latin3,   "ISO_IR 109", "ISO-8859-3", "ISO-8859-3"},
-    {DSRTypes::CS_Latin4,   "ISO_IR 110", "ISO-8859-4", "ISO-8859-4"},
-    {DSRTypes::CS_Cyrillic, "ISO_IR 144", "ISO-8859-5", "ISO-8859-5"},
-    {DSRTypes::CS_Arabic,   "ISO_IR 127", "ISO-8859-6", "ISO-8859-6"},
-    {DSRTypes::CS_Greek,    "ISO_IR 126", "ISO-8859-7", "ISO-8859-7"},
-    {DSRTypes::CS_Hebrew,   "ISO_IR 138", "ISO-8859-8", "ISO-8859-8"},
-    {DSRTypes::CS_Latin5,   "ISO_IR 148", "ISO-8859-9", "ISO-8859-9"},
-    {DSRTypes::CS_Japanese, "ISO_IR 13",  "?",          "?"},  /* JIS_X0201 ? */
-    {DSRTypes::CS_Thai,     "ISO_IR 166", "?",          "?"},  /* TIS-620 ? */
-    {DSRTypes::CS_UTF8,     "ISO_IR 192", "UTF-8",      "UTF-8"}
+    // columns: enum, DICOM, HTML, XML (if "?" a warning is reported).
+    // This mapping is based on Table D-1 in DICOM PS 3.18 Annex D.
+    {DSRTypes::CS_invalid,        "",                               "",            ""},
+    {DSRTypes::CS_ASCII,          "ISO_IR 6",                       "",            "UTF-8"},   /* "ISO_IR 6" is only used for reading */
+    {DSRTypes::CS_Latin1,         "ISO_IR 100",                     "ISO-8859-1",  "ISO-8859-1"},
+    {DSRTypes::CS_Latin2,         "ISO_IR 101",                     "ISO-8859-2",  "ISO-8859-2"},
+    {DSRTypes::CS_Latin3,         "ISO_IR 109",                     "ISO-8859-3",  "ISO-8859-3"},
+    {DSRTypes::CS_Latin4,         "ISO_IR 110",                     "ISO-8859-4",  "ISO-8859-4"},
+    {DSRTypes::CS_Cyrillic,       "ISO_IR 144",                     "ISO-8859-5",  "ISO-8859-5"},
+    {DSRTypes::CS_Arabic,         "ISO_IR 127",                     "ISO-8859-6",  "ISO-8859-6"},
+    {DSRTypes::CS_Greek,          "ISO_IR 126",                     "ISO-8859-7",  "ISO-8859-7"},
+    {DSRTypes::CS_Hebrew,         "ISO_IR 138",                     "ISO-8859-8",  "ISO-8859-8"},
+    {DSRTypes::CS_Latin5,         "ISO_IR 148",                     "ISO-8859-9",  "ISO-8859-9"},
+    {DSRTypes::CS_Thai,           "ISO_IR 166",                     "TIS-620",     "TIS-620"},
+    {DSRTypes::CS_Japanese,       "ISO 2022 IR 13\\ISO 2022 IR 87", "ISO-2022-JP", "ISO-2022-JP"},
+    {DSRTypes::CS_Korean,         "ISO 2022 IR 6\\ISO 2022 IR 149", "ISO-2022-KR", "ISO-2022-KR"},
+    {DSRTypes::CS_ChineseISO,     "ISO 2022 IR 6\\ISO 2022 IR 58",  "ISO-2022-CN", "ISO-2022-CN"},
+    {DSRTypes::CS_ChineseGB18030, "GB18030",                        "GB18030",     "GB18030"},
+    {DSRTypes::CS_ChineseGBK,     "GBK",                            "GBK",         "GBK"},
+    {DSRTypes::CS_UTF8,           "ISO_IR 192",                     "UTF-8",       "UTF-8"}
 };
+
+
+/*--------------------*
+ *  global variables  *
+ *--------------------*/
+
+OFLogger DCM_dcmsrLogger = OFLog::getLogger("dcmtk.dcmsr");
 
 
 /*------------------*
@@ -455,12 +539,18 @@ const char *DSRTypes::documentTypeToReadableName(const E_DocumentType documentTy
 const char *DSRTypes::documentTypeToDocumentTitle(const E_DocumentType documentType,
                                                   OFString &documentTitle)
 {
-    documentTitle = documentTypeToReadableName(documentType);
-    // avoid doubling of term "Document" and/or "Report"
-    if (!documentTitle.empty() && (documentTitle.find("Document") == OFString_npos) &&
-                                  (documentTitle.find("Report") == OFString_npos))
+    if (documentType != DT_invalid)
     {
-        documentTitle += " Document";
+        documentTitle = documentTypeToReadableName(documentType);
+        // avoid doubling of term "Document" and/or "Report"
+        if (!documentTitle.empty() && (documentTitle.find("Document") == OFString_npos) &&
+                                      (documentTitle.find("Report") == OFString_npos))
+        {
+            documentTitle += " Document";
+        }
+    } else {
+        // return empty string in case of invalid document
+        documentTitle.clear();
     }
     return documentTitle.c_str();
 }
@@ -471,7 +561,55 @@ OFBool DSRTypes::requiresEnhancedEquipmentModule(const E_DocumentType documentTy
     const S_DocumentTypeNameMap *iterator = DocumentTypeNameMap;
     while ((iterator->Type != DT_last) && (iterator->Type != documentType))
         iterator++;
-    return iterator->EnhancedEquipmentModule;
+    return (iterator->ExtendedModules & EM_EnhancedEquipment) > 0;
+}
+
+
+OFBool DSRTypes::requiresTimezoneModule(const E_DocumentType documentType)
+{
+    const S_DocumentTypeNameMap *iterator = DocumentTypeNameMap;
+    while ((iterator->Type != DT_last) && (iterator->Type != documentType))
+        iterator++;
+    return (iterator->ExtendedModules & EM_Timezone) > 0;
+}
+
+
+OFBool DSRTypes::requiresSynchronizationModule(const E_DocumentType documentType)
+{
+    const S_DocumentTypeNameMap *iterator = DocumentTypeNameMap;
+    while ((iterator->Type != DT_last) && (iterator->Type != documentType))
+        iterator++;
+    return (iterator->ExtendedModules & EM_Synchronization) > 0;
+}
+
+
+OFBool DSRTypes::usesSRDocumentSeriesModule(const E_DocumentType documentType)
+{
+    /* SR Document Series Module and Key Object Document Series Module are mutually exclusive */
+    return !usesKeyObjectDocumentSeriesModule(documentType);
+}
+
+
+OFBool DSRTypes::usesKeyObjectDocumentSeriesModule(const E_DocumentType documentType)
+{
+    /* Key Object Document Series Module is used if (and only if) Key Object Document Module is used */
+    return usesKeyObjectDocumentModule(documentType);
+}
+
+
+OFBool DSRTypes::usesSRDocumentGeneralModule(const E_DocumentType documentType)
+{
+    /* SR Document Module and Key Object Document Module are mutually exclusive */
+    return !usesKeyObjectDocumentModule(documentType);
+}
+
+
+OFBool DSRTypes::usesKeyObjectDocumentModule(const E_DocumentType documentType)
+{
+    const S_DocumentTypeNameMap *iterator = DocumentTypeNameMap;
+    while ((iterator->Type != DT_last) && (iterator->Type != documentType))
+        iterator++;
+    return (iterator->ExtendedModules & EM_KeyObjectDocument) > 0;
 }
 
 
@@ -517,6 +655,15 @@ const char *DSRTypes::valueTypeToReadableName(const E_ValueType valueType)
     while ((iterator->Type != VT_last) && (iterator->Type != valueType))
         iterator++;
     return iterator->ReadableName;
+}
+
+
+const char *DSRTypes::presentationStateTypeToShortName(const E_PresentationStateType pstateType)
+{
+    const S_PresentationStateTypeNameMap *iterator = PresentationStateTypeNameMap;
+    while ((iterator->Type != PT_last) && (iterator->Type != pstateType))
+        iterator++;
+    return iterator->ShortName;
 }
 
 
@@ -613,8 +760,12 @@ const char *DSRTypes::verificationFlagToEnumeratedValue(const E_VerificationFlag
 const char *DSRTypes::characterSetToDefinedTerm(const E_CharacterSet characterSet)
 {
     const S_CharacterSetNameMap *iterator = CharacterSetNameMap;
-    while ((iterator->Type != CS_last) && (iterator->Type != characterSet))
-        iterator++;
+    /* make sure that we never return "ISO_IR 6", but an empty string instead */
+    if (characterSet != CS_ASCII)
+    {
+        while ((iterator->Type != CS_last) && (iterator->Type != characterSet))
+            iterator++;
+    }
     return iterator->DefinedTerm;
 }
 
@@ -668,6 +819,18 @@ DSRTypes::E_ValueType DSRTypes::definedTermToValueType(const OFString &definedTe
     while ((iterator->Type != VT_last) && (definedTerm != iterator->DefinedTerm))
         iterator++;
     if (definedTerm == iterator->DefinedTerm)
+        type = iterator->Type;
+    return type;
+}
+
+
+DSRTypes::E_PresentationStateType DSRTypes::sopClassUIDToPresentationStateType(const OFString &sopClassUID)
+{
+    E_PresentationStateType type = PT_invalid;
+    const S_PresentationStateTypeNameMap *iterator = PresentationStateTypeNameMap;
+    while ((iterator->Type != PT_last) && (sopClassUID != iterator->SOPClassUID))
+        iterator++;
+    if (sopClassUID == iterator->SOPClassUID)
         type = iterator->Type;
     return type;
 }
@@ -771,19 +934,25 @@ DSRTypes::E_VerificationFlag DSRTypes::enumeratedValueToVerificationFlag(const O
 
 DSRTypes::E_CharacterSet DSRTypes::definedTermToCharacterSet(const OFString &definedTerm)
 {
-    E_CharacterSet type = CS_invalid;
-    const S_CharacterSetNameMap *iterator = CharacterSetNameMap;
-    while ((iterator->Type != CS_last) && (definedTerm != iterator->DefinedTerm))
-        iterator++;
-    if (definedTerm == iterator->DefinedTerm)
-        type = iterator->Type;
+    E_CharacterSet type = CS_default;
+    /* empty defined term means default */
+    if (!definedTerm.empty())
+    {
+        const S_CharacterSetNameMap *iterator = CharacterSetNameMap;
+        while ((iterator->Type != CS_last) && (definedTerm != iterator->DefinedTerm))
+            iterator++;
+        if (definedTerm == iterator->DefinedTerm)
+            type = iterator->Type;
+        else
+            type = CS_invalid;
+    }
     return type;
 }
 
 
 OFBool DSRTypes::isDocumentTypeSupported(const E_DocumentType documentType)
 {
-    return (documentType != DT_invalid);
+    return (documentType != DT_invalid) && (documentType != DT_ExtensibleSR) && (documentType != DT_EnhancedXRayRadiationDoseSR);
 }
 
 
@@ -804,14 +973,14 @@ OFCondition DSRTypes::addElementToDataset(OFCondition &result,
                 triedToInsert = OFTrue;
                 /* insert non-empty element or empty "type 2" element */
                 result = dataset.insert(delem, OFTrue /*replaceOld*/);
-                if (DCM_dcmsrGetLogger().isEnabledFor(OFLogger::WARN_LOG_LEVEL))
+                if (DCM_dcmsrLogger.isEnabledFor(OFLogger::WARN_LOG_LEVEL))
                     checkElementValue(*delem, vm, type, result, moduleName);
             }
             else if (type == "1")
             {
                 /* empty element value not allowed for "type 1" */
                 result = SR_EC_InvalidValue;
-                if (DCM_dcmsrGetLogger().isEnabledFor(OFLogger::WARN_LOG_LEVEL))
+                if (DCM_dcmsrLogger.isEnabledFor(OFLogger::WARN_LOG_LEVEL))
                     checkElementValue(*delem, vm, type, result, moduleName);
             }
         }
@@ -827,23 +996,13 @@ OFCondition DSRTypes::addElementToDataset(OFCondition &result,
 void DSRTypes::removeAttributeFromSequence(DcmSequenceOfItems &sequence,
                                            const DcmTagKey &tagKey)
 {
-    DcmStack stack;
-    DcmItem *item = NULL;
-    const size_t count = OFstatic_cast(size_t, sequence.card());
-    for (size_t i = 0; i < count; i++)
+    /* iterate over all sequence items */
+    DcmObject *dobj = NULL;
+    while ((dobj = sequence.nextInContainer(dobj)) != NULL)
     {
-        /* not very efficient, should be replaced by nextObject() sometime */
-        item = sequence.getItem(i);
-        if (item != NULL)
-        {
-            /* should not be necessary, but is more secure */
-            stack.clear();
-            if (item->search(tagKey, stack, ESM_fromHere, OFTrue /*searchIntoSub*/).good())
-            {
-                while (!stack.empty())
-                    delete item->remove(stack.pop());
-            }
-        }
+        DcmItem *ditem = OFstatic_cast(DcmItem *, dobj);
+        /* remove specified data elements (on all nesting levels) */
+        ditem->findAndDeleteElement(tagKey, OFTrue /*allOccurrences*/);
     }
 }
 
@@ -880,6 +1039,21 @@ const OFString &DSRTypes::getStringValueFromElement(const DcmElement &delem,
 }
 
 
+OFCondition DSRTypes::getStringValueFromElement(const DcmElement &delem,
+                                                OFString &stringValue,
+                                                const signed long pos)
+{
+    OFCondition result = EC_Normal;
+    if (pos < 0)
+        result = OFconst_cast(DcmElement &, delem).getOFStringArray(stringValue);
+    else
+        result = OFconst_cast(DcmElement &, delem).getOFString(stringValue, OFstatic_cast(unsigned long, pos));
+    if (result.bad())
+        stringValue.clear();
+    return result;
+}
+
+
 const OFString &DSRTypes::getPrintStringFromElement(const DcmElement &delem,
                                                     OFString &stringValue)
 {
@@ -899,9 +1073,15 @@ const OFString &DSRTypes::getMarkupStringFromElement(const DcmElement &delem,
 
 OFCondition DSRTypes::getStringValueFromDataset(DcmItem &dataset,
                                                 const DcmTagKey &tagKey,
-                                                OFString &stringValue)
+                                                OFString &stringValue,
+                                                const signed long pos)
 {
-    return dataset.findAndGetOFString(tagKey, stringValue, 0, OFFalse /*searchIntoSub*/);
+    OFCondition result = EC_Normal;
+    if (pos < 0)
+        result = dataset.findAndGetOFStringArray(tagKey, stringValue, OFFalse /*searchIntoSub*/);
+    else
+        result = dataset.findAndGetOFString(tagKey, stringValue, OFstatic_cast(unsigned long, pos), OFFalse /*searchIntoSub*/);
+    return result;
 }
 
 
@@ -912,7 +1092,64 @@ OFCondition DSRTypes::putStringValueToDataset(DcmItem &dataset,
 {
     OFCondition result = EC_Normal;
     if (allowEmpty || !stringValue.empty())
-        result = dataset.putAndInsertString(tag, stringValue.c_str(), OFTrue /*replaceOld*/);
+        result = dataset.putAndInsertOFStringArray(tag, stringValue, OFTrue /*replaceOld*/);
+    return result;
+}
+
+
+OFBool DSRTypes::checkElementValue(DcmElement *delem,
+                                   const DcmTagKey &tagKey,
+                                   const OFString &vm,
+                                   const OFString &type,
+                                   const OFCondition &searchCond,
+                                   const char *moduleName,
+                                   const OFBool acceptViolation)
+{
+    OFBool result = OFTrue;
+    const OFString tagName = DcmTag(tagKey).getTagName();
+    const OFString module = (moduleName == NULL) ? "SR document" : moduleName;
+    /* NB: type 1C and 2C cannot be checked, assuming to be optional */
+    if (((type == "1") || (type == "2")) && searchCond.bad())
+    {
+        DCMSR_WARN(tagName << " " << tagKey << " absent in " << module << " (type " << type << ")");
+        result = OFFalse;
+    }
+    else if ((delem == NULL) || delem->isEmpty(OFTrue /*normalize*/))
+    {
+        /* however, type 1C should never be present with empty value */
+        if (((type == "1") || (type == "1C")) && searchCond.good())
+        {
+            DCMSR_WARN(tagName << " " << tagKey << " empty in " << module << " (type " << type << ")");
+            result = OFFalse;
+        }
+    } else {
+        const OFCondition checkResult = delem->checkValue(vm, OFTrue /*oldFormat*/);
+        if (checkResult == EC_InvalidCharacter)
+        {
+            DCMSR_WARN(tagName << " " << tagKey << " contains invalid character(s) in " << module);
+            result = acceptViolation;
+        }
+        else if (checkResult == EC_ValueRepresentationViolated)
+        {
+            DCMSR_WARN(tagName << " " << tagKey << " violates VR definition in " << module);
+            result = acceptViolation;
+        }
+        else if (checkResult == EC_ValueMultiplicityViolated)
+        {
+            const OFString vmText = (delem->getVR() == EVR_SQ) ? " #items" : " VM";
+            DCMSR_WARN(tagName << " " << tagKey << vmText << " != " << vm << " in " << module);
+            result = acceptViolation;
+        }
+        else if (checkResult == EC_MaximumLengthViolated)
+        {
+            DCMSR_WARN(tagName << " " << tagKey << " violates maximum VR length in " << module);
+            result = acceptViolation;
+        }
+        else if (checkResult.bad())
+        {
+            DCMSR_DEBUG("INTERNAL ERROR while checking value of " << tagName << " " << tagKey << " in " << module);
+        }
+    }
     return result;
 }
 
@@ -921,60 +1158,11 @@ OFBool DSRTypes::checkElementValue(DcmElement &delem,
                                    const OFString &vm,
                                    const OFString &type,
                                    const OFCondition &searchCond,
-                                   const char *moduleName)
+                                   const char *moduleName,
+                                   const OFBool acceptViolation)
 {
-    OFBool result = OFTrue;
-    DcmTag tag = delem.getTag();
-    const OFString tagName = tag.getTagName();
-    const OFString module = (moduleName == NULL) ? "SR document" : moduleName;
-    unsigned long vmNum;
-    OFString vmText;
-    /* special case: sequence of items */
-    if (delem.getVR() == EVR_SQ)
-    {
-        vmNum = OFstatic_cast(DcmSequenceOfItems &, delem).card();
-        vmText = " #items";
-    } else {
-        vmNum = delem.getVM();
-        vmText = " VM";
-    }
-    /* NB: type 1C and 2C cannot be checked, assuming to be optional = type 3 */
-    if (((type == "1") || (type == "2")) && searchCond.bad())
-    {
-        DCMSR_WARN(tagName << " " << tag << " absent in " << module << " (type " << type << ")");
-        result = OFFalse;
-    }
-    else if (delem.isEmpty(OFTrue /*normalize*/))
-    {
-        /* however, type 1C should never be present with empty value */
-        if (((type == "1") || (type == "1C")) && searchCond.good())
-        {
-            DCMSR_WARN(tagName << " " << tag << " empty in " << module << " (type " << type << ")");
-            result = OFFalse;
-        }
-    } else {
-        const OFCondition checkResult = delem.checkValue(vm, OFTrue /*oldFormat*/);
-        if (checkResult == EC_ValueRepresentationViolated)
-        {
-            DCMSR_WARN(tagName << " " << tag << " violates VR definition in " << module);
-            result = OFFalse;
-        }
-        else if (checkResult == EC_ValueMultiplicityViolated)
-        {
-            DCMSR_WARN(tagName << " " << tag << vmText << " != " << vm << " in " << module);
-            result = OFFalse;
-        }
-        else if (checkResult == EC_MaximumLengthViolated)
-        {
-            DCMSR_WARN(tagName << " " << tag << " violates maximum VR length in " << module);
-            result = OFFalse;
-        }
-        else if (checkResult.bad())
-        {
-            DCMSR_DEBUG("INTERNAL ERROR while checking value of " << tagName << " " << tag << " in " << module);
-        }
-    }
-    return result;
+    /* call the real function */
+    return checkElementValue(&delem, delem.getTag(), vm, type, searchCond, moduleName, acceptViolation);
 }
 
 
@@ -982,10 +1170,22 @@ OFCondition DSRTypes::getAndCheckElementFromDataset(DcmItem &dataset,
                                                     DcmElement &delem,
                                                     const OFString &vm,
                                                     const OFString &type,
-                                                    const char *moduleName)
+                                                    const char *moduleName,
+                                                    const OFBool acceptViolation)
 {
-    OFCondition result = getElementFromDataset(dataset, delem);
-    if (!checkElementValue(delem, vm, type, result, moduleName))
+    DcmStack stack;
+    const DcmTagKey tagKey = delem.getTag();
+    OFCondition result = dataset.search(tagKey, stack, ESM_fromHere, OFFalse /*searchIntoSub*/);
+    if (result.good())
+    {
+        /* copy object from search stack */
+        result = delem.copyFrom(*stack.top());
+        /* we need a reference to the original element in order to determine the SpecificCharacterSet */
+        if (!checkElementValue(OFstatic_cast(DcmElement *, stack.top()), tagKey, vm, type, result, moduleName, acceptViolation))
+            result = SR_EC_InvalidValue;
+    }
+    /* the element could not be found in the dataset */
+    else if (!checkElementValue(delem, vm, type, result, moduleName, acceptViolation))
         result = SR_EC_InvalidValue;
     return result;
 }
@@ -996,21 +1196,18 @@ OFCondition DSRTypes::getAndCheckStringValueFromDataset(DcmItem &dataset,
                                                         OFString &stringValue,
                                                         const OFString &vm,
                                                         const OFString &type,
-                                                        const char *moduleName)
+                                                        const char *moduleName,
+                                                        const OFBool acceptViolation)
 {
     DcmStack stack;
     OFCondition result = dataset.search(tagKey, stack, ESM_fromHere, OFFalse /*searchIntoSub*/);
     if (result.good())
     {
         DcmElement *delem = OFstatic_cast(DcmElement *, stack.top());
-        if (delem != NULL)
-        {
-            if (checkElementValue(*delem, vm, type, result, moduleName))
-                result = delem->getOFString(stringValue, 0);
-            else
-                result = SR_EC_InvalidValue;
-        } else
-            result = EC_CorruptedData;
+        /* we need a reference to the original element in order to determine the SpecificCharacterSet */
+        if (!checkElementValue(delem, tagKey, vm, type, result, moduleName, acceptViolation))
+            result = SR_EC_InvalidValue;
+        delem->getOFString(stringValue, 0);
     } else {
         if ((type == "1") || (type == "2"))
         {
@@ -1019,7 +1216,8 @@ OFCondition DSRTypes::getAndCheckStringValueFromDataset(DcmItem &dataset,
             DCMSR_WARN(tagName << " " << tagKey << " absent in " << module << " (type " << type << ")");
         }
     }
-    if (result.bad())
+    /* clear return parameter if an error occurred, but not in case of invalid value */
+    if (result.bad() && (result != SR_EC_InvalidValue))
         stringValue.clear();
     return result;
 }
@@ -1045,6 +1243,15 @@ const OFString &DSRTypes::currentDateTime(OFString &dateTimeString)
 {
     DcmDateTime::getCurrentDateTime(dateTimeString, OFTrue /*seconds*/, OFFalse /*fraction*/, OFFalse /*timeZone*/);
     return dateTimeString;
+}
+
+
+const OFString &DSRTypes::localTimezone(OFString &timezoneString)
+{
+    OFString dateTimeString;
+    DcmDateTime::getCurrentDateTime(dateTimeString, OFFalse /*seconds*/, OFFalse /*fraction*/, OFTrue /*timeZone*/);
+    timezoneString.assign(dateTimeString.substr(8 /* YYYYMMDD */ + 4 /* HHMM */, 5 /* &ZZZZ */));
+    return timezoneString;
 }
 
 
@@ -1233,7 +1440,7 @@ const OFString &DSRTypes::convertToXMLString(const OFString &sourceString,
 }
 
 
-OFBool DSRTypes::checkForValidUIDFormat(const OFString &stringValue)
+OFBool DSRTypes::checkForValidReference(const OFString &stringValue)
 {
     OFBool result = OFFalse;
     /* empty strings are invalid */
@@ -1245,6 +1452,9 @@ OFBool DSRTypes::checkForValidUIDFormat(const OFString &stringValue)
             /* check for leading number */
             while (isdigit(*p))
             {
+                /* disallow leading 0 */
+                if (!result && (*p == '0'))
+                    break;
                 result = OFTrue;
                 p++;
             }
@@ -1257,6 +1467,9 @@ OFBool DSRTypes::checkForValidUIDFormat(const OFString &stringValue)
                 /* check for trailing number */
                 while (isdigit(*p))
                 {
+                    /* disallow leading 0 */
+                    if (!result && (*p == '0'))
+                        break;
                     result = OFTrue;
                     p++;
                 }
@@ -1311,7 +1524,38 @@ DSRIODConstraintChecker *DSRTypes::createIODConstraintChecker(const E_DocumentTy
         case DT_ImplantationPlanSRDocument:
             checker = new DSRImplantationPlanSRDocumentConstraintChecker();
             break;
-        default:
+        case DT_Comprehensive3DSR:
+            checker = new DSRComprehensive3DSRConstraintChecker();
+            break;
+        case DT_RadiopharmaceuticalRadiationDoseSR:
+            checker = new DSRRadiopharmaceuticalRadiationDoseSRConstraintChecker();
+            break;
+        case DT_ExtensibleSR:
+            /* not yet supported */
+            break;
+        case DT_AcquisitionContextSR:
+            checker = new DSRAcquisitionContextSRConstraintChecker();
+            break;
+        case DT_SimplifiedAdultEchoSR:
+            checker = new DSRSimplifiedAdultEchoSRConstraintChecker();
+            break;
+        case DT_PatientRadiationDoseSR:
+            checker = new DSRPatientRadiationDoseSRConstraintChecker();
+            break;
+        case DT_PerformedImagingAgentAdministrationSR:
+            checker = new DSRPerformedImagingAgentAdministrationSRConstraintChecker();
+            break;
+        case DT_PlannedImagingAgentAdministrationSR:
+            checker = new DSRPlannedImagingAgentAdministrationSRConstraintChecker();
+            break;
+        case DT_RenditionSelectionDocument:
+            checker = new DSRRenditionSelectionDocumentConstraintChecker();
+            break;
+        case DT_EnhancedXRayRadiationDoseSR:
+            /* not yet supported */
+            break;
+        case DT_invalid:
+            /* nothing to do */
             break;
     }
     return checker;
@@ -1487,12 +1731,17 @@ OFBool DSRTypes::writeStringFromElementToXML(STD_NAMESPACE ostream &stream,
     {
         OFString tempString;
         stream << "<" << tagName << ">";
-        if (delem.getVR() == EVR_PN)        // special formatting for person names
+        /* special formatting for person names */
+        if (delem.getVR() == EVR_PN)
         {
             OFString xmlString;
+            /* use first element value only */
             stream << OFendl << dicomToXMLPersonName(getStringValueFromElement(delem, tempString), xmlString, writeEmptyValue) << OFendl;
-        } else
-            OFStandard::convertToMarkupStream(stream, getStringValueFromElement(delem, tempString), OFFalse /*convertNonASCII*/);
+        } else {
+            /* use all element values (1-n) */
+            getStringValueFromElement(delem, tempString, -1 /* all components */);
+            OFStandard::convertToMarkupStream(stream, tempString, OFFalse /*convertNonASCII*/);
+        }
         stream << "</" << tagName << ">" << OFendl;
         result = OFTrue;
     }
@@ -1571,303 +1820,3 @@ OFCondition DSRTypes::appendStream(STD_NAMESPACE ostream &mainStream,
     }
     return result;
 }
-
-OFLogger DCM_dcmsrGetLogger()
-{
-    // We don't just use a global variable, because constructors of globals are
-    // executed in random order. This guarantees that the OFLogger is constructed
-    // before first use.
-    static OFLogger DCM_dcmsrLogger = OFLog::getLogger("dcmtk.dcmsr");
-    return DCM_dcmsrLogger;
-}
-
-
-/*
- *  CVS/RCS Log:
- *  $Log: dsrtypes.cc,v $
- *  Revision 1.73  2010-11-05 11:06:57  joergr
- *  Added support for new Implantation Plan SR Document Storage SOP Class.
- *
- *  Revision 1.72  2010-10-21 09:06:51  joergr
- *  Added virtual destructor in order to avoid warnings reported by gcc with
- *  additional flags.
- *
- *  Revision 1.71  2010-10-20 07:41:36  uli
- *  Made sure isalpha() & friends are only called with valid arguments.
- *
- *  Revision 1.70  2010-10-14 13:14:42  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.69  2010-09-30 08:59:55  joergr
- *  Added support for the Spectacle Prescription Report IOD.
- *  Added support for the Macular Grid Thickness and Volume Report IOD.
- *  Renamed class and enumeration related to the Key Object Selection Document.
- *
- *  Revision 1.68  2010-09-29 15:16:51  joergr
- *  Enhanced checking and reporting of standard violations in write() methods.
- *
- *  Revision 1.67  2010-09-29 10:07:41  joergr
- *  Added support for the recently introduced, optional PreliminaryFlag.
- *
- *  Revision 1.66  2010-09-28 16:25:49  joergr
- *  Added support for Enhanced General Equipment Module which is required for
- *  both X-Ray Radiation Dose SR and Colon CAD SR.
- *  Use new isEmpty() method instead of length in order to determine whether the
- *  element value is empty (e.g. for checking the presence of type 3 attributes).
- *
- *  Revision 1.65  2010-09-28 14:09:36  joergr
- *  Added support for Colon CAD SR which requires a new value type (SCOORD3D).
- *
- *  Revision 1.64  2010-09-24 13:35:52  joergr
- *  Compared names of SOP Class UIDs with 2009 edition of the DICOM standard. The
- *  resulting name changes are mainly caused by the fact that the corresponding
- *  SOP Class is now retired.
- *
- *  Revision 1.63  2010-04-23 14:38:39  joergr
- *  Enhanced checking of element values using the new DcmElement::checkValue()
- *  method.
- *
- *  Revision 1.62  2010-01-21 14:51:30  joergr
- *  Switched to new stream variant of method convertToMarkupString() where
- *  appropriate.
- *
- *  Revision 1.61  2009-12-10 15:18:41  joergr
- *  Fixed small issue in log output.
- *
- *  Revision 1.60  2009-10-14 09:45:31  joergr
- *  Slightly modified output of some log messages (avoid creation of temporary
- *  strings).
- *
- *  Revision 1.59  2009-10-13 14:57:51  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.58  2009-08-07 14:27:42  joergr
- *  Use new isEmpty() method instead of length in order to determine whether the
- *  element value is empty (e.g. for checking the presence of type 1 attributes).
- *
- *  Revision 1.57  2009-07-27 15:31:55  joergr
- *  Fixed possible memory leak in method addElementToDataset().
- *
- *  Revision 1.56  2008-12-11 15:50:25  joergr
- *  Enhanced method checkElementValue(), e.g. added support for type 1C elements.
- *
- *  Revision 1.55  2008-07-17 11:57:11  joergr
- *  Replaced wrong use of assignment operator by new copyFrom() method.
- *  Removed getSequenceFromDataset() function.
- *
- *  Revision 1.54  2008-06-27 10:50:00  joergr
- *  Fixed condition that could lead to a wrong error message in method
- *  checkElementValue().
- *
- *  Revision 1.53  2008-05-19 09:55:34  joergr
- *  Added new flag that enables reading of SR documents with unknown/missing
- *  relationship type(s).
- *  Changed parameters of checkByReferenceRelationships() method.
- *
- *  Revision 1.52  2007/11/15 16:45:26  joergr
- *  Added support for output in XHTML 1.1 format.
- *  Enhanced support for output in valid HTML 3.2 format. Migrated support for
- *  standard HTML from version 4.0 to 4.01 (strict).
- *
- *  Revision 1.51  2006/08/15 16:40:03  meichel
- *  Updated the code in module dcmsr to correctly compile when
- *    all standard C++ classes remain in namespace std.
- *
- *  Revision 1.50  2006/07/25 13:34:24  joergr
- *  Added new optional flags for the HTML rendering of SR documents:
- *  HF_alwaysExpandChildrenInline, HF_useCodeDetailsTooltip and
- *  HF_renderSectionTitlesInline.
- *
- *  Revision 1.49  2006/05/11 09:16:49  joergr
- *  Moved containsExtendedCharacters() from dcmsr to dcmdata module.
- *
- *  Revision 1.48  2005/12/08 15:48:19  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.47  2005/11/30 12:01:15  joergr
- *  Added support for X-Ray Radiation Dose SR documents.
- *
- *  Revision 1.46  2004/11/29 17:11:37  joergr
- *  Added warning message when character set is unknown, unsupported  or cannot
- *  be mapped to the output format. Added support for UTF-8 character set.
- *
- *  Revision 1.45  2004/11/22 16:35:40  meichel
- *  Added helper methods to check strings and DICOM elements for presence of
- *    extended (non-ASCII) characters
- *
- *  Revision 1.44  2004/09/09 14:02:02  joergr
- *  Added flags to control the way the template identification is encoded in
- *  writeXML() and expected in readXML().
- *
- *  Revision 1.43  2004/02/11 15:58:32  joergr
- *  Renamed UID_ProcedureLog to UID_ProcedureLogStorage.
- *
- *  Revision 1.42  2004/01/20 15:37:39  joergr
- *  Added new command line option which allows to write the item identifier "id"
- *  (XML attribute) even if it is not required (because the item is not referenced
- *  by any other item). Useful for debugging purposes.
- *
- *  Revision 1.41  2004/01/16 10:09:45  joergr
- *  Replaced OFString::resize() by ..reserve() in convertToPrintString().
- *
- *  Revision 1.40  2004/01/05 14:37:23  joergr
- *  Removed acknowledgements with e-mail addresses from CVS log.
- *
- *  Revision 1.39  2003/12/08 13:05:48  joergr
- *  Return more appropriate error codes in getAndCheckXXX() routines.
- *
- *  Revision 1.38  2003/12/01 15:47:28  joergr
- *  Changed XML encoding of by-reference relationships if flag
- *  XF_valueTypeAsAttribute is set.
- *
- *  Revision 1.37  2003/10/30 17:51:43  joergr
- *  Added new command line options which allow to print/write the template
- *  identification of a content item.
- *
- *  Revision 1.36  2003/10/09 12:58:19  joergr
- *  Added support for Procedure Log.
- *
- *  Revision 1.35  2003/10/06 09:55:35  joergr
- *  Added new flag which allows to ignore content item errors when reading an SR
- *  document (e.g. missing value type specific attributes).
- *
- *  Revision 1.34  2003/09/15 14:13:42  joergr
- *  Introduced new class to facilitate checking of SR IOD relationship content
- *  constraints. Replaced old implementation distributed over numerous classes.
- *
- *  Revision 1.33  2003/09/10 13:18:43  joergr
- *  Replaced PrivateCodingSchemeUID by new CodingSchemeIdenticationSequence as
- *  required by CP 324.
- *
- *  Revision 1.32  2003/08/07 14:14:46  joergr
- *  Added readXML functionality. Added support for Chest CAD SR.
- *  Added new option --add-schema-reference to command line tool dsr2xml.
- *  Renamed parameters/variables "string" to avoid name clash with STL class.
- *  Adapted type casts to new-style typecast operators defined in ofcast.h.
- *
- *  Revision 1.31  2003/04/01 14:59:41  joergr
- *  Added support for XML namespaces.
- *
- *  Revision 1.30  2002/11/27 14:36:18  meichel
- *  Adapted module dcmsr to use of new header file ofstdinc.h
- *
- *  Revision 1.29  2002/08/20 12:53:57  meichel
- *  Added explicit includes for header files included implicitly
- *    via dcstream before.
- *
- *  Revision 1.28  2002/08/02 12:39:07  joergr
- *  Enhanced debug output of dcmsr::read() routines (e.g. add position string
- *  of invalid content items to error messages).
- *
- *  Revision 1.27  2002/07/22 14:22:34  joergr
- *  Added new print flag to suppress the output of general document information.
- *
- *  Revision 1.26  2002/05/07 12:54:28  joergr
- *  Added support for the Current Requested Procedure Evidence Sequence and the
- *  Pertinent Other Evidence Sequence to the dcmsr module.
- *
- *  Revision 1.25  2002/05/02 14:08:36  joergr
- *  Added support for standard and non-standard string streams (which one is
- *  supported is detected automatically via the configure mechanism).
- *
- *  Revision 1.24  2002/04/25 09:15:39  joergr
- *  Moved helper function which converts a conventional character string to an
- *  HTML/XML mnenonic string (e.g. using "&lt;" instead of "<") from module
- *  dcmsr to ofstd.
- *
- *  Revision 1.23  2001/11/09 16:20:18  joergr
- *  Added new command line option allowing to encode codes as XML attributes
- *  (instead of tags).
- *  Added preliminary support for Mammography CAD SR.
- *
- *  Revision 1.22  2001/10/10 15:29:18  joergr
- *  Changed parameter DcmTagKey to DcmTag in DcmItem::putAndInsert... methods
- *  to support elements which are not in the data dictionary (e.g. private
- *  extensions).
- *  Additonal adjustments for new OFCondition class.
- *
- *  Revision 1.21  2001/10/02 12:07:11  joergr
- *  Adapted module "dcmsr" to the new class OFCondition. Introduced module
- *  specific error codes.
- *
- *  Revision 1.20  2001/10/01 15:11:37  joergr
- *  Introduced new general purpose functions to get/set person names, date, time
- *  and date/time.
- *
- *  Revision 1.19  2001/09/26 13:04:28  meichel
- *  Adapted dcmsr to class OFCondition
- *
- *  Revision 1.18  2001/06/20 15:05:22  joergr
- *  Added minimal support for new SOP class Key Object Selection Document
- *  (suppl. 59).
- *  Added new debugging features (additional flags) to examine "corrupted" SR
- *  documents.
- *
- *  Revision 1.17  2001/04/03 08:25:18  joergr
- *  Added new command line option: ignore relationship content constraints
- *  specified for each SR document class.
- *
- *  Revision 1.16  2001/02/13 16:34:09  joergr
- *  Allow newline characters (encoded as &#182;) in XML documents.
- *
- *  Revision 1.15  2001/02/02 14:41:51  joergr
- *  Added new option to dsr2xml allowing to specify whether value and/or
- *  relationship type are to be encoded as XML attributes or elements.
- *
- *  Revision 1.14  2001/01/25 11:50:10  joergr
- *  Always remove signature sequences from certain dataset sequences (e.g.
- *  VerifyingObserver or PredecessorDocuments).
- *
- *  Revision 1.13  2001/01/18 15:56:46  joergr
- *  Encode PN components in separate XML tags.
- *
- *  Revision 1.12  2000/12/12 17:21:21  joergr
- *  Added explicit typecast to keep gcc 2.7 quiet.
- *
- *  Revision 1.11  2000/12/08 13:46:00  joergr
- *  Removed optional fractional second part from time value.
- *
- *  Revision 1.10  2000/11/16 13:32:11  joergr
- *  Fixed bug in dicomToReadablePersonName().
- *
- *  Revision 1.9  2000/11/09 20:34:02  joergr
- *  Added support for non-ASCII characters in HTML 3.2 (use numeric value).
- *
- *  Revision 1.8  2000/11/09 11:36:07  joergr
- *  Minor HTML code purifications.
- *  Reordered renderHTML flags (internal flags to the end).
- *
- *  Revision 1.7  2000/11/07 18:32:01  joergr
- *  Enhanced rendered HTML output of date, time, datetime and pname.
- *  Added new command line option allowing to choose code value or meaning to be
- *  rendered as the numeric measurement unit.
- *
- *  Revision 1.6  2000/11/01 16:36:11  joergr
- *  Added support for conversion to XML.
- *  Added support for Cascading Style Sheet (CSS) used optionally for HTML
- *  rendering.
- *  Enhanced support for specific character sets.
- *
- *  Revision 1.5  2000/10/26 14:36:32  joergr
- *  Added support for "Comprehensive SR".
- *  Added support for TCOORD content item.
- *  Added new flag specifying whether to add a "dcmtk" footnote to the rendered
- *  HTML document or not.
- *  Added check routine for valid UID strings.
- *
- *  Revision 1.4  2000/10/18 17:23:58  joergr
- *  Added new method allowing to get and check string values from dataset.
- *
- *  Revision 1.3  2000/10/16 12:09:28  joergr
- *  Added new options: number nested items instead of indenting them, print SOP
- *  instance UID of referenced composite objects.
- *
- *  Revision 1.2  2000/10/13 08:53:33  joergr
- *  Removed typedef statements to keep MSVC++ quiet.
- *
- *  Revision 1.1  2000/10/13 07:52:27  joergr
- *  Added new module 'dcmsr' providing access to DICOM structured reporting
- *  documents (supplement 23).  Doc++ documentation not yet completed.
- *
- *
- */

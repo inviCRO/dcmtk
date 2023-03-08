@@ -1,10 +1,11 @@
+// -*- C++ -*-
 // Module:  Log4CPLUS
 // File:    pointer.h
 // Created: 6/2001
 // Author:  Tad E. Smith
 //
 //
-// Copyright 2001-2009 Tad E. Smith
+// Copyright 2001-2010 Tad E. Smith
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,19 +26,25 @@
 
 /** @file */
 
-#ifndef _LOG4CPLUS_HELPERS_POINTERS_HEADER_
-#define _LOG4CPLUS_HELPERS_POINTERS_HEADER_
+#ifndef DCMTK_LOG4CPLUS_HELPERS_POINTERS_HEADER_
+#define DCMTK_LOG4CPLUS_HELPERS_POINTERS_HEADER_
 
 #include "dcmtk/oflog/config.h"
-//#include <memory>
-//#include <stdexcept>
-//#include <string>
-//#include <algorithm>
-//#include <cassert>
 
-#define INCLUDE_CASSERT
-#include "dcmtk/ofstd/ofstdinc.h"
+#if defined (DCMTK_LOG4CPLUS_HAVE_PRAGMA_ONCE)
+#pragma once
+#endif
 
+#include "dcmtk/oflog/thread/syncprim.h"
+#include <algorithm>
+#include <cassert>
+#if ! defined (DCMTK_LOG4CPLUS_SINGLE_THREADED) \
+    && defined (DCMTK_LOG4CPLUS_HAVE_CXX11_ATOMICS)
+#include <atomic>
+#endif
+
+
+namespace dcmtk {
 namespace log4cplus {
     namespace helpers {
 
@@ -45,7 +52,7 @@ namespace log4cplus {
          *                       Class SharedObject (from pp. 204-205)                *
          ******************************************************************************/
 
-        class LOG4CPLUS_EXPORT SharedObject
+        class DCMTK_LOG4CPLUS_EXPORT SharedObject
         {
         public:
             void addReference() const;
@@ -54,12 +61,12 @@ namespace log4cplus {
         protected:
           // Ctor
             SharedObject()
-                : access_mutex(LOG4CPLUS_MUTEX_CREATE)
+                : access_mutex()
                 , count(0)
             { }
 
             SharedObject(const SharedObject&)
-                : access_mutex(LOG4CPLUS_MUTEX_CREATE)
+                : access_mutex()
                 , count(0)
             { }
 
@@ -70,10 +77,19 @@ namespace log4cplus {
             SharedObject& operator=(const SharedObject&) { return *this; }
 
         public:
-            LOG4CPLUS_MUTEX_PTR_DECLARE access_mutex;
+            thread::Mutex access_mutex;
 
         private:
-            mutable int count;
+#if defined (DCMTK_LOG4CPLUS_SINGLE_THREADED)
+            typedef unsigned count_type;
+#elif defined (DCMTK_LOG4CPLUS_HAVE_CXX11_ATOMICS)
+            typedef STD_NAMESPACE atomic<unsigned> count_type;
+#elif defined (_WIN32) || defined (__CYGWIN__)
+            typedef long count_type;
+#else
+            typedef unsigned count_type;
+#endif
+            mutable count_type count;
         };
 
 
@@ -97,6 +113,20 @@ namespace log4cplus {
             {
                 addref ();
             }
+
+#if defined (DCMTK_LOG4CPLUS_HAVE_RVALUE_REFS)
+            SharedObjectPtr(SharedObjectPtr && rhs)
+                : pointee (STD_NAMESPACE move (rhs.pointee))
+            {
+                rhs.pointee = 0;
+            }
+
+            SharedObjectPtr & operator = (SharedObjectPtr && rhs)
+            {
+                rhs.swap (*this);
+                return *this;
+            }
+#endif
 
             // Dtor
             ~SharedObjectPtr()
@@ -132,7 +162,6 @@ namespace log4cplus {
                 T* tmp = pointee;
                 pointee = other.pointee;
                 other.pointee = tmp;
-                //STD_NAMESPACE swap (pointee, other.pointee);
             }
 
             typedef T * (SharedObjectPtr:: * unspec_bool_type) () const;
@@ -160,6 +189,7 @@ namespace log4cplus {
 
     } // end namespace helpers
 } // end namespace log4cplus
+} // end namespace dcmtk
 
 
-#endif // _LOG4CPLUS_HELPERS_POINTERS_HEADER_
+#endif // DCMTK_LOG4CPLUS_HELPERS_POINTERS_HEADER_

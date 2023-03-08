@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2011, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: file cache facility for DcmElement::getPartialValue
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:41 $
- *  CVS/RCS Revision: $Revision: 1.3 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCFCACHE_H
@@ -39,7 +32,7 @@
  *  It is used to keep a single file handle open during multiple calls to
  *  DcmElement::getPartialValue(), thus speeding up the reading.
  */
-class DcmFileCache
+class DCMTK_DCMDATA_EXPORT DcmFileCache
 {
 public:
 	
@@ -99,10 +92,14 @@ public:
   
 private:
 
-  /// private undefined copy constructor
+  /** private undefined copy constructor
+   * @param arg documented to avoid doxygen warnings
+   */
   DcmFileCache(const DcmFileCache& arg);
 
-  /// private undefined copy assignment operator
+  /** private undefined copy assignment operator
+   * @param arg the cache to copy
+   */
   DcmFileCache& operator=(const DcmFileCache& arg);
 
   /// input stream, may be NULL
@@ -116,20 +113,3 @@ private:
 };
 
 #endif
-
-/*
- * CVS/RCS Log:
- * $Log: dcfcache.h,v $
- * Revision 1.3  2010-10-14 13:15:41  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.2  2009-11-04 09:58:07  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.1  2007-07-11 08:50:23  meichel
- * Initial release of new method DcmElement::getPartialValue which gives access
- *   to partial attribute values without loading the complete attribute value
- *   into memory, if kept in file.
- *
- *
- */

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,22 +18,12 @@
  *  Purpose:
  *    classes: DVPSTextObject
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:33 $
- *  CVS/RCS Revision: $Revision: 1.16 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 #include "dcmtk/dcmpstat/dvpstx.h"
 #include "dcmtk/ofstd/ofstring.h"
 #include "dcmtk/dcmpstat/dvpsdef.h"     /* for constants and macros */
-
-#define INCLUDE_CSTRING
-#include "dcmtk/ofstd/ofstdinc.h"
 
 
 /* --------------- class DVPSTextObject --------------- */
@@ -71,83 +61,83 @@ OFCondition DVPSTextObject::read(DcmItem &dset)
   OFCondition result = EC_Normal;
   DcmStack stack;
 
-  READ_FROM_DATASET(DcmCodeString, boundingBoxAnnotationUnits)
-  READ_FROM_DATASET(DcmCodeString, anchorPointAnnotationUnits)
-  READ_FROM_DATASET(DcmShortText, unformattedTextValue)
-  READ_FROM_DATASET(DcmFloatingPointSingle, boundingBoxTLHC)
-  READ_FROM_DATASET(DcmFloatingPointSingle, boundingBoxBRHC)
-  READ_FROM_DATASET(DcmCodeString, boundingBoxTextHorizontalJustification)
-  READ_FROM_DATASET(DcmFloatingPointSingle, anchorPoint)
-  READ_FROM_DATASET(DcmCodeString, anchorPointVisibility)
+  READ_FROM_DATASET(DcmCodeString, EVR_CS, boundingBoxAnnotationUnits)
+  READ_FROM_DATASET(DcmCodeString, EVR_CS, anchorPointAnnotationUnits)
+  READ_FROM_DATASET(DcmShortText, EVR_ST, unformattedTextValue)
+  READ_FROM_DATASET(DcmFloatingPointSingle, EVR_FL, boundingBoxTLHC)
+  READ_FROM_DATASET(DcmFloatingPointSingle, EVR_FL, boundingBoxBRHC)
+  READ_FROM_DATASET(DcmCodeString, EVR_CS, boundingBoxTextHorizontalJustification)
+  READ_FROM_DATASET(DcmFloatingPointSingle, EVR_FL, anchorPoint)
+  READ_FROM_DATASET(DcmCodeString, EVR_CS, anchorPointVisibility)
   
   /* Now perform basic sanity checks */
   
   if (unformattedTextValue.getLength() == 0)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a text object SQ item with unformattedTextValue absent or empty");
+    DCMPSTAT_WARN("presentation state contains a text object SQ item with unformattedTextValue absent or empty");
   }
   else if (unformattedTextValue.getVM() != 1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a text object SQ item with unformattedTextValue VM != 1");
+    DCMPSTAT_WARN("presentation state contains a text object SQ item with unformattedTextValue VM != 1");
   }
 
   if (boundingBoxAnnotationUnits.getVM() > 1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a text object SQ item with boundingBoxAnnotationUnits VM > 1");
+    DCMPSTAT_WARN("presentation state contains a text object SQ item with boundingBoxAnnotationUnits VM > 1");
   }
 
   if (anchorPointAnnotationUnits.getVM() > 1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a text object SQ item with anchorPointAnnotationUnits VM > 1");
+    DCMPSTAT_WARN("presentation state contains a text object SQ item with anchorPointAnnotationUnits VM > 1");
   }
 
   if (anchorPointVisibility.getVM() > 1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a text object SQ item with anchorPointVisibility VM > 1");
+    DCMPSTAT_WARN("presentation state contains a text object SQ item with anchorPointVisibility VM > 1");
   }
 
   if (boundingBoxTLHC.getVM() ==1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a text object SQ item with boundingBoxTLHC VM == 1");
+    DCMPSTAT_WARN("presentation state contains a text object SQ item with boundingBoxTLHC VM == 1");
   }
   else if (boundingBoxTLHC.getVM() > 2)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a text object SQ item with boundingBoxTLHC VM > 2");
+    DCMPSTAT_WARN("presentation state contains a text object SQ item with boundingBoxTLHC VM > 2");
   }
 
   if (boundingBoxBRHC.getVM() ==1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a text object SQ item with boundingBoxBRHC VM == 1");
+    DCMPSTAT_WARN("presentation state contains a text object SQ item with boundingBoxBRHC VM == 1");
   }
   else if (boundingBoxBRHC.getVM() > 2)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a text object SQ item with boundingBoxBRHC VM > 2");
+    DCMPSTAT_WARN("presentation state contains a text object SQ item with boundingBoxBRHC VM > 2");
   }
 
   if (boundingBoxTextHorizontalJustification.getVM() > 1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a text object SQ item with boundingBoxTextHorizontalJustification VM > 1");
+    DCMPSTAT_WARN("presentation state contains a text object SQ item with boundingBoxTextHorizontalJustification VM > 1");
   }
 
   if (anchorPoint.getVM() ==1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a text object SQ item with anchorPoint VM == 1");
+    DCMPSTAT_WARN("presentation state contains a text object SQ item with anchorPoint VM == 1");
   }
   else if (anchorPoint.getVM() > 2)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a text object SQ item with anchorPoint VM > 2");
+    DCMPSTAT_WARN("presentation state contains a text object SQ item with anchorPoint VM > 2");
   }
 
   /* test for the various type 1c conditions */
@@ -156,38 +146,38 @@ OFCondition DVPSTextObject::read(DcmItem &dset)
      && ((boundingBoxTLHC.getVM() >0) || (boundingBoxBRHC.getVM() >0)))
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a text object SQ item with bounding box but boundingBoxAnnotationUnits absent or empty");
+    DCMPSTAT_WARN("presentation state contains a text object SQ item with bounding box but boundingBoxAnnotationUnits absent or empty");
   }
 
   if ((boundingBoxTextHorizontalJustification.getVM() == 0)
      && ((boundingBoxTLHC.getVM() >0) || (boundingBoxBRHC.getVM() >0)))
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a text object SQ item with bounding box but boundingBoxTextHorizontalJustification absent or empty");
+    DCMPSTAT_WARN("presentation state contains a text object SQ item with bounding box but boundingBoxTextHorizontalJustification absent or empty");
   }
 
   if ((anchorPointAnnotationUnits.getVM() == 0) && (anchorPoint.getVM() >0)) 
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a text object SQ item with anchor point but anchorPointAnnotationUnits absent or empty");
+    DCMPSTAT_WARN("presentation state contains a text object SQ item with anchor point but anchorPointAnnotationUnits absent or empty");
   }
 
   if ((anchorPointVisibility.getVM() == 0) && (anchorPoint.getVM() >0)) 
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a text object SQ item with anchor point but anchorPointVisibility absent or empty");
+    DCMPSTAT_WARN("presentation state contains a text object SQ item with anchor point but anchorPointVisibility absent or empty");
   }
 
   if ((boundingBoxTLHC.getVM() == 0) && (anchorPoint.getVM() == 0)) 
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a text object SQ item without bounding box and anchor point");
+    DCMPSTAT_WARN("presentation state contains a text object SQ item without bounding box and anchor point");
   }
 
   if ((boundingBoxBRHC.getVM() == 0) && (anchorPoint.getVM() == 0)) 
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a text object SQ item without bounding box and anchor point");
+    DCMPSTAT_WARN("presentation state contains a text object SQ item without bounding box and anchor point");
   }
 
   return result;
@@ -420,62 +410,3 @@ DVPSannotationUnit DVPSTextObject::getAnchorPointAnnotationUnits()
   if ((result==EC_Normal)&&(aString == "DISPLAY")) aresult = DVPSA_display;
   return aresult;
 }
-
-/*
- *  $Log: dvpstx.cc,v $
- *  Revision 1.16  2010-10-14 13:14:33  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.15  2009-11-24 14:12:59  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.14  2006-08-15 16:57:02  meichel
- *  Updated the code in module dcmpstat to correctly compile when
- *    all standard C++ classes remain in namespace std.
- *
- *  Revision 1.13  2005/12/08 15:46:53  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.12  2002/11/27 15:48:17  meichel
- *  Adapted module dcmpstat to use of new header file ofstdinc.h
- *
- *  Revision 1.11  2001/09/26 15:36:35  meichel
- *  Adapted dcmpstat to class OFCondition
- *
- *  Revision 1.10  2001/06/01 15:50:40  meichel
- *  Updated copyright header
- *
- *  Revision 1.9  2000/06/02 16:01:09  meichel
- *  Adapted all dcmpstat classes to use OFConsole for log and error output
- *
- *  Revision 1.8  2000/05/31 13:02:41  meichel
- *  Moved dcmpstat macros and constants into a common header file
- *
- *  Revision 1.7  2000/03/08 16:29:12  meichel
- *  Updated copyright header.
- *
- *  Revision 1.6  2000/03/03 14:14:07  meichel
- *  Implemented library support for redirecting error messages into memory
- *    instead of printing them to stdout/stderr for GUI applications.
- *
- *  Revision 1.5  1999/07/22 16:40:06  meichel
- *  Adapted dcmpstat data structures and API to supplement 33 letter ballot text.
- *
- *  Revision 1.4  1999/01/11 13:35:24  meichel
- *  added some explicit type conversions to avoid compiler warnings with VC++.
- *
- *  Revision 1.3  1998/12/22 17:57:19  meichel
- *  Implemented Presentation State interface for overlays,
- *    VOI LUTs, VOI windows, curves. Added test program that
- *    allows to add curve data to DICOM images.
- *
- *  Revision 1.2  1998/12/14 16:10:49  meichel
- *  Implemented Presentation State interface for graphic layers,
- *    text and graphic annotations, presentation LUTs.
- *
- *  Revision 1.1  1998/11/27 14:50:48  meichel
- *  Initial Release.
- *
- *
- */
-

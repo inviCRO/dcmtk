@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2022, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose:
  *    classes: DVPSStoredPrint_PList
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:33 $
- *  CVS/RCS Revision: $Revision: 1.14 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -114,13 +107,13 @@ void DVPSStoredPrint_PList::printSCPBasicFilmBoxSet(
         list_.push_back(newSP);
       } else delete newSP;
     } else {
-      DCMPSTAT_INFO("cannot update film box, out of memory.");
+      DCMPSTAT_WARN("cannot update film box, out of memory.");
       rsp.msg.NSetRSP.DimseStatus = STATUS_N_ProcessingFailure;
     }
   } else {
     // film box does not exist or wrong instance UID
-    DCMPSTAT_INFO("cannot update film box, object not found.");
-    rsp.msg.NSetRSP.DimseStatus = STATUS_N_NoSuchObjectInstance;
+    DCMPSTAT_WARN("cannot update film box, object not found.");
+    rsp.msg.NSetRSP.DimseStatus = STATUS_N_NoSuchSOPInstance;
   }
 }
 
@@ -149,7 +142,7 @@ void DVPSStoredPrint_PList::printSCPBasicGrayscaleImageBoxSet(
     DcmFileFormat imageFile;
     DcmDataset *imageDataset = imageFile.getDataset();
 
-    if (newib->printSCPSet(cfg, cfgname, rqDataset, rsp, rspDataset, *imageDataset, 
+    if (newib->printSCPSet(cfg, cfgname, rqDataset, rsp, rspDataset, *imageDataset,
         sp->getReferencedPresentationLUTAlignment(), presentationLUTnegotiated))
     {
       if (EC_Normal == sp->writeHardcopyImageAttributes(*imageDataset))
@@ -159,7 +152,7 @@ void DVPSStoredPrint_PList::printSCPBasicGrayscaleImageBoxSet(
         {
           delete rspDataset;
           rspDataset = NULL;
-          DCMPSTAT_INFO("cannot update basic grayscale image box, image position collision.");
+          DCMPSTAT_WARN("cannot update basic grayscale image box, image position collision.");
           rsp.msg.NSetRSP.DimseStatus = STATUS_N_InvalidAttributeValue;
         } else {
           if (EC_Normal == cfg.saveFileFormatToDB(imageFile))
@@ -174,14 +167,14 @@ void DVPSStoredPrint_PList::printSCPBasicGrayscaleImageBoxSet(
       } else {
         delete rspDataset;
         rspDataset = NULL;
-        DCMPSTAT_INFO("cannot update basic grayscale image box, out of memory.");
+        DCMPSTAT_WARN("cannot update basic grayscale image box, out of memory.");
         rsp.msg.NSetRSP.DimseStatus = STATUS_N_ProcessingFailure;
       }
     }
   } else {
     // image box does not exist or wrong instance UID
-    DCMPSTAT_INFO("cannot update basic grayscale image box, object not found.");
-    rsp.msg.NSetRSP.DimseStatus = STATUS_N_NoSuchObjectInstance;
+    DCMPSTAT_WARN("cannot update basic grayscale image box, object not found.");
+    rsp.msg.NSetRSP.DimseStatus = STATUS_N_NoSuchSOPInstance;
   }
 }
 
@@ -224,14 +217,14 @@ void DVPSStoredPrint_PList::printSCPBasicFilmBoxAction(
           rsp.msg.NActionRSP.DimseStatus = STATUS_N_ProcessingFailure;
         }
       } else {
-        DCMPSTAT_INFO("cannot print basic film box, out of memory.");
+        DCMPSTAT_WARN("cannot print basic film box, out of memory.");
         rsp.msg.NActionRSP.DimseStatus = STATUS_N_ProcessingFailure;
       }
     }
   } else {
     // film box does not exist or wrong instance UID
-    DCMPSTAT_INFO("cannot print film box, object not found.");
-    rsp.msg.NActionRSP.DimseStatus = STATUS_N_NoSuchObjectInstance;
+    DCMPSTAT_WARN("cannot print film box, object not found.");
+    rsp.msg.NActionRSP.DimseStatus = STATUS_N_NoSuchSOPInstance;
   }
 }
 
@@ -268,7 +261,7 @@ void DVPSStoredPrint_PList::printSCPBasicFilmSessionAction(
              rsp.msg.NActionRSP.DimseStatus = STATUS_N_ProcessingFailure;
            }
          } else {
-           DCMPSTAT_INFO("cannot print basic film session, out of memory.");
+           DCMPSTAT_WARN("cannot print basic film session, out of memory.");
            rsp.msg.NActionRSP.DimseStatus = STATUS_N_ProcessingFailure;
          }
       }
@@ -276,7 +269,7 @@ void DVPSStoredPrint_PList::printSCPBasicFilmSessionAction(
     }
   } else {
     // no film boxes to print
-    DCMPSTAT_INFO("cannot print film session, no film box.");
+    DCMPSTAT_WARN("cannot print film session, no film box.");
     rsp.msg.NActionRSP.DimseStatus = STATUS_N_PRINT_BFS_Fail_NoFilmBox;
   }
 }
@@ -299,8 +292,8 @@ void DVPSStoredPrint_PList::printSCPBasicFilmBoxDelete(T_DIMSE_Message& rq, T_DI
     list_.erase(first);
   } else {
     // film box does not exist or wrong instance UID
-    DCMPSTAT_INFO("cannot delete film box with instance UID '" << rq.msg.NDeleteRQ.RequestedSOPInstanceUID << "': object does not exist.");
-    rsp.msg.NDeleteRSP.DimseStatus = STATUS_N_NoSuchObjectInstance;
+    DCMPSTAT_WARN("cannot delete film box with instance UID '" << rq.msg.NDeleteRQ.RequestedSOPInstanceUID << "': object does not exist.");
+    rsp.msg.NDeleteRSP.DimseStatus = STATUS_N_NoSuchSOPInstance;
   }
 }
 
@@ -336,12 +329,12 @@ OFBool DVPSStoredPrint_PList::matchesPresentationLUT(DVPSPrintPresentationLUTAli
 {
   OFBool result = OFTrue;
   OFListConstIterator(DVPSStoredPrint *) first = list_.begin();
-  OFListConstIterator(DVPSStoredPrint *) last = list_.end();  
+  OFListConstIterator(DVPSStoredPrint *) last = list_.end();
   while (first != last)
   {
     result = result && (*first)->matchesPresentationLUT(align);
     ++first;
-  }  
+  }
   return result;
 }
 
@@ -352,60 +345,10 @@ void DVPSStoredPrint_PList::overridePresentationLUTSettings(
       DVPSPrintPresentationLUTAlignment newAlignment)
 {
   OFListIterator(DVPSStoredPrint *) first = list_.begin();
-  OFListIterator(DVPSStoredPrint *) last = list_.end();  
+  OFListIterator(DVPSStoredPrint *) last = list_.end();
   while (first != last)
   {
     (*first)->overridePresentationLUTSettings(newIllumination, newReflectedAmbientLight, newReferencedPLUT, newAlignment);
     ++first;
-  }  
+  }
 }
-
-/*
- *  $Log: dvpsspl.cc,v $
- *  Revision 1.14  2010-10-14 13:14:33  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.13  2009-11-24 14:12:59  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.12  2006-08-15 16:57:02  meichel
- *  Updated the code in module dcmpstat to correctly compile when
- *    all standard C++ classes remain in namespace std.
- *
- *  Revision 1.11  2005/12/08 15:46:48  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.10  2004/02/04 15:57:49  joergr
- *  Removed acknowledgements with e-mail addresses from CVS log.
- *
- *  Revision 1.9  2003/06/12 18:23:11  joergr
- *  Modified code to use const_iterators where appropriate (required for STL).
- *
- *  Revision 1.8  2003/06/04 12:30:29  meichel
- *  Added various includes needed by MSVC5 with STL
- *
- *  Revision 1.7  2003/06/04 10:18:07  meichel
- *  Replaced private inheritance from template with aggregation
- *
- *  Revision 1.6  2001/06/01 15:50:38  meichel
- *  Updated copyright header
- *
- *  Revision 1.5  2001/05/25 10:07:59  meichel
- *  Corrected some DIMSE error status codes for Print SCP
- *
- *  Revision 1.4  2000/06/08 10:44:38  meichel
- *  Implemented Referenced Presentation LUT Sequence on Basic Film Session level.
- *    Empty film boxes (pages) are not written to file anymore.
- *
- *  Revision 1.3  2000/06/07 13:17:09  meichel
- *  now using DIMSE status constants and log facilities defined in dcmnet
- *
- *  Revision 1.2  2000/06/02 16:01:07  meichel
- *  Adapted all dcmpstat classes to use OFConsole for log and error output
- *
- *  Revision 1.1  2000/05/31 12:58:12  meichel
- *  Added initial Print SCP support
- *
- *
- */
-

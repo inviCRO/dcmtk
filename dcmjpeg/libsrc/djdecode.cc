@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2010, OFFIS e.V.
+ *  Copyright (C) 1997-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,20 +17,13 @@
  *
  *  Purpose: singleton class that registers decoders for all supported JPEG processes.
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:21 $
- *  CVS/RCS Revision: $Revision: 1.7 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"
 #include "dcmtk/dcmjpeg/djdecode.h"
 
 #include "dcmtk/dcmdata/dccodec.h"  /* for DcmCodecStruct */
-#include "dcmtk/dcmjpeg/djdecbas.h" 
+#include "dcmtk/dcmjpeg/djdecbas.h"
 #include "dcmtk/dcmjpeg/djdecext.h"
 #include "dcmtk/dcmjpeg/djdecsps.h"
 #include "dcmtk/dcmjpeg/djdecpro.h"
@@ -52,16 +45,21 @@ void DJDecoderRegistration::registerCodecs(
     E_DecompressionColorSpaceConversion pDecompressionCSConversion,
     E_UIDCreation pCreateSOPInstanceUID,
     E_PlanarConfiguration pPlanarConfiguration,
-    OFBool predictor6WorkaroundEnable)
+    OFBool predictor6WorkaroundEnable,
+    OFBool cornellWorkaroundEnable,
+    OFBool pForceSingleFragmentPerFrame)
 {
   if (! registered)
   {
     cp = new DJCodecParameter(
       ECC_lossyYCbCr, // ignored, compression only
-      pDecompressionCSConversion, 
-      pCreateSOPInstanceUID, 
+      pDecompressionCSConversion,
+      pCreateSOPInstanceUID,
       pPlanarConfiguration,
-      predictor6WorkaroundEnable);
+      predictor6WorkaroundEnable,
+      cornellWorkaroundEnable,
+      pForceSingleFragmentPerFrame);
+
     if (cp)
     {
       // baseline JPEG
@@ -124,34 +122,3 @@ void DJDecoderRegistration::cleanup()
 
   }
 }
-
-
-/*
- * CVS/RCS Log
- * $Log: djdecode.cc,v $
- * Revision 1.7  2010-10-14 13:14:21  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.6  2009-10-07 12:44:33  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.5  2006-03-29 15:58:52  meichel
- * Added support for decompressing images with 16 bits/pixel compressed with
- *   a faulty lossless JPEG encoder that produces integer overflows in predictor 6.
- *
- * Revision 1.4  2005/12/08 15:43:32  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.3  2001/12/04 17:10:20  meichel
- * Fixed codec registration: flag registered was never set to true
- *
- * Revision 1.2  2001/11/19 15:13:30  meichel
- * Introduced verbose mode in module dcmjpeg. If enabled, warning
- *   messages from the IJG library are printed on ofConsole, otherwise
- *   the library remains quiet.
- *
- * Revision 1.1  2001/11/13 15:58:26  meichel
- * Initial release of module dcmjpeg
- *
- *
- */

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2000-2010, OFFIS e.V.
+ *  Copyright (C) 2000-2016, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -11,33 +11,30 @@
  *    D-26121 Oldenburg, Germany
  *
  *
- *  Module:  dcmsr
+ *  Module: dcmsr
  *
- *  Author:  Joerg Riesmeier
+ *  Author: Joerg Riesmeier
  *
- *  Purpose: Renders the contents of a DICOM structured reporting file in
- *           HTML format
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-21 09:10:08 $
- *  CVS/RCS Revision: $Revision: 1.37 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
+ *  Purpose:
+ *    render the contents of a DICOM structured reporting file in HTML format
  *
  */
 
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 
-#include "dcmtk/dcmsr/dsrdoc.h"
-#include "dcmtk/dcmdata/cmdlnarg.h"
+#include "dcmtk/dcmsr/dsrdoc.h"       /* for main interface class DSRDocument */
+
+#include "dcmtk/dcmdata/dctk.h"       /* for typical set of "dcmdata" headers */
+
 #include "dcmtk/ofstd/ofstream.h"
 #include "dcmtk/ofstd/ofconapp.h"
-#include "dcmtk/dcmdata/dcuid.h"      /* for dcmtk version name */
 
 #ifdef WITH_ZLIB
-#include <zlib.h>       /* for zlibVersion() */
+#include <zlib.h>                     /* for zlibVersion() */
+#endif
+#ifdef DCMTK_ENABLE_CHARSET_CONVERSION
+#include "dcmtk/ofstd/ofchrenc.h"     /* for OFCharacterEncoding */
 #endif
 
 #define OFFIS_CONSOLE_APPLICATION "dsr2html"
@@ -58,7 +55,9 @@ static OFCondition renderFile(STD_NAMESPACE ostream &out,
                               const E_FileReadMode readMode,
                               const E_TransferSyntax xfer,
                               const size_t readFlags,
-                              const size_t renderFlags)
+                              const size_t renderFlags,
+                              const OFBool checkAllStrings,
+                              const OFBool convertToUTF8)
 {
     OFCondition result = EC_Normal;
 
@@ -83,6 +82,31 @@ static OFCondition renderFile(STD_NAMESPACE ostream &out,
     } else
         result = EC_MemoryExhausted;
 
+#ifdef DCMTK_ENABLE_CHARSET_CONVERSION
+    /* convert all DICOM strings to UTF-8 (if requested) */
+    if (result.good() && convertToUTF8)
+    {
+        DcmDataset *dset = dfile->getDataset();
+        OFLOG_INFO(dsr2htmlLogger, "converting all element values that are affected by SpecificCharacterSet (0008,0005) to UTF-8");
+        // check whether SpecificCharacterSet is absent but needed
+        if ((defaultCharset != NULL) && !dset->tagExistsWithValue(DCM_SpecificCharacterSet) &&
+            dset->containsExtendedCharacters(OFFalse /*checkAllStrings*/))
+        {
+            // use the manually specified source character set
+            result = dset->convertCharacterSet(defaultCharset, OFString("ISO_IR 192"));
+        } else {
+            // expect that SpecificCharacterSet contains the correct value
+            result = dset->convertToUTF8();
+        }
+        if (result.bad())
+        {
+            OFLOG_FATAL(dsr2htmlLogger, result.text() << ": converting file to UTF-8: " << ifname);
+        }
+    }
+#else
+    // avoid compiler warning on unused variable
+    (void)convertToUTF8;
+#endif
     if (result.good())
     {
         result = EC_CorruptedData;
@@ -94,39 +118,36 @@ static OFCondition renderFile(STD_NAMESPACE ostream &out,
             if (result.good())
             {
                 // check extended character set
-                const char *charset = dsrdoc->getSpecificCharacterSet();
-                if ((charset == NULL || strlen(charset) == 0) && dset->containsExtendedCharacters())
+                OFString charset;
+                if ((dsrdoc->getSpecificCharacterSet(charset).bad() || charset.empty()) &&
+                    dset->containsExtendedCharacters(checkAllStrings))
                 {
                     // we have an unspecified extended character set
                     if (defaultCharset == NULL)
                     {
-                        /* the dataset contains non-ASCII characters that really should not be there */
-                        OFLOG_FATAL(dsr2htmlLogger, OFFIS_CONSOLE_APPLICATION << ": (0008,0005) Specific Character Set absent "
-                            << "but extended characters used in file: " << ifname);
+                        // the dataset contains non-ASCII characters that really should not be there
+                        OFLOG_FATAL(dsr2htmlLogger, OFFIS_CONSOLE_APPLICATION << ": SpecificCharacterSet (0008,0005) "
+                            << "element absent but extended characters used in file: " << ifname);
+                        OFLOG_DEBUG(dsr2htmlLogger, "use option --charset-assume to manually specify an appropriate character set");
                         result = EC_IllegalCall;
                     } else {
-                        OFString charsetStr(defaultCharset);
-                        if (charsetStr == "latin-1")
-                            dsrdoc->setSpecificCharacterSetType(DSRTypes::CS_Latin1);
-                        else if (charsetStr == "latin-2")
-                            dsrdoc->setSpecificCharacterSetType(DSRTypes::CS_Latin2);
-                        else if (charsetStr == "latin-3")
-                            dsrdoc->setSpecificCharacterSetType(DSRTypes::CS_Latin3);
-                        else if (charsetStr == "latin-4")
-                            dsrdoc->setSpecificCharacterSetType(DSRTypes::CS_Latin4);
-                        else if (charsetStr == "latin-5")
-                            dsrdoc->setSpecificCharacterSetType(DSRTypes::CS_Latin5);
-                        else if (charsetStr == "cyrillic")
-                            dsrdoc->setSpecificCharacterSetType(DSRTypes::CS_Cyrillic);
-                        else if (charsetStr == "arabic")
-                            dsrdoc->setSpecificCharacterSetType(DSRTypes::CS_Arabic);
-                        else if (charsetStr == "greek")
-                            dsrdoc->setSpecificCharacterSetType(DSRTypes::CS_Greek);
-                        else if (charsetStr == "hebrew")
-                            dsrdoc->setSpecificCharacterSetType(DSRTypes::CS_Hebrew);
+                        // use the default character set specified by the user
+                        result = dsrdoc->setSpecificCharacterSet(defaultCharset);
+                        if (dsrdoc->getSpecificCharacterSetType() == DSRTypes::CS_unknown)
+                        {
+                            OFLOG_FATAL(dsr2htmlLogger, OFFIS_CONSOLE_APPLICATION << ": Character set '"
+                                << defaultCharset << "' specified with option --charset-assume not supported");
+                            result = EC_IllegalCall;
+                        }
+                        else if (result.bad())
+                        {
+                            OFLOG_FATAL(dsr2htmlLogger, OFFIS_CONSOLE_APPLICATION << ": Cannot use character set '"
+                                << defaultCharset << "' specified with option --charset-assume: " << result.text());
+                        }
                     }
                 }
-                if (result.good()) result = dsrdoc->renderHTML(out, renderFlags, cssName);
+                if (result.good())
+                    result = dsrdoc->renderHTML(out, renderFlags, cssName);
             } else {
                 OFLOG_FATAL(dsr2htmlLogger, OFFIS_CONSOLE_APPLICATION << ": error (" << result.text()
                     << ") parsing file: " << ifname);
@@ -152,6 +173,8 @@ int main(int argc, char *argv[])
     const char *opt_defaultCharset = NULL;
     E_FileReadMode opt_readMode = ERM_autoDetect;
     E_TransferSyntax opt_ixfer = EXS_Unknown;
+    OFBool opt_checkAllStrings = OFFalse;
+    OFBool opt_convertToUTF8 = OFFalse;
 
     OFConsoleApplication app(OFFIS_CONSOLE_APPLICATION, "Render DICOM SR file and data set to HTML/XHTML", rcsid);
     OFCommandLine cmd;
@@ -178,19 +201,24 @@ int main(int argc, char *argv[])
         cmd.addOption("--read-xfer-big",        "-tb",    "read with explicit VR big endian TS");
         cmd.addOption("--read-xfer-implicit",   "-ti",    "read with implicit VR little endian TS");
 
-    cmd.addGroup("parsing options:");
+    cmd.addGroup("processing options:");
       cmd.addSubGroup("additional information:");
         cmd.addOption("--processing-details",   "-Ip",    "show currently processed content item");
       cmd.addSubGroup("error handling:");
         cmd.addOption("--unknown-relationship", "-Er",    "accept unknown/missing relationship type");
+        cmd.addOption("--invalid-item-value",   "-Ev",    "accept invalid content item value\n(e.g. violation of VR or VM definition)");
         cmd.addOption("--ignore-constraints",   "-Ec",    "ignore relationship content constraints");
         cmd.addOption("--ignore-item-errors",   "-Ee",    "do not abort on content item errors, just warn\n(e.g. missing value type specific attributes)");
         cmd.addOption("--skip-invalid-items",   "-Ei",    "skip invalid content items (incl. sub-tree)");
+        cmd.addOption("--disable-vr-checker",   "-Dv",    "disable check for VR-conformant string values");
       cmd.addSubGroup("character set:");
         cmd.addOption("--charset-require",      "+Cr",    "require declaration of ext. charset (default)");
-        cmd.addOption("--charset-assume",       "+Ca", 1, "[c]harset: string constant (latin-1 to -5,",
-                                                          "greek, cyrillic, arabic, hebrew)\n"
-                                                          "assume c if undeclared extended charset found");
+        cmd.addOption("--charset-assume",       "+Ca", 1, "[c]harset: string",
+                                                          "assume charset c if no extended charset declared");
+        cmd.addOption("--charset-check-all",              "check all data elements with string values\n(default: only PN, LO, LT, SH, ST, UC and UT)");
+#ifdef DCMTK_ENABLE_CHARSET_CONVERSION
+        cmd.addOption("--convert-to-utf8",      "+U8",    "convert all element values that are affected\nby Specific Character Set (0008,0005) to UTF-8");
+#endif
     cmd.addGroup("output options:");
       cmd.addSubGroup("HTML/XHTML compatibility:");
         cmd.addOption("--html-3.2",             "+H3",    "use only HTML version 3.2 compatible features");
@@ -223,7 +251,7 @@ int main(int argc, char *argv[])
 
     /* evaluate command line */
     prepareCmdLineArgs(argc, argv, OFFIS_CONSOLE_APPLICATION);
-    if (app.parseCommandLine(cmd, argc, argv, OFCommandLine::PF_ExpandWildcards))
+    if (app.parseCommandLine(cmd, argc, argv))
     {
         /* check exclusive options first */
         if (cmd.hasExclusiveOption())
@@ -232,19 +260,27 @@ int main(int argc, char *argv[])
             {
                 app.printHeader(OFTrue /*print host identifier*/);
                 COUT << OFendl << "External libraries used:";
-#ifdef WITH_ZLIB
-                COUT << OFendl << "- ZLIB, Version " << zlibVersion() << OFendl;
-#else
+#if !defined(WITH_ZLIB) && !defined(DCMTK_ENABLE_CHARSET_CONVERSION)
                 COUT << " none" << OFendl;
+#else
+                COUT << OFendl;
+#endif
+#ifdef WITH_ZLIB
+                COUT << "- ZLIB, Version " << zlibVersion() << OFendl;
+#endif
+#ifdef DCMTK_ENABLE_CHARSET_CONVERSION
+                COUT << "- " << OFCharacterEncoding::getLibraryVersionString() << OFendl;
 #endif
                 return 0;
             }
         }
 
         /* general options */
+
         OFLog::configureFromCommandLine(cmd, app);
 
         /* input options */
+
         cmd.beginOptionBlock();
         if (cmd.findOption("--read-file")) opt_readMode = ERM_autoDetect;
         if (cmd.findOption("--read-file-only")) opt_readMode = ERM_fileOnly;
@@ -273,6 +309,8 @@ int main(int argc, char *argv[])
         }
         cmd.endOptionBlock();
 
+        /* processing options */
+
         if (cmd.findOption("--processing-details"))
         {
             app.checkDependence("--processing-details", "verbose mode", dsr2htmlLogger.isEnabledFor(OFLogger::INFO_LOG_LEVEL));
@@ -280,31 +318,32 @@ int main(int argc, char *argv[])
         }
         if (cmd.findOption("--unknown-relationship"))
             opt_readFlags |= DSRTypes::RF_acceptUnknownRelationshipType;
+        if (cmd.findOption("--invalid-item-value"))
+            opt_readFlags |= DSRTypes::RF_acceptInvalidContentItemValue;
         if (cmd.findOption("--ignore-constraints"))
             opt_readFlags |= DSRTypes::RF_ignoreRelationshipConstraints;
         if (cmd.findOption("--ignore-item-errors"))
             opt_readFlags |= DSRTypes::RF_ignoreContentItemErrors;
         if (cmd.findOption("--skip-invalid-items"))
             opt_readFlags |= DSRTypes::RF_skipInvalidContentItems;
+        if (cmd.findOption("--disable-vr-checker"))
+            dcmEnableVRCheckerForStringValues.set(OFFalse);
 
-        /* charset options */
+        /* character set options */
         cmd.beginOptionBlock();
         if (cmd.findOption("--charset-require"))
-        {
            opt_defaultCharset = NULL;
-        }
         if (cmd.findOption("--charset-assume"))
-        {
           app.checkValue(cmd.getValue(opt_defaultCharset));
-          OFString charset(opt_defaultCharset);
-          if (charset != "latin-1" && charset != "latin-2" && charset != "latin-3" &&
-              charset != "latin-4" && charset != "latin-5" && charset != "cyrillic" &&
-              charset != "arabic" && charset != "greek" && charset != "hebrew")
-          {
-            app.printError("unknown value for --charset-assume. known values are latin-1 to -5, cyrillic, arabic, greek, hebrew.");
-          }
-        }
         cmd.endOptionBlock();
+        if (cmd.findOption("--charset-check-all"))
+            opt_checkAllStrings = OFTrue;
+#ifdef DCMTK_ENABLE_CHARSET_CONVERSION
+        if (cmd.findOption("--convert-to-utf8"))
+            opt_convertToUTF8 = OFTrue;
+#endif
+
+        /* output options */
 
         /* HTML compatibility */
         cmd.beginOptionBlock();
@@ -396,169 +435,57 @@ int main(int argc, char *argv[])
             << DCM_DICT_ENVIRONMENT_VARIABLE);
     }
 
+    // map "old" charset names to DICOM defined terms
+    if (opt_defaultCharset != NULL)
+    {
+        OFString charset(opt_defaultCharset);
+        if (charset == "latin-1")
+            opt_defaultCharset = "ISO_IR 100";
+        else if (charset == "latin-2")
+            opt_defaultCharset = "ISO_IR 101";
+        else if (charset == "latin-3")
+            opt_defaultCharset = "ISO_IR 109";
+        else if (charset == "latin-4")
+            opt_defaultCharset = "ISO_IR 110";
+        else if (charset == "latin-5")
+            opt_defaultCharset = "ISO_IR 148";
+        else if (charset == "cyrillic")
+            opt_defaultCharset = "ISO_IR 144";
+        else if (charset == "arabic")
+            opt_defaultCharset = "ISO_IR 127";
+        else if (charset == "greek")
+            opt_defaultCharset = "ISO_IR 126";
+        else if (charset == "hebrew")
+            opt_defaultCharset = "ISO_IR 138";
+    }
+
     int result = 0;
     const char *ifname = NULL;
+    /* first parameter is treated as the input filename */
     cmd.getParam(1, ifname);
     if (cmd.getParamCount() == 2)
     {
+        /* second parameter specifies the output filename */
         const char *ofname = NULL;
         cmd.getParam(2, ofname);
         STD_NAMESPACE ofstream stream(ofname);
         if (stream.good())
         {
-            if (renderFile(stream, ifname, opt_cssName, opt_defaultCharset, opt_readMode, opt_ixfer, opt_readFlags, opt_renderFlags).bad())
+            if (renderFile(stream, ifname, opt_cssName, opt_defaultCharset, opt_readMode, opt_ixfer, opt_readFlags,
+                opt_renderFlags, opt_checkAllStrings, opt_convertToUTF8).bad())
+            {
                 result = 2;
+            }
         } else
             result = 1;
     } else {
-        if (renderFile(COUT, ifname, opt_cssName, opt_defaultCharset, opt_readMode, opt_ixfer, opt_readFlags, opt_renderFlags).bad())
+        /* use standard output */
+        if (renderFile(COUT, ifname, opt_cssName, opt_defaultCharset, opt_readMode, opt_ixfer, opt_readFlags,
+            opt_renderFlags, opt_checkAllStrings, opt_convertToUTF8).bad())
+        {
             result = 3;
+        }
     }
 
     return result;
 }
-
-
-/*
- * CVS/RCS Log:
- * $Log: dsr2html.cc,v $
- * Revision 1.37  2010-10-21 09:10:08  joergr
- * Renamed variable to avoid warning reported by gcc with additional flags.
- *
- * Revision 1.36  2010-10-14 13:13:51  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.35  2009-10-30 10:08:34  joergr
- * Option --processing-details now requires verbose mode.
- *
- * Revision 1.34  2009-10-14 10:51:56  joergr
- * Fixed minor issues in log output. Also updated copyright date (if required).
- *
- * Revision 1.33  2009-10-13 14:57:49  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.32  2009-04-21 14:13:27  joergr
- * Fixed minor inconsistencies in manpage / syntax usage.
- *
- * Revision 1.31  2008-09-25 14:14:21  joergr
- * Added support for printing the expanded command line arguments.
- * Always output the resource identifier of the command line tool in debug mode.
- *
- * Revision 1.30  2008-05-20 13:46:39  joergr
- * Modified code to avoid warning message on MSVC compiler (implicit type
- * conversion).
- *
- * Revision 1.29  2008-05-19 09:41:07  joergr
- * Added new command line options that enables reading of SR documents with
- * unknown/missing relationship type(s).
- *
- * Revision 1.28  2007/11/15 16:25:07  joergr
- * Added support for output in XHTML 1.1 format.
- *
- * Revision 1.27  2006/08/15 16:40:02  meichel
- * Updated the code in module dcmsr to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.26  2006/07/27 14:52:00  joergr
- * Changed parameter "exclusive" of method addOption() from type OFBool into an
- * integer parameter "flags". Prepended prefix "PF_" to parseLine() flags.
- * Option "--help" is no longer an exclusive option by default.
- *
- * Revision 1.25  2006/07/25 13:33:30  joergr
- * Added new command line options --always-expand-inline, --section-title-inline
- * and --code-details-tooltip (according to new optional HTML rendering flags).
- * Changed short option of --render-all-codes from +Ca to +Cc in order to avoid
- * conflicts with option --charset-assume.
- *
- * Revision 1.24  2006/05/11 09:13:45  joergr
- * Moved containsExtendedCharacters() from dcmsr to dcmdata module.
- *
- * Revision 1.23  2005/12/08 15:47:33  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.22  2005/12/02 10:37:30  joergr
- * Added new command line option that ignores the transfer syntax specified in
- * the meta header and tries to detect the transfer syntax automatically from
- * the dataset.
- * Added new command line option that checks whether a given file starts with a
- * valid DICOM meta header.
- *
- * Revision 1.21  2004/11/22 17:20:16  meichel
- * Now checking whether extended characters are present in a DICOM SR document,
- *   preventing generation of incorrect HTML if undeclared extended charset used.
- *
- * Revision 1.20  2004/01/05 14:34:59  joergr
- * Removed acknowledgements with e-mail addresses from CVS log.
- *
- * Revision 1.19  2003/10/06 09:56:10  joergr
- * Added new flag which allows to ignore content item errors when reading an SR
- * document (e.g. missing value type specific attributes).
- *
- * Revision 1.18  2002/11/26 08:45:34  meichel
- * Replaced all includes for "zlib.h" with <zlib.h>
- *   to avoid inclusion of zlib.h in the makefile dependencies.
- *
- * Revision 1.17  2002/09/23 18:16:42  joergr
- * Added new command line option "--version" which prints the name and version
- * number of external libraries used (incl. preparation for future support of
- * 'config.guess' host identifiers).
- *
- * Revision 1.16  2002/08/02 12:37:16  joergr
- * Enhanced debug output of dcmsr command line tools (e.g. add position string
- * of invalid content items to error messages).
- *
- * Revision 1.15  2002/05/07 12:47:58  joergr
- * Fixed bug in an error message.
- *
- * Revision 1.14  2002/04/16 13:49:52  joergr
- * Added configurable support for C++ ANSI standard includes (e.g. streams).
- *
- * Revision 1.13  2002/04/11 13:05:02  joergr
- * Use the new loadFile() and saveFile() routines from the dcmdata library.
- *
- * Revision 1.12  2001/10/10 15:26:31  joergr
- * Additonal adjustments for new OFCondition class.
- *
- * Revision 1.11  2001/10/02 11:55:59  joergr
- * Adapted module "dcmsr" to the new class OFCondition. Introduced module
- * specific error codes.
- *
- * Revision 1.10  2001/09/26 13:04:01  meichel
- * Adapted dcmsr to class OFCondition
- *
- * Revision 1.9  2001/06/20 15:06:38  joergr
- * Added new debugging features (additional flags) to examine "corrupted" SR
- * documents.
- *
- * Revision 1.8  2001/06/01 15:50:57  meichel
- * Updated copyright header
- *
- * Revision 1.7  2001/04/03 08:22:54  joergr
- * Added new command line option: ignore relationship content constraints
- * specified for each SR document class.
- *
- * Revision 1.6  2000/12/08 16:06:19  joergr
- * Replaced empty code lines (";") by empty command blocks ("{}") to avoid
- * compiler warnings reported by MSVC6.
- *
- * Revision 1.5  2000/11/09 20:31:08  joergr
- * Added new command line options (document type and HTML version).
- *
- * Revision 1.4  2000/11/07 18:09:48  joergr
- * Added new command line option allowing to choose code value or meaning to be
- * rendered as the numeric measurement unit.
- *
- * Revision 1.3  2000/11/01 16:08:04  joergr
- * Added support for Cascading Style Sheet (CSS) used optionally for HTML
- * rendering. Optimized HTML rendering.
- *
- * Revision 1.2  2000/10/26 14:15:33  joergr
- * Added new flag specifying whether to add a "dcmtk" footnote to the rendered
- * HTML document or not.
- *
- * Revision 1.1  2000/10/13 07:46:21  joergr
- * Added new module 'dcmsr' providing access to DICOM structured reporting
- * documents (supplement 23).  Doc++ documentation not yet completed.
- *
- *
- */

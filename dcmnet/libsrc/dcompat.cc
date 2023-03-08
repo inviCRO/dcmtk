@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were partly developed by
@@ -77,12 +77,6 @@
 **
 ** Module Prefix: none
 **
-** Last Update:         $Author: joergr $
-** Update Date:         $Date: 2010-12-01 08:26:35 $
-** CVS/RCS Revision:    $Revision: 1.35 $
-** Status:              $State: Exp $
-**
-** CVS/RCS Log at end of file
 */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
@@ -93,13 +87,6 @@
 #include "dcmtk/ofstd/ofconsol.h"
 #include "dcmtk/ofstd/ofstd.h"
 #include "dcmtk/dcmnet/diutil.h"
-
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CSTDIO
-#define INCLUDE_CSTRING
-#define INCLUDE_CERRNO
-#define INCLUDE_UNISTD
-#include "dcmtk/ofstd/ofstdinc.h"
 
 #ifdef HAVE_UNIX_H
 #if defined(macintosh) && defined (HAVE_WINSOCK_H)
@@ -134,11 +121,6 @@ BEGIN_EXTERN_C
 #endif
 END_EXTERN_C
 
-#ifdef HAVE_WINDOWS_H
-#include <windows.h>
-#include <winbase.h>
-#endif
-
 /*
  * On DEC alpha the linker moans if a library is empty.
  * So define a dummy variable.
@@ -156,11 +138,6 @@ int dcmtk_flock(int fd, int operation)
   DCMNET_WARN("Unsupported flock(fd[" << fd << "],operation[0x"
     << hex << operation << "])");
   return 0;
-}
-
-void dcmtk_plockerr(const char *s)
-{
-  DCMNET_WARN(s << ": flock not implemented");
 }
 
 #else /* macintosh */
@@ -224,22 +201,6 @@ int dcmtk_flock(int fd, int operation)
   else return -1; /* unknown lock operation */
 }
 
-void dcmtk_plockerr(const char *s)
-{
-  LPVOID lpMsgBuf=NULL;
-
-  FormatMessage(
-    FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
-    NULL,
-    GetLastError(),
-    MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // Default language
-    (LPTSTR) &lpMsgBuf, 0, NULL);
-
-  if (lpMsgBuf && s)
-      DCMNET_ERROR(s << ": " << (const char*)lpMsgBuf);
-  LocalFree(lpMsgBuf);
-}
-
 #else /* USE__LOCKING */
 
 /* Note: this alternative emulation of flock() for Win32 uses _locking().
@@ -270,12 +231,6 @@ int dcmtk_flock(int fd, int operation)
     pos = lseek(fd, originalPosition, SEEK_SET);
     if (pos < 0) return pos;
     return status;
-}
-
-void dcmtk_plockerr(const char *s)
-{
-  char buf[256];
-  DCMNET_ERROR(s << ": " << OFStandard::strerror(errno, buf, sizeof(buf)));
 }
 
 #endif /* USE__LOCKING */
@@ -331,12 +286,6 @@ int dcmtk_flock(int fd, int operation)
     return result;
 }
 
-void dcmtk_plockerr(const char *s)
-{
-  char buf[256];
-  DCMNET_ERROR(s << ": " << OFStandard::strerror(errno, buf, sizeof(buf)));
-}
-
 #endif /* _WIN32 */
 #endif /* macintosh */
 #endif /* HAVE_FLOCK */
@@ -346,12 +295,12 @@ void dcmtk_plockerr(const char *s)
 ** Use the SYSV uname function (if we have it)
 */
 #ifdef HAVE_UNAME
-int gethostname(char* name, int namelen);
+int gethostname(char* name, int namelen)
 {
     struct utsname uts;
     int rc;
 
-    bzero(&uts, sizeof(uts));
+    memset(&uts, 0, sizeof(uts));
     rc = utsname(&uts);
     if (rc >= 0) {
 	strncpy(name, uts.nodename, namelen);
@@ -385,225 +334,13 @@ int access(const char* path, int /* amode */)
 }
 #endif
 
+#endif /* HAVE_ACCESS */
+
+DCMTK_DCMNET_EXPORT void dcmtk_plockerr(const char *s)
+{
+#if !defined(HAVE_FLOCK) && defined(macintosh)
+  DCMNET_ERROR(s << ": flock not implemented");
+#else
+  DCMNET_ERROR(s << ": " << OFStandard::getLastSystemErrorCode().message());
 #endif
-
-
-#ifndef HAVE_STRERROR
-
-#warning Your system does not seem to have the strerror() function
-
-/*
- * strerror does not appear to be available on SunOs 4.1.3
- */
-char *strerror(int errornum)
-{
-    static char string[256];
-    char *s = NULL;
-    /*
-     * These are not in the system include files,
-     * declare them here.
-     */
-    extern int sys_nerr;
-    extern char *sys_errlist[];
-
-    string[0] = '\0';
-    if (errornum < 0 || errornum >= sys_nerr) {
-        sprintf(string, "Error number: %d", errornum);
-	s = string;
-    } else {
-        s = sys_errlist[errornum];
-    }
-    return s;
 }
-
-#endif /* ! HAVE_STRERROR */
-
-
-#ifndef HAVE_TEMPNAM
-/*
- * These functions are not present on NeXTs but are used by the
- * DB module.
- */
-
-char *
-tempnam(char *dir, char *pfx)
-{
-#define TMPDIR_1	"/usr/tmp"
-#define TMPDIR_2	"/tmp"
-#define AMODES		(R_OK | W_OK | X_OK)
-    char *tmpdir = NULL;
-    char *env = NULL;
-    char prefix[6];
-    char *name = NULL;
-    static unsigned short mix = 0;
-
-    /* check environment variable first */
-    if (((env = getenv("TMPDIR")) != NULL) && access(env, AMODES) == 0) {
-	tmpdir = env;
-    } else if (dir != NULL && access(dir, AMODES) == 0) {
-	tmpdir = dir;
-    } else if (access(TMPDIR_1, AMODES) == 0) {
-	tmpdir = TMPDIR_1;
-    } else if (access(TMPDIR_2, AMODES) == 0) {
-	 tmpdir = TMPDIR_2;
-    }
-
-    if (tmpdir == NULL) {
-	return NULL; 	/* no suitable directory found */
-    }
-
-
-    name = (char*)malloc(strlen(tmpdir) + 1 + MIN(strlen(pfx), 5) + 15);
-    if (name == NULL) {
-	return NULL;	/* malloc failure */
-    }
-
-    /* SUNOS Compatability: take the first 5 characters of prefix (pfx) */
-    bzero(prefix, sizeof(prefix));
-    strncpy(prefix, pfx, 5);
-    /*
-     * Find a suitable name.
-     * Use at most 14 characters for filename component of
-     * path.  The last 5 characters use the process id, the middle
-     * 4 some hex number.
-     * note will recycle after about 65536 times
-     */
-
-    mix++;	/* will recycle */
-
-    sprintf(name, "%s%c%s%04x%05d", tmpdir, PATH_SEPARATOR, prefix,
-	(unsigned int)mix, (int)OFStandard::getProcessID());
-
-    return name;
-}
-
-#endif /* ! HAVE_TEMPNAM */
-
-
-/*
-** CVS Log
-** $Log: dcompat.cc,v $
-** Revision 1.35  2010-12-01 08:26:35  joergr
-** Added OFFIS copyright header (beginning with the year 1994).
-**
-** Revision 1.34  2010-10-14 13:14:28  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.33  2010-06-02 14:52:03  joergr
-** Replaced calls to strerror() by new helper function OFStandard::strerror()
-** which results in using the thread safe version of strerror() if available.
-** Added #warning statement for systems where HAVE_STRERROR is not defined.
-**
-** Revision 1.32  2010-01-20 13:49:47  uli
-** Added OFStandard::getProcessID().
-**
-** Revision 1.31  2009-12-02 13:16:16  uli
-** Corrected build failures on windows.
-**
-** Revision 1.30  2009-11-18 11:53:59  uli
-** Switched to logging mechanism provided by the "new" oflog module.
-**
-** Revision 1.29  2006-08-15 16:04:29  meichel
-** Updated the code in module dcmnet to correctly compile when
-**   all standard C++ classes remain in namespace std.
-**
-** Revision 1.28  2005/12/08 15:44:36  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.27  2004/08/03 11:42:47  meichel
-** Headers libc.h and unistd.h are now included via ofstdinc.h
-**
-** Revision 1.26  2002/11/27 13:04:38  meichel
-** Adapted module dcmnet to use of new header file ofstdinc.h
-**
-** Revision 1.25  2001/06/05 10:05:46  joergr
-** Replaced some #ifdef _WIN32 statements by #ifdef HAVE_WINDOWS_H to reflect
-** the fact that the latest Cygwin/gcc version does not define _WIN32 any more.
-**
-** Revision 1.24  2000/03/03 14:11:20  meichel
-** Implemented library support for redirecting error messages into memory
-**   instead of printing them to stdout/stderr for GUI applications.
-**
-** Revision 1.23  2000/02/23 15:12:29  meichel
-** Corrected macro for Borland C++ Builder 4 workaround.
-**
-** Revision 1.22  2000/02/02 15:17:36  meichel
-** Replaced some #if statements by more robust #ifdef
-**
-** Revision 1.21  2000/02/01 10:24:07  meichel
-** Avoiding to include <stdlib.h> as extern "C" on Borland C++ Builder 4,
-**   workaround for bug in compiler header files.
-**
-** Revision 1.20  1999/11/12 16:51:05  meichel
-** Corrected file locking code that did not work correctly under Win95/98.
-**
-** Revision 1.19  1999/05/04 12:18:26  joergr
-** Minor changes to support Cygwin B20.1 (check __CYGWIN__ to distinguish from
-** MSVC which also defines _WIN32).
-**
-** Revision 1.18  1999/04/30 16:36:30  meichel
-** Renamed all flock calls to dcmtk_flock to avoid name clash between flock()
-** emulation based on fcntl() and a constructor for struct flock.
-**
-** Revision 1.17  1999/04/22 13:35:29  meichel
-** Corrected Win32 API version of flock emulation
-**
-** Revision 1.16  1999/04/21 13:02:58  meichel
-** Now always including <windows.h> instead of <winsock.h> on Win32 platforms.
-**   This makes sure that <winsock2.h> is used if available.
-**
-** Revision 1.15  1999/04/19 08:43:08  meichel
-** Implemented locking for Win95/98 and Win32s using
-**   LockFile() instead of LockFileEx() which is only supported on NT.
-**
-** Revision 1.14  1999/01/20 19:12:35  meichel
-** Some code purifications in Win32 variant of flock() emulation.
-**
-** Revision 1.13  1999/01/12 17:09:02  vorwerk
-** differences of lock from windows and flock corrected.
-**
-** Revision 1.11  1999/01/11 13:06:13  vorwerk
-** Shared and exclusive locking mechanism for Windows with MS Visual C++ added.
-**
-** Revision 1.10  1999/01/06 16:32:33  vorwerk
-** exclusive lockmechanism for windows added
-**
-** Revision 1.9  1997/09/18 14:41:26  meichel
-** Some systems, e.g. NeXTStep, need the third argument
-**   for fcntl calls to be casted to int. Other systems,
-**   e.g. OSF1-Alpha, won't accept this because int and struct flock *
-**   have different sizes. The workaround used here is to use a typecast to int
-**   if sizeof(void *) == sizeof(int) and leave it away otherwise.
-**
-** Revision 1.8  1997/08/06 12:22:18  andreas
-** - Change definition of path to database index now using consistently
-**   the defines PATH_SEPARATOR and DBINDEXFILE
-**
-** Revision 1.7  1997/02/06 12:17:11  hewett
-** Updated for Macintosh CodeWarrior 11.  Corrected for incompatibilities
-** in the timeval structure between unix.h and winsock.h
-**
-** Revision 1.6  1996/09/27 14:03:48  hewett
-** Added simple version of access(...) for Win32.  This needs improvement.
-**
-** Revision 1.5  1996/09/27 09:18:02  hewett
-** Changed flock_t to struct flock (for IBM AIX C Set++).
-**
-** Revision 1.4  1996/09/27 08:37:15  hewett
-** Preliminary Win32 support.  File-locking is disabled.
-**
-** Revision 1.3  1996/06/20 07:35:48  hewett
-** Removed inclusion of system header already included by dcompat.h
-** and made sure that dcompat.h is always included (via dicom.h).
-**
-** Revision 1.2  1996/04/25 16:11:12  hewett
-** Added parameter casts to char* for bzero calls.  Replaced some declarations
-** of DIC_UL with unsigned long (reduces mismatch problems with 32 & 64 bit
-** architectures).  Added some protection to inclusion of sys/socket.h (due
-** to MIPS/Ultrix).
-**
-** Revision 1.1.1.1  1996/03/26 18:38:45  hewett
-** Initial Release.
-**
-**
-*/

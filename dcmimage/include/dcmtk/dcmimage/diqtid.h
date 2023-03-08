@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2010, OFFIS e.V.
+ *  Copyright (C) 2002-2011, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Marco Eichelberg
  *
  *  Purpose: class DcmQuantIdent
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:30 $
- *  CVS/RCS Revision: $Revision: 1.4 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -47,7 +40,7 @@ class DcmQuantPixel;
  *  the appropriate class at compile time.  With a decent optimizer this
  *  reduces the overhead for using this class to zero.
  */
-class DcmQuantIdent
+class DCMTK_DCMIMAGE_EXPORT DcmQuantIdent
 {
 public:
 
@@ -105,23 +98,3 @@ private:
 
 
 #endif
-
-
-/*
- * CVS/RCS Log:
- * $Log: diqtid.h,v $
- * Revision 1.4  2010-10-14 13:16:30  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.3  2005/12/08 16:01:51  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.2  2003/12/23 12:18:41  joergr
- * Updated copyright header.
- *
- * Revision 1.1  2002/01/25 13:32:06  meichel
- * Initial release of new color quantization classes and
- *   the dcmquant tool in module dcmimage.
- *
- *
- */

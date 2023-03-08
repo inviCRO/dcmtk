@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2007-2010, OFFIS e.V.
+ *  Copyright (C) 2007-2022, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: Implements utility for converting standard image formats to DICOM
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:13:30 $
- *  CVS/RCS Revision: $Revision: 1.20 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -39,6 +32,8 @@
 #include "dcmtk/dcmdata/libi2d/i2dplsc.h"
 #include "dcmtk/dcmdata/libi2d/i2dplvlp.h"
 #include "dcmtk/dcmdata/libi2d/i2dplnsc.h"
+#include "dcmtk/dcmdata/libi2d/i2dplop.h"
+#include "dcmtk/dcmdata/xml2dcm.h"
 
 #define OFFIS_CONSOLE_APPLICATION "img2dcm"
 static char rcsid[] = "$dcmtk: " OFFIS_CONSOLE_APPLICATION " v" OFFIS_DCMTK_VERSION " " OFFIS_DCMTK_RELEASEDATE " $";
@@ -46,22 +41,56 @@ static char rcsid[] = "$dcmtk: " OFFIS_CONSOLE_APPLICATION " v" OFFIS_DCMTK_VERS
 #define SHORTCOL 4
 #define LONGCOL 21
 
+enum InputFormat
+{
+  InputFormatJPEG,
+  InputFormatBMP
+};
+
 static OFLogger img2dcmLogger = OFLog::getLogger("dcmtk.apps." OFFIS_CONSOLE_APPLICATION);
 
-static OFCondition evaluateFromFileOptions(OFCommandLine& cmd,
-                                           Image2Dcm& converter)
+static OFCondition evaluateFromFileOptions(
+#ifdef WITH_LIBXML
+  OFConsoleApplication& app,
+#else
+  OFConsoleApplication& /* app */,
+#endif
+  OFCommandLine& cmd,
+  Image2Dcm& converter)
 {
   OFCondition cond;
+#ifdef WITH_LIBXML
+  OFBool dataset_from = OFFalse;
+#endif
+
   // Parse command line options dealing with DICOM file import
   if ( cmd.findOption("--dataset-from") )
   {
+#ifdef WITH_LIBXML
+    dataset_from = OFTrue;
+#endif
     OFString tempStr;
     OFCommandLine::E_ValueStatus valStatus;
     valStatus = cmd.getValue(tempStr);
     if (valStatus != OFCommandLine::VS_Normal)
       return makeOFCondition(OFM_dcmdata, 18, OF_error, "Unable to read value of --dataset-from option");
     converter.setTemplateFile(tempStr);
+    converter.setTemplateFileIsXML(OFFalse);
   }
+
+#ifdef WITH_LIBXML
+  if ( cmd.findOption("--dataset-from-xml") )
+  {
+    app.checkConflict("--dataset-from-xml", "--dataset-from", dataset_from);
+    OFString tempStr;
+    OFCommandLine::E_ValueStatus valStatus;
+    valStatus = cmd.getValue(tempStr);
+    if (valStatus != OFCommandLine::VS_Normal)
+      return makeOFCondition(OFM_dcmdata, 18, OF_error, "Unable to read value of --dataset-from option");
+    converter.setTemplateFile(tempStr);
+    converter.setTemplateFileIsXML(OFTrue);
+  }
+#endif
 
   if (cmd.findOption("--study-from"))
   {
@@ -93,7 +122,7 @@ static OFCondition evaluateFromFileOptions(OFCommandLine& cmd,
 
 static void addCmdLineOptions(OFCommandLine& cmd)
 {
-  cmd.addParam("imgfile-in",  "image input filename");
+  cmd.addParam("imgfile-in",  "image input filename", OFCmdParam::PM_MultiMandatory);
   cmd.addParam("dcmfile-out", "DICOM output filename");
 
   cmd.addGroup("general options:", LONGCOL, SHORTCOL + 2);
@@ -103,10 +132,14 @@ static void addCmdLineOptions(OFCommandLine& cmd)
 
   cmd.addGroup("input options:", LONGCOL, SHORTCOL + 2);
     cmd.addSubGroup("general:");
-      cmd.addOption("--input-format",        "-i",   1, "[i]nput file format: string", "supported formats: JPEG (default), BMP");
+      cmd.addOption("--input-format",        "-i",   1, "[i]nput file format: string",
+                                                        "supported formats: JPEG (default), BMP");
       cmd.addOption("--dataset-from",        "-df",  1, "[f]ilename: string",
                                                         "use dataset from DICOM file f");
-
+#ifdef WITH_LIBXML
+      cmd.addOption("--dataset-from-xml",    "-dx",  1, "[f]ilename: string",
+                                                        "use dataset from XML file f");
+#endif
       cmd.addOption("--study-from",          "-stf", 1, "[f]ilename: string",
                                                         "read patient/study from DICOM file f");
       cmd.addOption("--series-from",         "-sef", 1, "[f]ilename: string",
@@ -117,6 +150,12 @@ static void addCmdLineOptions(OFCommandLine& cmd)
       cmd.addOption("--disable-ext",         "-de",     "disable support for extended sequential JPEG");
       cmd.addOption("--insist-on-jfif",      "-jf",     "insist on JFIF header");
       cmd.addOption("--keep-appn",           "-ka",     "keep APPn sections (except JFIF)");
+      cmd.addOption("--remove-com",          "-rc",     "remove COM segment");
+#ifdef WITH_LIBXML
+    cmd.addSubGroup("XML validation:");
+      cmd.addOption("--validate-document",   "+Vd",     "validate XML document against DTD");
+      cmd.addOption("--check-namespace",     "+Vn",     "check XML namespace in document root");
+#endif
 
   cmd.addGroup("processing options:", LONGCOL, SHORTCOL + 2);
     cmd.addSubGroup("attribute checking:");
@@ -126,9 +165,9 @@ static void addCmdLineOptions(OFCommandLine& cmd)
       cmd.addOption("--no-type2-insert",     "-i2",     "do not insert missing type 2 attributes \n(only with --do-checks)");
       cmd.addOption("--invent-type1",        "+i1",     "invent missing type 1 attributes (default)\n(only with --do-checks)");
       cmd.addOption("--no-type1-invent",     "-i1",     "do not invent missing type 1 attributes\n(only with --do-checks)");
-    cmd.addSubGroup("character set:");
-      cmd.addOption("--latin1",              "+l1",     "set latin-1 as standard character set (default)");
-      cmd.addOption("--no-latin1",           "-l1",     "keep 7-bit ASCII as standard character set");
+    cmd.addSubGroup("character set conversion of study/series file:");
+      cmd.addOption("--transliterate",       "-Ct",     "try to approximate characters that cannot be\nrepresented through similar looking characters");
+      cmd.addOption("--discard-illegal",     "-Cd",     "discard characters that cannot be represented\nin destination character set");
     cmd.addSubGroup("other processing options:");
       cmd.addOption("--key",                 "-k",   1, "[k]ey: gggg,eeee=\"str\", path or dict. name=\"str\"",
                                                         "add further attribute");
@@ -138,6 +177,7 @@ static void addCmdLineOptions(OFCommandLine& cmd)
       cmd.addOption("--sec-capture",         "-sc",     "write Secondary Capture SOP class (default)");
       cmd.addOption("--new-sc",              "-nsc",    "write new Secondary Capture SOP classes");
       cmd.addOption("--vl-photo",            "-vlp",    "write Visible Light Photographic SOP class");
+      cmd.addOption("--oph-photo",           "-oph",    "write Ophthalmic Photography SOP classes");
 
     cmd.addSubGroup("output file format:");
       cmd.addOption("--write-file",          "+F",      "write file format (default)");
@@ -156,34 +196,32 @@ static void addCmdLineOptions(OFCommandLine& cmd)
 }
 
 
-static OFCondition startConversion(OFCommandLine& cmd,
-                                   int argc,
-                                   char *argv[])
+static I2DImgSource *createInputPlugin(InputFormat ifrm)
 {
-  // Parse command line and exclusive options
-  prepareCmdLineArgs(argc, argv, OFFIS_CONSOLE_APPLICATION);
-  OFConsoleApplication app(OFFIS_CONSOLE_APPLICATION, "Convert standard image formats into DICOM format", rcsid);
-  if (app.parseCommandLine(cmd, argc, argv, OFCommandLine::PF_ExpandWildcards))
+  switch (ifrm)
   {
-    /* check exclusive options first */
-    if (cmd.hasExclusiveOption())
-    {
-      if (cmd.findOption("--version"))
-      {
-        app.printHeader(OFTrue /*print host identifier*/);
-        exit(0);
-      }
-    }
+    case InputFormatBMP:
+      return new I2DBmpSource();
+    case InputFormatJPEG:
+    default:
+      return new I2DJpegSource();
   }
+}
+
+
+static OFCondition startConversion(
+  OFConsoleApplication& app,
+  OFCommandLine& cmd)
+{
 
   /* print resource identifier */
   OFLOG_DEBUG(img2dcmLogger, rcsid << OFendl);
 
   // Main class for controlling conversion
   Image2Dcm i2d;
-  // Output plugin to use (ie. SOP class to write)
+  // Output plugin to use (i.e. SOP class to write)
   I2DOutputPlug *outPlug = NULL;
-  // Input plugin to use (ie. file format to read)
+  // Input plugin to use (i.e. file format to read)
   I2DImgSource *inputPlug = NULL;
   // Group length encoding mode for output DICOM file
   E_GrpLenEncoding grpLengthEnc = EGL_recalcGL;
@@ -195,77 +233,88 @@ static OFCondition startConversion(OFCommandLine& cmd,
   OFCmdUnsignedInt filepad = 0;
   // Item pad length for output DICOM file
   OFCmdUnsignedInt itempad = 0;
-  // Write only pure dataset, i.e. without meta header
+  // Write file format (with meta header)
   E_FileWriteMode writeMode = EWM_fileformat;
   // Override keys are applied at the very end of the conversion "pipeline"
   OFList<OFString> overrideKeys;
-  // The transfersytanx proposed to be written by output plugin
+  // The transfer syntax proposed to be written by output plugin
   E_TransferSyntax writeXfer;
+  // the input file format
+  InputFormat inForm = InputFormatJPEG;
 
   // Parse rest of command line options
   OFLog::configureFromCommandLine(cmd, app);
 
-  OFString pixDataFile, outputFile, tempStr;
-  cmd.getParam(1, tempStr);
-
-  if (tempStr.length() == 0)
+  // create list of input files
+  OFString paramValue;
+  OFString outputFile;
+  OFList<OFString> inputFiles;
+  const int paramCount = cmd.getParamCount();
+  for (int i = 1; i < paramCount; i++)
   {
-    OFLOG_ERROR(img2dcmLogger, "No image input filename specified");
-    return EC_IllegalCall;
+    cmd.getParam(i, paramValue);
+    inputFiles.push_back(paramValue);
   }
-  else
-    pixDataFile = tempStr;
 
-  cmd.getParam(2, tempStr);
-  if (tempStr.length() == 0)
-  {
-    OFLOG_ERROR(img2dcmLogger, "No DICOM output filename specified");
-    return EC_IllegalCall;
-  }
-  else
-    outputFile = tempStr;
+  // get output filename
+  cmd.getParam(paramCount, outputFile);
 
+  OFString tempStr;
   if (cmd.findOption("--input-format"))
   {
     app.checkValue(cmd.getValue(tempStr));
     if (tempStr == "JPEG")
     {
-      inputPlug = new I2DJpegSource();
+      inForm = InputFormatJPEG;
     }
     else if (tempStr == "BMP")
     {
-      inputPlug = new I2DBmpSource();
+      inForm = InputFormatBMP;
     }
     else
     {
       return makeOFCondition(OFM_dcmdata, 18, OF_error, "No plugin for selected input format available");
     }
-    if (!inputPlug)
-    {
-      return EC_MemoryExhausted;
-    }
   }
-  else // default is JPEG
-  {
-    inputPlug = new I2DJpegSource();
-  }
+
+  inputPlug = createInputPlugin(inForm);
   OFLOG_INFO(img2dcmLogger, OFFIS_CONSOLE_APPLICATION ": Instantiated input plugin: " << inputPlug->inputFormat());
 
- // Find out which plugin to use
+ // Find out which output plugin to use
   cmd.beginOptionBlock();
   if (cmd.findOption("--sec-capture"))
+  {
     outPlug = new I2DOutputPlugSC();
+  }
+  if (cmd.findOption("--new-sc"))
+  {
+    outPlug = new I2DOutputPlugNewSC();
+  }
   if (cmd.findOption("--vl-photo"))
   {
     outPlug = new I2DOutputPlugVLP();
   }
-  if (cmd.findOption("--new-sc"))
-    outPlug = new I2DOutputPlugNewSC();
+  if (cmd.findOption("--oph-photo"))
+  {
+    outPlug = new I2DOutputPlugOphthalmicPhotography();
+  }
+
   cmd.endOptionBlock();
   if (!outPlug) // default is the old Secondary Capture object
     outPlug = new I2DOutputPlugSC();
   if (outPlug == NULL) return EC_MemoryExhausted;
-  OFLOG_INFO(img2dcmLogger, OFFIS_CONSOLE_APPLICATION ": Instantiatiated output plugin: " << outPlug->ident());
+  OFLOG_INFO(img2dcmLogger, OFFIS_CONSOLE_APPLICATION ": Instantiated output plugin: " << outPlug->ident());
+
+  if (inputFiles.size() > 1)
+  {
+    // check if the output format supports multiframe
+    if (! outPlug->supportsMultiframe())
+    {
+      OFLOG_ERROR(img2dcmLogger, outPlug->ident() << " does not support multiframe images");
+      delete outPlug;
+      return EC_SOPClassMismatch;
+    }
+  }
 
   cmd.beginOptionBlock();
   if (cmd.findOption("--write-file"))    writeMode = EWM_fileformat;
@@ -310,15 +359,12 @@ static OFCondition startConversion(OFCommandLine& cmd,
   }
   i2d.setOverrideKeys(overrideKeys);
 
-  // Test for ISO Latin 1 option
-  OFBool insertLatin1 = OFTrue;
-  cmd.beginOptionBlock();
-  if (cmd.findOption("--latin1"))
-    insertLatin1 = OFTrue;
-  if (cmd.findOption("--no-latin1"))
-    insertLatin1 = OFFalse;
-  cmd.endOptionBlock();
-  i2d.setISOLatin1(insertLatin1);
+  size_t conversionFlags = 0;
+  if (cmd.findOption("--transliterate"))
+    conversionFlags |= DCMTypes::CF_transliterate;
+  if (cmd.findOption("--discard-illegal"))
+    conversionFlags |= DCMTypes::CF_discardIllegal;
+  i2d.setConversionFlags(conversionFlags);
 
   // evaluate validity checking options
   OFBool insertType2 = OFTrue;
@@ -347,9 +393,25 @@ static OFCondition startConversion(OFCommandLine& cmd,
   i2d.setValidityChecking(doChecks, insertType2, inventType1);
   outPlug->setValidityChecking(doChecks, insertType2, inventType1);
 
+#ifdef WITH_LIBXML
+  // evaluate XML parsing options
+  if (cmd.findOption("--validate-document"))
+  {
+    app.checkDependence("--validate-document", "--dataset-from-xml", cmd.findOption("--dataset-from-xml"));
+    i2d.setXMLvalidation(OFTrue);
+  } else i2d.setXMLvalidation(OFFalse);
+
+  if (cmd.findOption("--check-namespace"))
+  {
+    app.checkDependence("--check-namespace", "--dataset-from-xml", cmd.findOption("--dataset-from-xml"));
+    i2d.setXMLnamespaceCheck(OFTrue);
+  }
+  else i2d.setXMLnamespaceCheck(OFFalse);
+#endif
+
   // evaluate --xxx-from options and transfer syntax options
   OFCondition cond;
-  cond = evaluateFromFileOptions(cmd, i2d);
+  cond = evaluateFromFileOptions(app, cmd, i2d);
   if (cond.bad())
   {
     delete outPlug; outPlug = NULL;
@@ -374,8 +436,9 @@ static OFCondition startConversion(OFCommandLine& cmd,
       jpgSource->setInsistOnJFIF(OFTrue);
     if ( cmd.findOption("--keep-appn") )
       jpgSource->setKeepAPPn(OFTrue);
+    if ( cmd.findOption("--remove-com") )
+      jpgSource->setKeepCOM(OFFalse);
   }
-  inputPlug->setImageFile(pixDataFile);
 
   /* make sure data dictionary is loaded */
   if (!dcmDataDict.isDictionaryLoaded())
@@ -386,14 +449,36 @@ static OFCondition startConversion(OFCommandLine& cmd,
 
   DcmDataset *resultObject = NULL;
   OFLOG_INFO(img2dcmLogger, OFFIS_CONSOLE_APPLICATION ": Starting image conversion");
-  cond = i2d.convert(inputPlug, outPlug, resultObject, writeXfer);
+
+  OFListIterator(OFString) if_iter = inputFiles.begin();
+  OFListIterator(OFString) if_last = inputFiles.end();
+
+  inputPlug->setImageFile(*if_iter++); // we are guaranteed to have at least one input file
+  cond = i2d.convertFirstFrame(inputPlug, outPlug, inputFiles.size(), resultObject, writeXfer);
+  size_t frameNum = 1;
+
+  // iterate over all extra input filenames
+  while (cond.good() && (if_iter != if_last))
+  {
+    // create a new input format plugin for each file to be processed
+    delete inputPlug;
+    inputPlug = createInputPlugin(inForm);
+    inputPlug->setImageFile(*if_iter++);
+    cond = i2d.convertNextFrame(inputPlug, ++frameNum);
+  }
+
+  // update offset table if image type is encapsulated
+  if (cond.good()) cond = i2d.updateOffsetTable();
+
+  // update attributes related to lossy compression
+  if (cond.good()) cond = i2d.updateLossyCompressionInfo(inputPlug, inputFiles.size(), resultObject);
 
   // Save
   if (cond.good())
   {
     OFLOG_INFO(img2dcmLogger, OFFIS_CONSOLE_APPLICATION ": Saving output DICOM to file " << outputFile);
     DcmFileFormat dcmff(resultObject);
-    cond = dcmff.saveFile(outputFile.c_str(), writeXfer, lengthEnc, grpLengthEnc, padEnc, filepad, itempad, writeMode);
+    cond = dcmff.saveFile(outputFile, writeXfer, lengthEnc,  grpLengthEnc, padEnc, OFstatic_cast(Uint32, filepad), OFstatic_cast(Uint32, itempad), writeMode);
   }
 
   // Cleanup and return
@@ -407,96 +492,55 @@ static OFCondition startConversion(OFCommandLine& cmd,
 
 int main(int argc, char *argv[])
 {
-
-  // variables for command line
-  OFConsoleApplication app(OFFIS_CONSOLE_APPLICATION, "Convert image file to DICOM", rcsid);
+  // Parse command line and exclusive options
+  OFConsoleApplication app(OFFIS_CONSOLE_APPLICATION, "Convert standard image formats into DICOM format", rcsid);
   OFCommandLine cmd;
 
   cmd.setOptionColumns(LONGCOL, SHORTCOL);
   cmd.setParamColumn(LONGCOL + SHORTCOL + 4);
   addCmdLineOptions(cmd);
 
-  OFCondition cond = startConversion(cmd, argc, argv);
+  prepareCmdLineArgs(argc, argv, OFFIS_CONSOLE_APPLICATION);
+  if (app.parseCommandLine(cmd, argc, argv))
+  {
+    /* check exclusive options first */
+    if (cmd.hasExclusiveOption())
+    {
+      if (cmd.findOption("--version"))
+      {
+        app.printHeader(OFTrue /*print host identifier*/);
+
+#ifdef WITH_LIBXML
+        COUT << OFendl << "External libraries used:" << OFendl;
+        COUT << "- LIBXML, Version " << LIBXML_DOTTED_VERSION << OFendl;
+#if defined(LIBXML_ICONV_ENABLED) && defined(LIBXML_ZLIB_ENABLED)
+       COUT << "  with built-in LIBICONV and ZLIB support" << OFendl;
+#elif defined(LIBXML_ICONV_ENABLED)
+        COUT << "  with built-in LIBICONV support" << OFendl;
+#elif defined(LIBXML_ZLIB_ENABLED)
+       COUT << "  with built-in ZLIB support" << OFendl;
+#endif
+#endif
+        exit(0);
+      }
+    }
+  }
+
+#ifdef WITH_LIBXML
+  DcmXMLParseHelper::initLibrary(); // initialize XML parser
+#endif
+
+  int result = 0;
+  OFCondition cond = startConversion(app, cmd);
   if (cond.bad())
   {
     OFLOG_FATAL(img2dcmLogger, "Error converting file: " << cond.text());
-    return 1;
+    result = 1;
   }
 
-  return 0;
+#ifdef WITH_LIBXML
+    DcmXMLParseHelper::cleanupLibrary(); // clean up XML library before quitting
+#endif
+
+  return result;
 }
-
-
-
-/*
- * CVS/RCS Log:
- * $Log: img2dcm.cc,v $
- * Revision 1.20  2010-10-14 13:13:30  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.19  2010-10-06 09:14:23  joergr
- * Added text on the fact that the --key option also supports attribute paths.
- * Introduced meaningful sub groups for the processing command line options.
- *
- * Revision 1.18  2009-11-13 13:20:23  joergr
- * Fixed minor issues in log output.
- *
- * Revision 1.17  2009-11-04 09:58:06  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.16  2009-09-30 08:05:25  uli
- * Stop including dctk.h in libi2d's header files.
- *
- * Revision 1.15  2009-08-21 09:25:13  joergr
- * Added parameter 'writeMode' to save/write methods which allows for specifying
- * whether to write a dataset or fileformat as well as whether to update the
- * file meta information or to create a new file meta information header.
- *
- * Revision 1.14  2009-07-16 14:26:25  onken
- * Added img2dcm input plugin for the BMP graphics format (at the moment only
- * support for 24 Bit RGB).
- *
- * Revision 1.13  2009-07-10 13:16:10  onken
- * Added path functionality for --key option and lets the code make use
- * of the DcmPath classes.
- *
- * Revision 1.12  2009-04-24 12:20:42  joergr
- * Fixed minor inconsistencies regarding layout/formatting in syntax usage.
- *
- * Revision 1.11  2009-04-21 14:02:49  joergr
- * Fixed minor inconsistencies in manpage / syntax usage.
- *
- * Revision 1.10  2009-03-31 10:47:41  onken
- * Added NULL pointer check.
- *
- * Revision 1.9  2008-10-29 18:03:33  joergr
- * Fixed minor inconsistencies.
- *
- * Revision 1.8  2008-09-25 14:35:34  joergr
- * Moved checking on presence of the data dictionary.
- *
- * Revision 1.7  2008-09-25 11:19:48  joergr
- * Added support for printing the expanded command line arguments.
- * Always output the resource identifier of the command line tool in debug mode.
- *
- * Revision 1.6  2008-01-16 16:32:14  onken
- * Fixed some empty or doubled log messages in libi2d files.
- *
- * Revision 1.5  2008-01-16 15:19:41  onken
- * Moved library "i2dlib" from /dcmdata/libsrc/i2dlib to /dcmdata/libi2d
- *
- * Revision 1.4  2008-01-14 16:51:11  joergr
- * Fixed minor inconsistencies.
- *
- * Revision 1.3  2008-01-11 14:16:04  onken
- * Added various options to i2dlib. Changed logging to use a configurable
- * logstream. Added output plugin for the new Multiframe Secondary Capture SOP
- * Classes. Added mode for JPEG plugin to copy exsiting APPn markers (except
- * JFIF). Changed img2dcm default behaviour to invent type1/type2 attributes (no
- * need for templates any more). Added some bug fixes.
- *
- * Revision 1.1  2007/11/08 16:00:34  onken
- * Initial checkin of img2dcm application and corresponding library i2dlib.
- *
- *
- */

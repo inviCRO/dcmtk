@@ -1,10 +1,13 @@
-//
-// (C) Jan de Vaan 2007-2010, all rights reserved. See the accompanying "License.txt" for licensed use.
-//
+// 
+// (C) Jan de Vaan 2007-2010, all rights reserved. See the accompanying "License.txt" for licensed use. 
+// 
 
 
 #ifndef CHARLS_UTIL
 #define CHARLS_UTIL
+
+#include <cstddef>
+#include "dcmtk/ofstd/oftypes.h"
 
 #include "pubtypes.h"
 
@@ -20,8 +23,7 @@
 #define ABS(a)              (((a) > 0) ? (a) : -(a))
 #endif
 
-
-const LONG BASIC_RESET	= 64;
+class alloc_fail { };
 
 inline LONG log_2(LONG n)
 {
@@ -50,12 +52,12 @@ inline LONG Sign(LONG n)
 	{ return (n >> (LONG_BITCOUNT-1)) | 1;}
 
 inline LONG BitWiseSign(LONG i)
-	{ return i >> (LONG_BITCOUNT-1); }
+	{ return i >> (LONG_BITCOUNT-1); }	
 
 
 template<class SAMPLE>
 struct Triplet
-{
+{ 
 	Triplet() :
 		v1(0),
 		v2(0),
@@ -68,17 +70,17 @@ struct Triplet
 		v3((SAMPLE)x3)
 	{}
 
-		union
+		union 
 		{
 			SAMPLE v1;
 			SAMPLE R;
 		};
-		union
-		{
+		union 
+		{ 
 			SAMPLE v2;
 			SAMPLE G;
 		};
-		union
+		union 
 		{
 			SAMPLE v3;
 			SAMPLE B;
@@ -95,14 +97,14 @@ inline bool  operator!=(const Triplet<BYTE>& lhs, const Triplet<BYTE>& rhs)
 template<class sample>
 struct Quad : public Triplet<sample>
 {
-	Quad() :
+	Quad() : 
 		v4(0)
 		{}
 
 	Quad(Triplet<sample> triplet, LONG alpha) : Triplet<sample>(triplet), A((sample)alpha)
 		{}
-
-	union
+		
+	union 
 	{
 		sample v4;
 		sample A;
@@ -111,18 +113,30 @@ struct Quad : public Triplet<sample>
 
 
 
-template<typename T>
+template <int size>
 struct FromBigEndian
+{	
+};
+
+template <>
+struct FromBigEndian<4>
 {
-	inlinehint static T Read(BYTE* pbyte)
+	inlinehint static unsigned int Read(BYTE* pbyte)
 	{
-		T ret = pbyte[0];
-		for (unsigned int i = 1; i < sizeof(T); i++)
-		{
-			ret <<= 8;
-			ret |= pbyte[i];
-		}
-		return ret;
+		return  (pbyte[0] << 24) + (pbyte[1] << 16) + (pbyte[2] << 8) + (pbyte[3] << 0);
+	}
+};
+
+
+
+template <>
+struct FromBigEndian<8>
+{
+	inlinehint static size_t Read(BYTE* pbyte)
+	{
+		size_t a = FromBigEndian<4>::Read(&pbyte[0]);
+		size_t b = FromBigEndian<4>::Read(&pbyte[4]);
+		return ((a << 16) << 16) + b;
 	}
 };
 

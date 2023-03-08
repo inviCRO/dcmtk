@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2000-2010, OFFIS e.V.
+ *  Copyright (C) 2000-2016, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -11,32 +11,34 @@
  *    D-26121 Oldenburg, Germany
  *
  *
- *  Module:  dcmsr
+ *  Module: dcmsr
  *
- *  Author:  Joerg Riesmeier
+ *  Author: Joerg Riesmeier
  *
- *  Purpose: List the contents of a dicom structured reporting file
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:13:52 $
- *  CVS/RCS Revision: $Revision: 1.34 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
+ *  Purpose:
+ *    list the contents of a DICOM structured reporting file
  *
  */
 
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 
-#include "dcmtk/dcmsr/dsrdoc.h"
-#include "dcmtk/dcmdata/cmdlnarg.h"
+#include "dcmtk/dcmsr/dsrdoc.h"       /* for main interface class DSRDocument */
+
+#include "dcmtk/dcmdata/dctk.h"       /* for typical set of "dcmdata" headers */
+
 #include "dcmtk/ofstd/ofstream.h"
 #include "dcmtk/ofstd/ofconapp.h"
-#include "dcmtk/dcmdata/dcuid.h"       /* for dcmtk version name */
 
 #ifdef WITH_ZLIB
-#include <zlib.h>        /* for zlibVersion() */
+#include <zlib.h>                     /* for zlibVersion() */
+#endif
+#ifdef DCMTK_ENABLE_CHARSET_CONVERSION
+#include "dcmtk/ofstd/ofchrenc.h"     /* for OFCharacterEncoding */
+#endif
+
+#ifndef HAVE_WINDOWS_H
+#define ANSI_ESCAPE_CODES_AVAILABLE
 #endif
 
 #define OFFIS_CONSOLE_APPLICATION "dsrdump"
@@ -55,7 +57,8 @@ static OFCondition dumpFile(STD_NAMESPACE ostream &out,
                             const E_FileReadMode readMode,
                             const E_TransferSyntax xfer,
                             const size_t readFlags,
-                            const size_t printFlags)
+                            const size_t printFlags,
+                            const OFBool convertToUTF8)
 {
     OFCondition result = EC_Normal;
 
@@ -80,6 +83,23 @@ static OFCondition dumpFile(STD_NAMESPACE ostream &out,
     } else
         result = EC_MemoryExhausted;
 
+#ifdef DCMTK_ENABLE_CHARSET_CONVERSION
+    if (result.good())
+    {
+        if (convertToUTF8)
+        {
+            OFLOG_INFO(dsrdumpLogger, "converting all element values that are affected by Specific Character Set (0008,0005) to UTF-8");
+            result = dfile->convertToUTF8();
+            if (result.bad())
+            {
+                OFLOG_FATAL(dsrdumpLogger, result.text() << ": converting file to UTF-8: " << ifname);
+            }
+        }
+    }
+#else
+    // avoid compiler warning on unused variable
+    (void)convertToUTF8;
+#endif
     if (result.good())
     {
         result = EC_CorruptedData;
@@ -106,7 +126,7 @@ static OFCondition dumpFile(STD_NAMESPACE ostream &out,
 }
 
 
-#define SHORTCOL 3
+#define SHORTCOL 4
 #define LONGCOL 22
 
 
@@ -117,6 +137,7 @@ int main(int argc, char *argv[])
     OFBool opt_printFilename = OFFalse;
     E_FileReadMode opt_readMode = ERM_autoDetect;
     E_TransferSyntax opt_ixfer = EXS_Unknown;
+    OFBool opt_convertToUTF8 = OFFalse;
 
     OFConsoleApplication app(OFFIS_CONSOLE_APPLICATION, "Dump DICOM SR file and data set", rcsid);
     OFCommandLine cmd;
@@ -126,46 +147,66 @@ int main(int argc, char *argv[])
     cmd.addParam("dsrfile-in", "DICOM SR input filename to be dumped", OFCmdParam::PM_MultiMandatory);
 
     cmd.addGroup("general options:", LONGCOL, SHORTCOL + 2);
-      cmd.addOption("--help",                   "-h",  "print this help text and exit", OFCommandLine::AF_Exclusive);
-      cmd.addOption("--version",                       "print version information and exit", OFCommandLine::AF_Exclusive);
+      cmd.addOption("--help",                   "-h",   "print this help text and exit", OFCommandLine::AF_Exclusive);
+      cmd.addOption("--version",                        "print version information and exit", OFCommandLine::AF_Exclusive);
       OFLog::addOptions(cmd);
 
     cmd.addGroup("input options:");
       cmd.addSubGroup("input file format:");
-        cmd.addOption("--read-file",            "+f",  "read file format or data set (default)");
-        cmd.addOption("--read-file-only",       "+fo", "read file format only");
-        cmd.addOption("--read-dataset",         "-f",  "read data set without file meta information");
+        cmd.addOption("--read-file",            "+f",   "read file format or data set (default)");
+        cmd.addOption("--read-file-only",       "+fo",  "read file format only");
+        cmd.addOption("--read-dataset",         "-f",   "read data set without file meta information");
       cmd.addSubGroup("input transfer syntax:");
-        cmd.addOption("--read-xfer-auto",       "-t=", "use TS recognition (default)");
-        cmd.addOption("--read-xfer-detect",     "-td", "ignore TS specified in the file meta header");
-        cmd.addOption("--read-xfer-little",     "-te", "read with explicit VR little endian TS");
-        cmd.addOption("--read-xfer-big",        "-tb", "read with explicit VR big endian TS");
-        cmd.addOption("--read-xfer-implicit",   "-ti", "read with implicit VR little endian TS");
+        cmd.addOption("--read-xfer-auto",       "-t=",  "use TS recognition (default)");
+        cmd.addOption("--read-xfer-detect",     "-td",  "ignore TS specified in the file meta header");
+        cmd.addOption("--read-xfer-little",     "-te",  "read with explicit VR little endian TS");
+        cmd.addOption("--read-xfer-big",        "-tb",  "read with explicit VR big endian TS");
+        cmd.addOption("--read-xfer-implicit",   "-ti",  "read with implicit VR little endian TS");
 
-    cmd.addGroup("parsing options:");
+    cmd.addGroup("processing options:");
       cmd.addSubGroup("additional information:");
-        cmd.addOption("--processing-details",   "-Ip", "show currently processed content item");
+        cmd.addOption("--processing-details",   "-Ip",  "show currently processed content item");
       cmd.addSubGroup("error handling:");
-        cmd.addOption("--unknown-relationship", "-Er", "accept unknown/missing relationship type");
-        cmd.addOption("--ignore-constraints",   "-Ec", "ignore relationship content constraints");
-        cmd.addOption("--ignore-item-errors",   "-Ee", "do not abort on content item errors, just warn\n(e.g. missing value type specific attributes)");
-        cmd.addOption("--skip-invalid-items",   "-Ei", "skip invalid content items (incl. sub-tree)");
+        cmd.addOption("--unknown-relationship", "-Er",  "accept unknown/missing relationship type");
+        cmd.addOption("--invalid-item-value",   "-Ev",  "accept invalid content item value\n(e.g. violation of VR or VM definition)");
+        cmd.addOption("--ignore-constraints",   "-Ec",  "ignore relationship content constraints");
+        cmd.addOption("--ignore-item-errors",   "-Ee",  "do not abort on content item errors, just warn\n(e.g. missing value type specific attributes)");
+        cmd.addOption("--skip-invalid-items",   "-Ei",  "skip invalid content items (incl. sub-tree)");
+        cmd.addOption("--disable-vr-checker",   "-Dv",  "disable check for VR-conformant string values");
+#ifdef DCMTK_ENABLE_CHARSET_CONVERSION
+      cmd.addSubGroup("specific character set:");
+        cmd.addOption("--convert-to-utf8",      "+U8",  "convert all element values that are affected\nby Specific Character Set (0008,0005) to UTF-8");
+#endif
 
     cmd.addGroup("output options:");
-      cmd.addSubGroup("printing:");
-        cmd.addOption("--print-filename",       "+Pf", "print header with filename for each document");
-        cmd.addOption("--no-document-header",   "-Ph", "do not print general document information");
-        cmd.addOption("--number-nested-items",  "+Pn", "print position string in front of each line");
-        cmd.addOption("--indent-nested-items",  "-Pn", "indent nested items by spaces (default)");
-        cmd.addOption("--print-long-values",    "+Pl", "print long item values completely");
-        cmd.addOption("--shorten-long-values",  "-Pl", "print long item values shortened (default)");
-        cmd.addOption("--print-instance-uid",   "+Pu", "print SOP instance UID of referenced objects");
-        cmd.addOption("--print-all-codes",      "+Pc", "print all codes (incl. concept name codes)");
-        cmd.addOption("--print-template-id",    "+Pt", "print template identification information");
+      cmd.addSubGroup("general printing:");
+        cmd.addOption("--print-filename",       "+Pf",  "print header with filename for each document");
+        cmd.addOption("--no-document-header",   "-Ph",  "do not print general document information");
+        cmd.addOption("--number-nested-items",  "+Pn",  "print position string in front of each line");
+        cmd.addOption("--indent-nested-items",  "-Pn",  "indent nested items by spaces (default)");
+      cmd.addSubGroup("printing values:");
+        cmd.addOption("--print-long-values",    "+Pl",  "print long item values completely");
+        cmd.addOption("--shorten-long-values",  "-Pl",  "print long item values shortened (default)");
+        cmd.addOption("--print-instance-uid",   "+Pu",  "print SOP instance UID of referenced objects");
+        cmd.addOption("--print-sopclass-short", "-Ps",  "print short SOP class name of referenced\nimage objects, e.g. \"CT image\" (default)");
+        cmd.addOption("--print-sopclass-long",  "+Ps",  "print long SOP class name of ref. objects");
+        cmd.addOption("--print-sopclass-uid",   "+Psu", "print SOP class UID of referenced objects");
+        cmd.addOption("--print-all-codes",      "+Pc",  "print all codes (incl. concept name codes)");
+        cmd.addOption("--print-invalid-codes",  "+Pi",  "print invalid codes (for debugging purposes)");
+        cmd.addOption("--no-invalid-codes",     "-Pi",  "print text \"invalid code\" instead (default)");
+        cmd.addOption("--print-template-id",    "+Pt",  "print template identification information");
+      cmd.addSubGroup("enhanced encoding mode:");
+        cmd.addOption("--indicate-enhanced",    "+Pe",  "indicate that enhanced mode is used for codes");
+        cmd.addOption("--no-enhanced-mode",     "-Pe",  "do not indicate enhanced mode (default)");
+#ifdef ANSI_ESCAPE_CODES_AVAILABLE
+      cmd.addSubGroup("color:");
+        cmd.addOption("--print-color",          "+C",   "use ANSI escape codes for colored output");
+        cmd.addOption("--no-color",             "-C",   "do not use any ANSI escape codes (default)");
+#endif
 
     /* evaluate command line */
     prepareCmdLineArgs(argc, argv, OFFIS_CONSOLE_APPLICATION);
-    if (app.parseCommandLine(cmd, argc, argv, OFCommandLine::PF_ExpandWildcards))
+    if (app.parseCommandLine(cmd, argc, argv))
     {
         /* check exclusive options first */
         if (cmd.hasExclusiveOption())
@@ -174,18 +215,25 @@ int main(int argc, char *argv[])
             {
                 app.printHeader(OFTrue /*print host identifier*/);
                 COUT << OFendl << "External libraries used:";
-#ifdef WITH_ZLIB
-                COUT << OFendl << "- ZLIB, Version " << zlibVersion() << OFendl;
-#else
+#if !defined(WITH_ZLIB) && !defined(DCMTK_ENABLE_CHARSET_CONVERSION)
                 COUT << " none" << OFendl;
+#else
+                COUT << OFendl;
+#endif
+#ifdef WITH_ZLIB
+                COUT << "- ZLIB, Version " << zlibVersion() << OFendl;
+#endif
+#ifdef DCMTK_ENABLE_CHARSET_CONVERSION
+                COUT << "- " << OFCharacterEncoding::getLibraryVersionString() << OFendl;
 #endif
                 return 0;
             }
         }
 
-        /* options */
+        /* general options */
         OFLog::configureFromCommandLine(cmd, app);
 
+        /* input options */
         cmd.beginOptionBlock();
         if (cmd.findOption("--read-file")) opt_readMode = ERM_autoDetect;
         if (cmd.findOption("--read-file-only")) opt_readMode = ERM_fileOnly;
@@ -214,6 +262,7 @@ int main(int argc, char *argv[])
         }
         cmd.endOptionBlock();
 
+        /* processing options */
         if (cmd.findOption("--processing-details"))
         {
             app.checkDependence("--processing-details", "verbose mode", dsrdumpLogger.isEnabledFor(OFLogger::INFO_LOG_LEVEL));
@@ -221,13 +270,21 @@ int main(int argc, char *argv[])
         }
         if (cmd.findOption("--unknown-relationship"))
             opt_readFlags |= DSRTypes::RF_acceptUnknownRelationshipType;
+        if (cmd.findOption("--invalid-item-value"))
+            opt_readFlags |= DSRTypes::RF_acceptInvalidContentItemValue;
         if (cmd.findOption("--ignore-constraints"))
             opt_readFlags |= DSRTypes::RF_ignoreRelationshipConstraints;
         if (cmd.findOption("--ignore-item-errors"))
             opt_readFlags |= DSRTypes::RF_ignoreContentItemErrors;
         if (cmd.findOption("--skip-invalid-items"))
             opt_readFlags |= DSRTypes::RF_skipInvalidContentItems;
+        if (cmd.findOption("--disable-vr-checker"))
+            dcmEnableVRCheckerForStringValues.set(OFFalse);
+#ifdef DCMTK_ENABLE_CHARSET_CONVERSION
+        if (cmd.findOption("--convert-to-utf8")) opt_convertToUTF8 = OFTrue;
+#endif
 
+        /* output options */
         if (cmd.findOption("--print-filename"))
             opt_printFilename = OFTrue;
         if (cmd.findOption("--no-document-header"))
@@ -249,10 +306,44 @@ int main(int argc, char *argv[])
 
         if (cmd.findOption("--print-instance-uid"))
             opt_printFlags |= DSRTypes::PF_printSOPInstanceUID;
+
+        cmd.beginOptionBlock();
+        if (cmd.findOption("--print-sopclass-short"))
+            opt_printFlags = (opt_printFlags & ~(DSRTypes::PF_printLongSOPClassName | DSRTypes::PF_printSOPClassUID));
+        if (cmd.findOption("--print-sopclass-long"))
+            opt_printFlags = (opt_printFlags & ~DSRTypes::PF_printSOPClassUID) | DSRTypes::PF_printLongSOPClassName;
+        if (cmd.findOption("--print-sopclass-uid"))
+            opt_printFlags = (opt_printFlags & ~DSRTypes::PF_printLongSOPClassName) | DSRTypes::PF_printSOPClassUID;
+        cmd.endOptionBlock();
+
         if (cmd.findOption("--print-all-codes"))
             opt_printFlags |= DSRTypes::PF_printAllCodes;
+
+        cmd.beginOptionBlock();
+        if (cmd.findOption("--print-invalid-codes"))
+            opt_printFlags |= DSRTypes::PF_printInvalidCodes;
+        if (cmd.findOption("--no-invalid-codes"))
+            opt_printFlags &= ~DSRTypes::PF_printInvalidCodes;
+        cmd.endOptionBlock();
+
         if (cmd.findOption("--print-template-id"))
             opt_printFlags |= DSRTypes::PF_printTemplateIdentification;
+
+        cmd.beginOptionBlock();
+        if (cmd.findOption("--indicate-enhanced"))
+            opt_printFlags |= DSRTypes::PF_indicateEnhancedEncodingMode;
+        if (cmd.findOption("--no-enhanced-mode"))
+            opt_printFlags &= ~DSRTypes::PF_indicateEnhancedEncodingMode;
+        cmd.endOptionBlock();
+
+#ifdef ANSI_ESCAPE_CODES_AVAILABLE
+        cmd.beginOptionBlock();
+        if (cmd.findOption("--print-color"))
+            opt_printFlags |= DSRTypes::PF_useANSIEscapeCodes;
+        if (cmd.findOption("--no-color"))
+            opt_printFlags &= ~DSRTypes::PF_useANSIEscapeCodes;
+        cmd.endOptionBlock();
+#endif
     }
 
     /* print resource identifier */
@@ -277,7 +368,7 @@ int main(int argc, char *argv[])
                 COUT << OFString(79, '-') << OFendl;
             COUT << OFFIS_CONSOLE_APPLICATION << " (" << i << "/" << count << "): " << current << OFendl << OFendl;
         }
-        if (dumpFile(COUT, current, opt_readMode, opt_ixfer, opt_readFlags, opt_printFlags).bad())
+        if (dumpFile(COUT, current, opt_readMode, opt_ixfer, opt_readFlags, opt_printFlags, opt_convertToUTF8).bad())
             errorCount++;
     }
 
@@ -286,134 +377,3 @@ int main(int argc, char *argv[])
 #endif
     return errorCount;
 }
-
-
-/*
- * CVS/RCS Log:
- * $Log: dsrdump.cc,v $
- * Revision 1.34  2010-10-14 13:13:52  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.33  2009-11-03 09:13:54  joergr
- * Switched to old behavior: Output input filename to COUT and not to the log
- * stream.
- *
- * Revision 1.32  2009-10-30 10:08:34  joergr
- * Option --processing-details now requires verbose mode.
- *
- * Revision 1.31  2009-10-14 10:51:56  joergr
- * Fixed minor issues in log output. Also updated copyright date (if required).
- *
- * Revision 1.30  2009-10-13 14:57:50  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.29  2008-09-25 14:14:21  joergr
- * Added support for printing the expanded command line arguments.
- * Always output the resource identifier of the command line tool in debug mode.
- *
- * Revision 1.28  2008-05-19 09:41:07  joergr
- * Added new command line options that enables reading of SR documents with
- * unknown/missing relationship type(s).
- *
- * Revision 1.27  2007/11/15 16:22:42  joergr
- * Fixed coding style to be more consistent.
- *
- * Revision 1.26  2006/08/15 16:40:02  meichel
- * Updated the code in module dcmsr to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.25  2006/07/27 14:52:00  joergr
- * Changed parameter "exclusive" of method addOption() from type OFBool into an
- * integer parameter "flags". Prepended prefix "PF_" to parseLine() flags.
- * Option "--help" is no longer an exclusive option by default.
- *
- * Revision 1.24  2006/07/25 13:31:40  joergr
- * Fixed minor layout and formatting issues.
- *
- * Revision 1.23  2005/12/08 15:47:35  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.22  2005/12/02 10:37:30  joergr
- * Added new command line option that ignores the transfer syntax specified in
- * the meta header and tries to detect the transfer syntax automatically from
- * the dataset.
- * Added new command line option that checks whether a given file starts with a
- * valid DICOM meta header.
- *
- * Revision 1.21  2004/01/05 14:34:59  joergr
- * Removed acknowledgements with e-mail addresses from CVS log.
- *
- * Revision 1.20  2003/10/30 17:44:19  joergr
- * Added new command line option which allows to print the template
- * identification of a content item.
- *
- * Revision 1.19  2003/10/06 09:56:10  joergr
- * Added new flag which allows to ignore content item errors when reading an SR
- * document (e.g. missing value type specific attributes).
- *
- * Revision 1.18  2002/11/26 08:45:35  meichel
- * Replaced all includes for "zlib.h" with <zlib.h>
- *   to avoid inclusion of zlib.h in the makefile dependencies.
- *
- * Revision 1.17  2002/09/23 18:16:42  joergr
- * Added new command line option "--version" which prints the name and version
- * number of external libraries used (incl. preparation for future support of
- * 'config.guess' host identifiers).
- *
- * Revision 1.16  2002/08/02 12:37:16  joergr
- * Enhanced debug output of dcmsr command line tools (e.g. add position string
- * of invalid content items to error messages).
- *
- * Revision 1.15  2002/07/22 14:20:27  joergr
- * Added new command line option to suppress the output of general document
- * information.
- *
- * Revision 1.14  2002/04/16 13:49:53  joergr
- * Added configurable support for C++ ANSI standard includes (e.g. streams).
- *
- * Revision 1.13  2002/04/11 13:05:02  joergr
- * Use the new loadFile() and saveFile() routines from the dcmdata library.
- *
- * Revision 1.12  2002/01/11 14:35:56  joergr
- * Made spelling of option --print-filename consistent with other tools.
- *
- * Revision 1.11  2001/10/10 15:26:35  joergr
- * Additonal adjustments for new OFCondition class.
- *
- * Revision 1.10  2001/10/02 11:56:00  joergr
- * Adapted module "dcmsr" to the new class OFCondition. Introduced module
- * specific error codes.
- *
- * Revision 1.9  2001/09/26 13:04:01  meichel
- * Adapted dcmsr to class OFCondition
- *
- * Revision 1.8  2001/06/20 15:06:39  joergr
- * Added new debugging features (additional flags) to examine "corrupted" SR
- * documents.
- *
- * Revision 1.7  2001/06/01 15:50:58  meichel
- * Updated copyright header
- *
- * Revision 1.6  2001/04/03 08:22:53  joergr
- * Added new command line option: ignore relationship content constraints
- * specified for each SR document class.
- *
- * Revision 1.5  2000/11/07 18:36:05  joergr
- * Added useful code for debugging with dmalloc.
- *
- * Revision 1.4  2000/11/01 16:09:06  joergr
- * Updated comments/formatting.
- *
- * Revision 1.3  2000/10/18 16:56:33  joergr
- * Added new command line option --print-file-name.
- *
- * Revision 1.2  2000/10/16 11:50:31  joergr
- * Added new options: number nested items instead of indenting them, print SOP
- * instance UID of referenced composite objects.
- *
- * Revision 1.1  2000/10/13 07:46:21  joergr
- * Added new module 'dcmsr' providing access to DICOM structured reporting
- * documents (supplement 23).  Doc++ documentation not yet completed.
- *
- *
- */

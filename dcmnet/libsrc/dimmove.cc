@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were partly developed by
@@ -72,13 +72,6 @@
 **      query/retrieve services using the C-MOVE operation.
 **
 ** Module Prefix: DIMSE_
-**
-** Last Update:         $Author: joergr $
-** Update Date:         $Date: 2010-12-01 08:26:36 $
-** CVS/RCS Revision:    $Revision: 1.15 $
-** Status:              $State: Exp $
-**
-** CVS/RCS Log at end of file
 */
 
 /*
@@ -87,11 +80,7 @@
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CSTDIO
-#define INCLUDE_CSTRING
-#define INCLUDE_CSTDARG
-#include "dcmtk/ofstd/ofstdinc.h"
+#include "dcmtk/ofstd/oftimer.h"
 
 #ifdef HAVE_FCNTL_H
 #include <fcntl.h>
@@ -170,13 +159,13 @@ DIMSE_moveUser(
     DIC_US msgId;
     int responseCount = 0;
     T_ASC_Association *subAssoc = NULL;
-    DIC_US status = STATUS_Pending;
+    DIC_US status = STATUS_MOVE_Pending_SubOperationsAreContinuing;
     OFBool firstLoop = OFTrue;
 
     if (requestIdentifiers == NULL) return DIMSE_NULLKEY;
 
-    bzero((char*)&req, sizeof(req));
-    bzero((char*)&rsp, sizeof(rsp));
+    memset((char*)&req, 0, sizeof(req));
+    memset((char*)&rsp, 0, sizeof(rsp));
 
     req.CommandField = DIMSE_C_MOVE_RQ;
     request->DataSetType = DIMSE_DATASET_PRESENT;
@@ -191,7 +180,8 @@ DIMSE_moveUser(
 
     /* receive responses */
 
-    while (cond == EC_Normal && status == STATUS_Pending) {
+    OFTimer timer;
+    while (cond == EC_Normal && status == STATUS_MOVE_Pending_SubOperationsAreContinuing) {
 
         /* if user wants, multiplex between net/subAssoc
          * and move responses over main assoc.
@@ -201,11 +191,11 @@ DIMSE_moveUser(
             /* none are readable, timeout */
             if ((blockMode == DIMSE_BLOCKING) || firstLoop) {
                 firstLoop = OFFalse;
-                continue;  /* continue with while loop */
-            } else {
+            } else if ((blockMode == DIMSE_NONBLOCKING) && (timer.getDiff() > timeout)) {
+                DCMNET_DEBUG("timeout of " << timeout << " seconds elapsed while waiting for C-MOVE Responses");
                 return DIMSE_NODATAAVAILABLE;
             }
-            /* break; */   // never reached after continue or return statement
+            continue;    /* continue with main loop */
         case 1:
             /* main association readable */
             firstLoop = OFFalse;
@@ -217,10 +207,9 @@ DIMSE_moveUser(
             }
             firstLoop = OFFalse;
             continue;    /* continue with main loop */
-            /* break; */ // never reached after continue statement
         }
 
-        bzero((char*)&rsp, sizeof(rsp));
+        memset((char*)&rsp, 0, sizeof(rsp));
 
         cond = DIMSE_receiveCommand(assoc, blockMode, timeout, &presID, &rsp, statusDetail);
         if (cond != EC_Normal) {
@@ -244,7 +233,7 @@ DIMSE_moveUser(
         responseCount++;
 
         switch (status) {
-        case STATUS_Pending:
+        case STATUS_MOVE_Pending_SubOperationsAreContinuing:
             if (*statusDetail != NULL) {
                 DCMNET_WARN(DIMSE_warn_str(assoc) << "moveUser: Pending with statusDetail, ignoring detail");
                 delete *statusDetail;
@@ -285,6 +274,8 @@ DIMSE_moveUser(
             }
             break;
         }
+        /* reset the timeout timer */
+        timer.reset();
     }
 
     /* do remaining sub-association work, we may receive a non-pending
@@ -303,7 +294,7 @@ OFCondition
 DIMSE_sendMoveResponse(
     T_ASC_Association *assoc,
     T_ASC_PresentationContextID presID,
-    T_DIMSE_C_MoveRQ *request,
+    const T_DIMSE_C_MoveRQ *request,
     T_DIMSE_C_MoveRSP *response, DcmDataset *rspIds,
     DcmDataset *statusDetail)
 {
@@ -311,18 +302,18 @@ DIMSE_sendMoveResponse(
     T_DIMSE_Message rsp;
     unsigned int opts;
 
-    bzero((char*)&rsp, sizeof(rsp));
+    memset((char*)&rsp, 0, sizeof(rsp));
     rsp.CommandField = DIMSE_C_MOVE_RSP;
     rsp.msg.CMoveRSP = *response;
     /* copy over stuff from request */
     rsp.msg.CMoveRSP.MessageIDBeingRespondedTo = request->MessageID;
-    /* always send afected sop class uid */
-    strcpy(rsp.msg.CMoveRSP.AffectedSOPClassUID, request->AffectedSOPClassUID);
+    /* always send affected sop class uid */
+    OFStandard::strlcpy(rsp.msg.CMoveRSP.AffectedSOPClassUID, request->AffectedSOPClassUID, sizeof(rsp.msg.CMoveRSP.AffectedSOPClassUID));
     rsp.msg.CMoveRSP.opts = O_MOVE_AFFECTEDSOPCLASSUID;
 
     switch (response->DimseStatus) {
-    case STATUS_Success:
-    case STATUS_Pending:
+    case STATUS_MOVE_Success:
+    case STATUS_MOVE_Pending_SubOperationsAreContinuing:
         /* Success cannot have a Failed SOP Instance UID list (no failures).
          * Pending may not send such a list.
          */
@@ -346,7 +337,7 @@ DIMSE_sendMoveResponse(
             O_MOVE_NUMBEROFWARNINGSUBOPERATIONS);
 
     switch (response->DimseStatus) {
-    case STATUS_Pending:
+    case STATUS_MOVE_Pending_SubOperationsAreContinuing:
     case STATUS_MOVE_Cancel_SubOperationsTerminatedDueToCancelIndication:
         break;
     default:
@@ -391,10 +382,10 @@ DIMSE_moveProvider(
         if (presIdData != presIdCmd) {
           cond = makeDcmnetCondition(DIMSEC_INVALIDPRESENTATIONCONTEXTID, OF_error, "DIMSE: Presentation Contexts of Command and Data Differ");
         } else {
-            bzero((char*)&rsp, sizeof(rsp));
-            rsp.DimseStatus = STATUS_Pending;   /* assume */
+            memset((char*)&rsp, 0, sizeof(rsp));
+            rsp.DimseStatus = STATUS_MOVE_Pending_SubOperationsAreContinuing;   /* assume */
 
-            while (cond == EC_Normal && rsp.DimseStatus == STATUS_Pending && normal) {
+            while (cond == EC_Normal && rsp.DimseStatus == STATUS_MOVE_Pending_SubOperationsAreContinuing && normal) {
                 responseCount++;
 
                 cond = DIMSE_checkForCancelRQ(assoc, presIdCmd, request->MessageID);
@@ -405,7 +396,7 @@ DIMSE_moveProvider(
                 } else if (cond == DIMSE_NODATAAVAILABLE) {
                     /* timeout */
                 } else {
-                    /* some execption condition occured, bail out */
+                    /* some exception condition occurred, bail out */
                     normal = OFFalse;
                 }
 
@@ -418,8 +409,7 @@ DIMSE_moveProvider(
 
                      if (cancelled) {
                          /* make sure */
-                         rsp.DimseStatus =
-                           STATUS_MOVE_Cancel_SubOperationsTerminatedDueToCancelIndication;
+                         rsp.DimseStatus = STATUS_MOVE_Cancel_SubOperationsTerminatedDueToCancelIndication;
                          if (rspIds != NULL) {
                              delete reqIds;
                              reqIds = NULL;
@@ -445,65 +435,3 @@ DIMSE_moveProvider(
     delete rspIds;
     return cond;
 }
-
-/*
-** CVS Log
-** $Log: dimmove.cc,v $
-** Revision 1.15  2010-12-01 08:26:36  joergr
-** Added OFFIS copyright header (beginning with the year 1994).
-**
-** Revision 1.14  2010-09-13 10:40:17  joergr
-** Fixed issue with non-blocking mode in Move SCU (given timeout was ignored).
-**
-** Revision 1.13  2009-11-18 11:53:59  uli
-** Switched to logging mechanism provided by the "new" oflog module.
-**
-** Revision 1.12  2005-12-08 15:44:44  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.11  2005/11/22 16:44:47  meichel
-** Added option to movescu that allows graceful handling of Move SCPs
-**   that send illegal datasets following pending C-MOVE-RSP messages.
-**
-** Revision 1.10  2002/11/27 13:04:41  meichel
-** Adapted module dcmnet to use of new header file ofstdinc.h
-**
-** Revision 1.9  2001/10/12 10:18:35  meichel
-** Replaced the CONDITION types, constants and functions in the dcmnet module
-**   by an OFCondition based implementation which eliminates the global condition
-**   stack.  This is a major change, caveat emptor!
-**
-** Revision 1.8  2000/02/23 15:12:36  meichel
-** Corrected macro for Borland C++ Builder 4 workaround.
-**
-** Revision 1.7  2000/02/01 10:24:10  meichel
-** Avoiding to include <stdlib.h> as extern "C" on Borland C++ Builder 4,
-**   workaround for bug in compiler header files.
-**
-** Revision 1.6  1998/08/10 08:53:45  meichel
-** renamed member variable in DIMSE structures from "Status" to
-**   "DimseStatus". This is required if dcmnet is used together with
-**   <X11/Xlib.h> where Status is #define'd as int.
-**
-** Revision 1.5  1998/01/27 10:51:45  meichel
-** Removed some unused variables, meaningless const modifiers
-**   and unreached statements.
-**
-** Revision 1.4  1997/09/18 08:10:58  meichel
-** Many minor type conflicts (e.g. long passed as int) solved.
-**
-** Revision 1.3  1997/07/21 08:47:18  andreas
-** - Replace all boolean types (BOOLEAN, CTNBOOLEAN, DICOM_BOOL, BOOL)
-**   with one unique boolean type OFBool.
-**
-** Revision 1.2  1996/04/25 16:11:16  hewett
-** Added parameter casts to char* for bzero calls.  Replaced some declarations
-** of DIC_UL with unsigned long (reduces mismatch problems with 32 & 64 bit
-** architectures).  Added some protection to inclusion of sys/socket.h (due
-** to MIPS/Ultrix).
-**
-** Revision 1.1.1.1  1996/03/26 18:38:46  hewett
-** Initial Release.
-**
-**
-*/

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2011, OFFIS e.V.
+ *  Copyright (C) 1997-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -20,13 +20,6 @@
  *           semaphores, mutexes and read/write locks. The implementation
  *           of these classes supports the Solaris, POSIX and Win32
  *           multi-thread APIs.
- *
- *  Last Update:      $Author: onken $
- *  Update Date:      $Date: 2011-01-04 14:47:09 $
- *  CVS/RCS Revision: $Revision: 1.12 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -59,7 +52,7 @@ extern "C"
  *  This class is abstract. Deriving classes must implement the run()
  *  method which contains the code executed by the thread.
  */
-class OFThread
+class DCMTK_OFSTD_EXPORT OFThread
 {
 public:
 
@@ -169,7 +162,7 @@ private:
 
 #ifdef HAVE_WINDOWS_H
   /** thread handle (Win32 only) */
-  unsigned long theThreadHandle;
+  OFuintptr_t theThreadHandle;
 #endif
 
   /** thread identifier */
@@ -189,7 +182,7 @@ private:
 #ifdef HAVE_WINDOWS_H
   friend unsigned int __stdcall thread_stub(void *arg);
 #else
-  friend void *thread_stub(void *arg);
+  friend DCMTK_OFSTD_EXPORT void *thread_stub(void *arg);
 #endif
 };
 
@@ -203,7 +196,7 @@ private:
   * Threads must ensure on their own that the data pointed to by the thread
   * specific data key is freed upon termination of the thread.
   */
-class OFThreadSpecificData
+class DCMTK_OFSTD_EXPORT OFThreadSpecificData
 {
 public:
 
@@ -258,14 +251,6 @@ private:
   OFThreadSpecificData& operator=(const OFThreadSpecificData& arg);
 };
 
-
-/* Mac OS X only permits named Semaphores. The code below compiles on Mac OS X
-   but does not work. This will be corrected in the next snapshot. For now, the
-   semaphore code is completely disabled for that OS (it is not used in other
-   parts of the toolkit so far.
- */
-#ifndef _DARWIN_C_SOURCE
-
 /** provides an operating system independent abstraction for semaphores.
  *  A semaphore is a non-negative integer counter that is used
  *  to coordinate access to resources. The initial and maximum value of the counter
@@ -274,7 +259,7 @@ private:
  *  If a thread calls wait() while the counter is zero, the thread
  *  is blocked until another thread has increased the counter using post().
  */
-class OFSemaphore
+class DCMTK_OFSTD_EXPORT OFSemaphore
 {
 public:
 
@@ -338,9 +323,6 @@ private:
   OFSemaphore& operator=(const OFSemaphore& arg);
 };
 
-
-#endif // _DARWIN_C_SOURCE
-
 /** provides an operating system independent abstraction for mutexes
  *  (mutual exclusion locks).
  *  Mutexes prevent multiple threads from simultaneously executing critical
@@ -349,7 +331,7 @@ private:
  *  trying to lock the same mutex to block until the owner thread unlocks
  *  it by way of unlock().
  */
-class OFMutex
+class DCMTK_OFSTD_EXPORT OFMutex
 {
 public:
 
@@ -424,7 +406,7 @@ private:
  *  read/write locks, which are generally used to protect data that is
  *  frequently searched.
  */
-class OFReadWriteLock
+class DCMTK_OFSTD_EXPORT OFReadWriteLock
 {
 public:
 
@@ -469,14 +451,23 @@ public:
    */
   int trywrlock();
 
-  /** unlocks the read/write lock. The read/write lock must be locked and
+  /** unlocks the read lock. The read/write lock must be locked and
    *  the calling thread must be the owner of the lock, otherwise the
    *  behaviour is undefined. One of the other threads that is waiting for
    *  the read/write lock to be freed will be unblocked, provided there are
    *  other waiting threads.
    *  @return 0 upon success, an error code otherwise.
    */
-  int unlock();
+  int rdunlock();
+
+  /** unlocks the write lock. The read/write lock must be locked and
+   *  the calling thread must be the owner of the lock, otherwise the
+   *  behaviour is undefined. One of the other threads that is waiting for
+   *  the read/write lock to be freed will be unblocked, provided there are
+   *  other waiting threads.
+   *  @return 0 upon success, an error code otherwise.
+   */
+  int wrunlock();
 
   /** converts any of the error codes returned by the methods of this class
    *  into a textual description, which is written into the string object.
@@ -511,7 +502,7 @@ private:
  *  instance of this class and lock the OFReadWriteLock through it. When it
  *  is destructed it will make sure that the lock is unlocked if necessary.
  */
-class OFReadWriteLocker {
+class DCMTK_OFSTD_EXPORT OFReadWriteLocker {
 public:
   /** constructor
    *  @param lock the lock to associate this instance with
@@ -547,7 +538,7 @@ public:
    */
   int trywrlock();
 
-  /** unlock the lock
+  /** unlock the read/write lock
    *  @return 0 upon success, an error code otherwise
    *  @see OFReadWriteLock::unlock
    */
@@ -557,8 +548,11 @@ private:
   /** the lock on which we are operating */
   OFReadWriteLock& theLock;
 
-  /** did we sucessfully lock the lock? */
+  /** did we successfully lock the lock? */
   OFBool locked;
+
+  /** did we acquire a write lock? */
+  OFBool isWriteLock;
 
   /** unimplemented private copy constructor */
   OFReadWriteLocker(const OFReadWriteLocker& arg);
@@ -568,52 +562,3 @@ private:
 };
 
 #endif
-
-/*
- *
- * CVS/RCS Log:
- * $Log: ofthread.h,v $
- * Revision 1.12  2011-01-04 14:47:09  onken
- * Disable and hide OFSemaphore class on Mac OS X since implementation is
- * broken on that OS (needs named semaphores instead).
- *
- * Revision 1.11  2010-10-14 13:15:50  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.10  2010-06-04 13:58:42  uli
- * Added class OFReadWriteLocker which simplifies unlocking OFReadWriteLocks.
- *
- * Revision 1.9  2005-12-08 16:06:08  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.8  2004/08/03 16:44:16  meichel
- * Updated code to correctly handle pthread_t both as an integral integer type
- *   (e.g. Linux, Solaris) and as a pointer type (e.g. BSD, OSF/1).
- *
- * Revision 1.7  2003/12/05 10:37:41  joergr
- * Removed leading underscore characters from preprocessor symbols (reserved
- * symbols). Updated copyright date where appropriate.
- *
- * Revision 1.6  2003/07/04 13:29:51  meichel
- * Replaced forward declarations for OFString with explicit includes,
- *   needed when compiling with HAVE_STD_STRING
- *
- * Revision 1.5  2003/06/06 10:31:04  meichel
- * Added volatile keyword to data pointers in multi-thread wrapper classes
- *
- * Revision 1.4  2002/02/27 14:13:19  meichel
- * Changed initialized() methods to const. Fixed some return values when
- *   compiled without thread support.
- *
- * Revision 1.3  2001/06/01 15:51:36  meichel
- * Updated copyright header
- *
- * Revision 1.2  2000/06/26 09:27:26  joergr
- * Replaced _WIN32 by HAVE_WINDOWS_H to avoid compiler errors using CygWin-32.
- *
- * Revision 1.1  2000/03/29 16:41:23  meichel
- * Added new classes providing an operating system independent abstraction
- *   for threads, thread specific data, semaphores, mutexes and read/write locks.
- *
- *
- */

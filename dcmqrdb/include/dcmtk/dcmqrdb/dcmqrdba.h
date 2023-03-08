@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1993-2010, OFFIS e.V.
+ *  Copyright (C) 1993-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: class DcmQueryRetrieveDatabaseHandle
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:41 $
- *  CVS/RCS Revision: $Revision: 1.7 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCMQRDBA_H
@@ -31,14 +24,12 @@
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CSTDIO
-#define INCLUDE_UNISTD
-#include "dcmtk/ofstd/ofstdinc.h"
 #include "dcmtk/ofstd/ofcond.h"
+#include "dcmtk/dcmqrdb/qrdefine.h"
 
 class DcmDataset;
 class DcmQueryRetrieveDatabaseStatus;
+struct DcmQueryRetrieveCharacterSetOptions;
 
 #ifndef MAXPATHLEN
 #define MAXPATHLEN 1024
@@ -48,7 +39,7 @@ class DcmQueryRetrieveDatabaseStatus;
  *  a connection to a database and encapsulates database support for
  *  store, find and move/get operations.
  */
-class DcmQueryRetrieveDatabaseHandle
+class DCMTK_DCMQRDB_EXPORT DcmQueryRetrieveDatabaseHandle
 {
 public:
 
@@ -68,12 +59,14 @@ public:
    *  @param newImageFileName file name is returned in this parameter.
    *    Memory must be provided by the caller and should be at least MAXPATHLEN+1
    *    characters. The file name generated should be an absolute file name.
+   *  @param newImageFileNameLen length of buffer pointed to by newImageFileName
    *  @return EC_Normal upon normal completion, or some other OFCondition code upon failure.
    */
   virtual OFCondition makeNewStoreFileName(
       const char *SOPClassUID,
       const char *SOPInstanceUID,
-      char *newImageFileName) = 0;
+      char       *newImageFileName,
+      size_t      newImageFileNameLen) = 0;
 
   /** register the given DICOM object, which has been received through a C-STORE
    *  operation and stored in a file, in the database.
@@ -120,11 +113,13 @@ public:
    *    PENDING if more FIND responses will be generated or SUCCESS if no more
    *    FIND responses will be generated (SUCCESS indicates the completion of
    *    a operation), or another status code upon failure.
+   *  @param characterSetOptions the character set options for response conversion etc.
    *  @return EC_Normal upon normal completion, or some other OFCondition code upon failure.
    */
   virtual OFCondition nextFindResponse(
       DcmDataset **findResponseIdentifiers,
-      DcmQueryRetrieveDatabaseStatus *status) = 0;
+      DcmQueryRetrieveDatabaseStatus *status,
+      const DcmQueryRetrieveCharacterSetOptions& characterSetOptions) = 0;
 
   /** cancel the ongoing FIND request, stop and reset every running operation
    *  associated with this request, delete existing temporary files.
@@ -157,10 +152,13 @@ public:
    *  imageFileName containing the requested data).
    *  @param SOPClassUID pointer to string of at least 65 characters into
    *    which the SOP class UID for the next DICOM object to be transferred is copied.
+   *  @param SOPClassUIDSize size of SOPClassUID element
    *  @param SOPInstanceUID pointer to string of at least 65 characters into
    *    which the SOP instance UID for the next DICOM object to be transferred is copied.
+   *  @param SOPInstanceUIDSize size of SOPInstanceUID element
    *  @param imageFileName pointer to string of at least MAXPATHLEN+1 characters into
    *    which the file path for the next DICOM object to be transferred is copied.
+   *  @param imageFileNameSize size of imageFileName element
    *  @param numberOfRemainingSubOperations On return, this parameter will contain
    *     the number of suboperations still remaining for the request
    *     (this number is needed by move responses with PENDING status).
@@ -173,8 +171,11 @@ public:
    */
   virtual OFCondition nextMoveResponse(
       char *SOPClassUID,
+      size_t SOPClassUIDSize,
       char *SOPInstanceUID,
+      size_t SOPInstanceUIDSize,
       char *imageFileName,
+      size_t imageFileNameSize,
       unsigned short *numberOfRemainingSubOperations,
       DcmQueryRetrieveDatabaseStatus *status) = 0;
 
@@ -204,7 +205,7 @@ public:
 /** abstract factory class. Instances of this class are able to create database
  *  handles for a given called application entity title.
  */
-class DcmQueryRetrieveDatabaseHandleFactory
+class DCMTK_DCMQRDB_EXPORT DcmQueryRetrieveDatabaseHandleFactory
 {
 public:
   /** this method creates a new database handle instance on the heap and returns
@@ -227,34 +228,3 @@ public:
 };
 
 #endif
-
-/*
- * CVS Log
- * $Log: dcmqrdba.h,v $
- * Revision 1.7  2010-10-14 13:16:41  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.6  2009-11-24 10:10:42  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.5  2009-08-21 09:50:07  joergr
- * Replaced tabs by spaces and updated copyright date.
- *
- * Revision 1.4  2005/12/16 09:12:33  onken
- * - Added virtual (dummy) destructor to avoid compiler warnings
- *
- * Revision 1.3  2005/12/08 16:04:21  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.2  2005/04/22 15:36:34  meichel
- * Passing calling aetitle to DcmQueryRetrieveDatabaseHandleFactory::createDBHandle
- *   to allow configuration retrieval based on calling aetitle.
- *
- * Revision 1.1  2005/03/30 13:34:50  meichel
- * Initial release of module dcmqrdb that will replace module imagectn.
- *   It provides a clear interface between the Q/R DICOM front-end and the
- *   database back-end. The imagectn code has been re-factored into a minimal
- *   class structure.
- *
- *
- */

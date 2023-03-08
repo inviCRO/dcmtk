@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2012, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose:
  *    classes: DcmPresentationState
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:35 $
- *  CVS/RCS Revision: $Revision: 1.7 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -58,7 +51,7 @@ class DVPSSoftcopyVOI;
  *  Presentation states can be created, read, written, and modified.
  */
 
-class DcmPresentationState
+class DCMTK_DCMPSTAT_EXPORT DcmPresentationState
 {
 public:
   /** default constructor
@@ -985,33 +978,3 @@ protected:
 };
 
 #endif
-
-/*
- *  $Log: dcmpstat.h,v $
- *  Revision 1.7  2010-10-14 13:16:35  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.6  2010-10-07 14:31:35  joergr
- *  Removed leading underscore characters from preprocessor symbols (reserved).
- *
- *  Revision 1.5  2010-08-09 13:20:50  joergr
- *  Updated data dictionary to 2009 edition of the DICOM standard. From now on,
- *  the official "keyword" is used for the attribute name which results in a
- *  number of minor changes (e.g. "PatientsName" is now called "PatientName").
- *
- *  Revision 1.4  2009-11-24 14:12:57  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.3  2009-05-28 10:40:20  joergr
- *  Fixed various Doxygen API documentation issues.
- *
- *  Revision 1.2  2005/12/08 16:03:29  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.1  2003/08/27 14:57:19  meichel
- *  Splitted class DVPresentationState into a base class DcmPresentationState
- *    that does not depend on module dcmimgle and current derived class with
- *    public API identical to the previous version.
- *
- *
- */

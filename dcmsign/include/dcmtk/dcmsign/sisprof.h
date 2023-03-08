@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2019, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,24 +18,18 @@
  *  Purpose:
  *    classes: SiSecurityProfile
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:25 $
- *  CVS/RCS Revision: $Revision: 1.7 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef SISPROF_H
 #define SISPROF_H
 
 #include "dcmtk/config/osconfig.h"
-#include "dcmtk/dcmsign/sitypes.h"  /* for E_KeyType */
 
 #ifdef WITH_OPENSSL
 
-#include "dcmtk/dcmdata/dcxfer.h"   /* for E_TransferSyntax */
+#include "dcmtk/dcmsign/sitypes.h"   /* for E_KeyType */
+#include "dcmtk/dcmsign/sipurpos.h"  /* for E_SignaturePurposeType */
+#include "dcmtk/dcmdata/dcxfer.h"    /* for E_TransferSyntax */
 
 class SiAlgorithm;
 class DcmItem;
@@ -44,8 +38,10 @@ class SiMAC;
 class DcmTagKey;
 
 /** abstract base class for all security profiles.
+ *  @remark this class is only available if DCMTK is compiled with
+ *  OpenSSL support enabled.
  */
-class SiSecurityProfile
+class DCMTK_DCMSIGN_EXPORT SiSecurityProfile
 {
 public:
 
@@ -54,7 +50,7 @@ public:
 
   /// destructor
   virtual ~SiSecurityProfile() { }
-  
+
   /** checks whether the given MAC type can be used with this security profile.
    *  @param macType MAC type to be checked
    *  @return true if MAC type is allowable for this profile, false otherwise.
@@ -62,7 +58,7 @@ public:
   virtual OFBool isAllowableMACType(E_MACType macType) const = 0;
 
   /** checks whether the given MAC object can be used with this security profile.
-   *  @param macType object to be checked
+   *  @param mac macType object to be checked
    *  @return true if object is allowable for this profile, false otherwise.
    */
   virtual OFBool isAllowableMAC(const SiMAC& mac) const;
@@ -72,7 +68,7 @@ public:
    *  @return true if public key algorithm is allowable for this profile, false otherwise.
    */
   virtual OFBool isAllowableAlgorithmType(E_KeyType keyType) const = 0;
-  
+
   /** checks whether the given public/private key object can be used with this security profile.
    *  @param algo object to be checked
    *  @return true if object is allowable for this profile, false otherwise.
@@ -84,13 +80,13 @@ public:
    *  @return true if transfer syntax is allowable for this profile, false otherwise.
    */
   virtual OFBool isAllowableTransferSyntax(E_TransferSyntax xfer) const = 0;
-  
+
   /** checks whether an attribute with the given tag is required to be signed
-   *  for the current security profile.
+   *  for the current security profile if the attribute is present in the dataset
    *  @param key tag key to be checked
    *  @return true if required, false otherwise.
    */
-  virtual OFBool attributeRequired(const DcmTagKey& key) const = 0;
+  virtual OFBool attributeRequiredIfPresent(const DcmTagKey& key) const = 0;
 
   /** checks whether an attribute with the given tag must not be signed
    *  for the current security profile.
@@ -98,7 +94,7 @@ public:
    *  @return true if attribute must not be signed, false otherwise.
    */
   virtual OFBool attributeForbidden(const DcmTagKey& key) const = 0;
-  
+
   /** updates the given list of attribute tags according to the
    *  requirements of the current security profile. For all elements present in the
    *  dataset, the attribute tag is inserted or removed from the list if required by the profile.
@@ -108,13 +104,49 @@ public:
    */
   virtual OFCondition updateAttributeList(DcmItem &item, DcmAttributeTag& tagList);
 
+  /** create a maximum list of attribute tags according to the
+   *  requirements of the current security profile. For all elements present in the
+   *  dataset, the attribute tag is inserted if permitted by the profile.
+   *  @param item dataset to be handled
+   *  @param tagList attribute tag list to be created
+   *  @return status code
+   */
+  virtual OFCondition createAttributeList(DcmItem &item, DcmAttributeTag& tagList);
+
   /** checks whether the given list of attribute tags fulfils the requirements
-   *  of the current security profile for the given dataset. 
+   *  of the current security profile for the given dataset.
    *  @param item dataset to be checked
-   *  @param tagList attribute tag list. 
+   *  @param tagList attribute tag list.
    *  @return true if minimum requirements for profile are fulfilled, false otherwise.
-   */ 
+   */
   virtual OFBool checkAttributeList(DcmItem &item, DcmAttributeTag& tagList);
+
+  /** checks whether all attributes that are required unconditionally
+   *  to be signed in this profile are included in the given tagList.
+   *  @param taglist attribute tag list
+   *  @return true if requirements for profile are fulfilled, false otherwise.
+   */
+  virtual OFBool checkRequiredAttributeList(DcmAttributeTag& tagList) const = 0;
+
+  /** some digital signature profiles specify conditions under which certain
+   *  attributes must be included into the signature.
+   *  This method allows the signature profile to inspect the dataset in order
+   *  to determine whether or not the conditions are met.
+   *  This method should be called before DcmSignature::createSignature() is executed.
+   *  @param item the dataset or item to which the signature will be added
+   *  @return status code
+   */
+  virtual OFCondition inspectSignatureDataset(DcmItem &item) = 0;
+
+  /** return the required digital signature purpose for this signature profile
+   *  @return required signature purpose if any, ESP_none otherwise
+   */
+  virtual SiSignaturePurpose::E_SignaturePurposeType getOverrideSignaturePurpose() const;
+
+  /** returns true if this signature profile only applies to main dataset level
+   *  @return OFTrue if this signature profile only applies to main dataset level, OFFalse otherwise
+   */
+  virtual OFBool mainDatasetRequired() const = 0;
 
   /** checks if the given tag key is contained in the given list.
    *  @param tagList list of tag keys
@@ -135,31 +167,3 @@ private:
 
 #endif
 #endif
-
-/*
- *  $Log: sisprof.h,v $
- *  Revision 1.7  2010-10-14 13:17:25  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.6  2005-12-08 16:04:45  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.5  2003/06/04 14:21:03  meichel
- *  Simplified include structure to avoid preprocessor limitation
- *    (max 32 #if levels) on MSVC5 with STL.
- *
- *  Revision 1.4  2001/11/16 15:50:50  meichel
- *  Adapted digital signature code to final text of supplement 41.
- *
- *  Revision 1.3  2001/09/26 14:30:22  meichel
- *  Adapted dcmsign to class OFCondition
- *
- *  Revision 1.2  2001/06/01 15:50:51  meichel
- *  Updated copyright header
- *
- *  Revision 1.1  2000/11/07 16:48:59  meichel
- *  Initial release of dcmsign module for DICOM Digital Signatures
- *
- *
- */
-
