@@ -104,7 +104,7 @@ DCMTK_TARGET_LINK_LIBRARIES(dcmdata ${ZLIB_LIBS} ${LIBXML_LIBS})
 # Various dictionary-related commands
 set(DICOMDIC   "${dcmdata_SOURCE_DIR}/data/dicom.dic")
 set(PRIVATEDIC "${dcmdata_SOURCE_DIR}/data/private.dic")
-set(DICTIONARIES "${DICOMDIC}" "${PRIVATEDIC}")
+set(DICTIONARIES "${DICOMDIC}" "${PRIVATEDIC}" "$ENV{VQPATH}/extern/dicom-ns.dic")
 
 if(BUILD_APPS)
   # don't use DCMTK_ADD_EXECUTABLE() since we don't want to install the files
