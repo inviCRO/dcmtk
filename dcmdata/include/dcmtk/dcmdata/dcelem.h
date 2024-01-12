@@ -892,9 +892,7 @@ class DCMTK_DCMDATA_EXPORT DcmElement
      *  @param newByteOrder The byte ordering that shall be accounted
      *                      for (little or big endian).
      */
-  public:
     void *getValue(const E_ByteOrder newByteOrder = gLocalByteOrder);
-  protected:
 
     /** insert into the element value a copy of the given raw value. If the
      *  attribute is multi-valued, all other values remain untouched.

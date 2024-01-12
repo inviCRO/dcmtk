@@ -191,8 +191,8 @@ int main(int argc, char* argv[])
     DcmHashDictIterator end(globalDataDict.normalEnd());
     for (; iter != end; ++iter)
     {
-        const char *creator = (*iter)->getPrivateCreator();
-        if (creator == NULL || strcmp(creator, "MEDISO-1") == 0 || strcmp(creator,"SCIVIS-1") == 0 || strcmp(creator, "IVS") == 0 || strcmp(creator, "Philips PET Private Group") == 0) // exclude private tags
+        const char* creator = (*iter)->getPrivateCreator();
+        if (creator == NULL || strcmp(creator, "MEDISO-1") == 0 || strcmp(creator, "SCIVIS-1") == 0) // exclude private tags
         {
             e = new DcmDictEntry(*(*iter));
             list.insertAndReplace(e);
