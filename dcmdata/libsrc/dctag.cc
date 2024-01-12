@@ -120,14 +120,6 @@ void DcmTag::lookupVRinDictionary()
 {
     const DcmDataDictionary& globalDataDict = dcmDataDict.rdlock();
     const DcmDictEntry *dictRef = globalDataDict.findEntry(*this, privateCreator);
-    if (!privateCreator) {
-        if (!dictRef)
-            dictRef = globalDataDict.findEntry(*this, "SCIVIS-1");
-        if (!dictRef)
-            dictRef = globalDataDict.findEntry(*this, "MEDISO-1");
-        if (!dictRef)
-            dictRef = globalDataDict.findEntry(*this, "Philips PET Private Group");
-    }
     if (dictRef)
     {
         vr = dictRef->getVR();
@@ -161,14 +153,6 @@ const char *DcmTag::getTagName()
     const char *newTagName = NULL;
     const DcmDataDictionary& globalDataDict = dcmDataDict.rdlock();
     const DcmDictEntry *dictRef = globalDataDict.findEntry(*this, privateCreator);
-    if (!privateCreator) {
-        if (!dictRef)
-            dictRef = globalDataDict.findEntry(*this, "SCIVIS-1");
-        if (!dictRef)
-            dictRef = globalDataDict.findEntry(*this, "MEDISO-1");
-        if (!dictRef)
-            dictRef = globalDataDict.findEntry(*this, "Philips PET Private Group");
-    }
     if (dictRef)
         newTagName=dictRef->getTagName();
     if (newTagName == NULL)
@@ -273,6 +257,7 @@ void DcmTag::updatePrivateCreator(const char *c)
     delete[] privateCreator;
     if (c)
     {
+        printf("found private creator %s\n", c);
         size_t buflen = strlen(c) + 1;
         privateCreator = new char[buflen];
         if (privateCreator)

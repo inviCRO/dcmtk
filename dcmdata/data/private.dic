@@ -1535,14 +1535,6 @@
 (0021,"PHILIPS-MR-1",01)	IS	ReconstructionNumber	1	PrivateTag
 (0021,"PHILIPS-MR-1",02)	IS	SliceNumber	1	PrivateTag
 
-(7053,"Philips PET Private Group",00)	DS	SUVScaleFactor	1	PrivateTag
-(7053,"Philips PET Private Group",01)	OB	Unknown	1	PrivateTag
-(7053,"Philips PET Private Group",02)	OB	Unknown	1	PrivateTag
-(7053,"Philips PET Private Group",03)	ST	OriginalImageFilename	1	PrivateTag
-(7053,"Philips PET Private Group",05)	LO	Filename	1	PrivateTag
-(7053,"Philips PET Private Group",06)	OB	Unknown	1	PrivateTag
-(7053,"Philips PET Private Group",09)	DS	ActivityConcentrationScaleFactor	1	PrivateTag
-
 (7001,"Picker NM Private Group",01)	UI	Unknown	1	PrivateTag
 (7001,"Picker NM Private Group",02)	OB	Unknown	1	PrivateTag
 
