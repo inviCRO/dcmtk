@@ -4,12 +4,12 @@
 **
 **   User: jpieszala
 **   Host: BOSL298
-**   Date: 2024-01-12 13:48:57
-**   Prog: ..\BUILD\bin\Debug\mkdictbi.exe
+**   Date: 2024-01-19 12:23:50
+**   Prog: mkdictbi.exe
 **
-**   From: data\dicom.dic
-**         data/private.dic
-**         C:\dev\vivoquant\extern\dicom-ns.dic
+**   From: C:\dev\dcmtk_vq\dcmdata\data\dicom.dic
+**         C:\dev\dcmtk_vq\dcmdata\data\private.dic
+**         c:\dev\vivoquant\extern\dicom-ns.dic
 **
 */
 
@@ -31944,31 +31944,27 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       EVR_LT, "Dummy", 1, 1, "PrivateTag",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "SIEMENS MED" }
-  , { 0x7053, 0x0000, 0x7053, 0x0000,
+  , { 0x7053, 0x0010, 0x7053, 0x0010,
+      EVR_LO, "Philips_PrivateCreator", 1, 1, "PrivateTag",
+      DcmDictRange_Unspecified, DcmDictRange_Unspecified,
+      "Philips PET Private Group" }
+  , { 0x7053, 0x1000, 0x7053, 0x1000,
       EVR_DS, "Philips_SUVScaleFactor", 1, 1, "PrivateTag",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "Philips PET Private Group" }
-  , { 0x7053, 0x0001, 0x7053, 0x0001,
-      EVR_OB, "Philips_Unknown01", 1, 1, "PrivateTag",
+  , { 0x7053, 0x1001, 0x7053, 0x1001,
+      EVR_OB, "Philips_Private01", 1, 1, "PrivateTag",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "Philips PET Private Group" }
-  , { 0x7053, 0x0002, 0x7053, 0x0002,
-      EVR_OB, "Philips_Unknown02", 1, 1, "PrivateTag",
+  , { 0x7053, 0x1002, 0x7053, 0x1002,
+      EVR_OB, "Philips_Private02", 1, 1, "PrivateTag",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "Philips PET Private Group" }
-  , { 0x7053, 0x0003, 0x7053, 0x0003,
+  , { 0x7053, 0x1003, 0x7053, 0x1003,
       EVR_ST, "Philips_OriginalImageFilename", 1, 1, "PrivateTag",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "Philips PET Private Group" }
-  , { 0x7053, 0x0005, 0x7053, 0x0005,
-      EVR_LO, "Philips_Filename", 1, 1, "PrivateTag",
-      DcmDictRange_Unspecified, DcmDictRange_Unspecified,
-      "Philips PET Private Group" }
-  , { 0x7053, 0x0006, 0x7053, 0x0006,
-      EVR_OB, "Philips_Unknown06", 1, 1, "PrivateTag",
-      DcmDictRange_Unspecified, DcmDictRange_Unspecified,
-      "Philips PET Private Group" }
-  , { 0x7053, 0x0009, 0x7053, 0x0009,
+  , { 0x7053, 0x1009, 0x7053, 0x1009,
       EVR_DS, "Philips_ActivityConcentrationScaleFactor", 1, 1, "PrivateTag",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "Philips PET Private Group" }
