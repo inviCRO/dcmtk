@@ -4,12 +4,12 @@
 **
 **   User: jpieszala
 **   Host: BOSL298
-**   Date: 2024-01-12 13:46:59
-**   Prog: ..\BUILD\bin\Debug\mkdeftag.exe
+**   Date: 2024-01-19 12:21:54
+**   Prog: mkdeftag
 **
-**   From: data\dicom.dic
-**         data/private.dic
-**         C:\dev\vivoquant\extern\dicom-ns.dic
+**   From: C:\dev\dcmtk_vq\dcmdata\data\dicom.dic
+**         C:\dev\dcmtk_vq\dcmdata\data\private.dic
+**         c:\dev\vivoquant\extern\dicom-ns.dic
 **
 */
 
@@ -18,12 +18,12 @@
 
 #include "dcmtk/dcmdata/dctagkey.h"
 
-#define DCM_DICT_DEFTAG_BUILD_DATE "2024-01-12 13:46:59"
+#define DCM_DICT_DEFTAG_BUILD_DATE "2024-01-19 12:21:54"
 
 
 /*
 ** Fixed Tags in ascending (gggg,eeee) order.
-** Number of entries: 5191
+** Number of entries: 5197
 ** Tags with a repeating component (repeating tags) are listed later.
 */
 #define DCM_CommandGroupLength                   DcmTagKey(0x0000, 0x0000)
@@ -5204,6 +5204,12 @@
 #define DCM_SCIVIS_1_AptGroup                    DcmTagKey(0x6001, 0x10aa)
 #define DCM_SCIVIS_1_AptGroupDescription         DcmTagKey(0x6001, 0x10ab)
 #define DCM_SCIVIS_1_ScivisCompressedData        DcmTagKey(0x6001, 0x10ff)
+#define DCM_Philips_PrivateCreator               DcmTagKey(0x7053, 0x0010)
+#define DCM_Philips_SUVScaleFactor               DcmTagKey(0x7053, 0x1000)
+#define DCM_Philips_Private01                    DcmTagKey(0x7053, 0x1001)
+#define DCM_Philips_Private02                    DcmTagKey(0x7053, 0x1002)
+#define DCM_Philips_OriginalImageFilename        DcmTagKey(0x7053, 0x1003)
+#define DCM_Philips_ActivityConcentrationScaleFactor DcmTagKey(0x7053, 0x1009)
 #define DCM_ExtendedOffsetTable                  DcmTagKey(0x7fe0, 0x0001)
 #define DCM_ExtendedOffsetTableLengths           DcmTagKey(0x7fe0, 0x0002)
 #define DCM_FloatPixelData                       DcmTagKey(0x7fe0, 0x0008)
