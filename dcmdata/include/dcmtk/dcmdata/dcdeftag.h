@@ -4,7 +4,7 @@
 **
 **   User: jpieszala
 **   Host: BOSL298
-**   Date: 2024-01-19 12:21:54
+**   Date: 2024-01-24 18:00:16
 **   Prog: mkdeftag
 **
 **   From: C:\dev\dcmtk_vq\dcmdata\data\dicom.dic
@@ -18,12 +18,12 @@
 
 #include "dcmtk/dcmdata/dctagkey.h"
 
-#define DCM_DICT_DEFTAG_BUILD_DATE "2024-01-19 12:21:54"
+#define DCM_DICT_DEFTAG_BUILD_DATE "2024-01-24 18:00:16"
 
 
 /*
 ** Fixed Tags in ascending (gggg,eeee) order.
-** Number of entries: 5197
+** Number of entries: 5198
 ** Tags with a repeating component (repeating tags) are listed later.
 */
 #define DCM_CommandGroupLength                   DcmTagKey(0x0000, 0x0000)
@@ -1815,6 +1815,7 @@
 #define DCM_ContributingEquipmentSequence        DcmTagKey(0x0018, 0xa001)
 #define DCM_ContributionDateTime                 DcmTagKey(0x0018, 0xa002)
 #define DCM_ContributionDescription              DcmTagKey(0x0018, 0xa003)
+#define DCM_Siemens_DiffusionBValue              DcmTagKey(0x0019, 0x100c)
 #define DCM_StudyInstanceUID                     DcmTagKey(0x0020, 0x000d)
 #define DCM_SeriesInstanceUID                    DcmTagKey(0x0020, 0x000e)
 #define DCM_StudyID                              DcmTagKey(0x0020, 0x0010)

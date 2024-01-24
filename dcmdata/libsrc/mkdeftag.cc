@@ -192,7 +192,13 @@ int main(int argc, char* argv[])
     for (; iter != end; ++iter)
     {
         const char* creator = (*iter)->getPrivateCreator();
-        if (creator == NULL || strcmp(creator, "MEDISO-1") == 0 || strcmp(creator, "SCIVIS-1") == 0 || strcmp(creator, "Philips PET Private Group") == 0) // exclude private tags
+        if (creator == NULL 
+            || strcmp(creator, "MEDISO-1") == 0 
+            || strcmp(creator, "SCIVIS-1") == 0 
+            || strcmp(creator, "Philips PET Private Group") == 0 
+            || strcmp(creator, "SIEMENS MR HEADER") == 0
+            || strcmp(creator, "Invicro") == 0) //JKP just leaving to show experimental invicro tag possibility
+            // exclude private tags
         {
             e = new DcmDictEntry(*(*iter));
             list.insertAndReplace(e);
