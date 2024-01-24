@@ -4,7 +4,7 @@
 **
 **   User: jpieszala
 **   Host: BOSL298
-**   Date: 2024-01-19 12:23:50
+**   Date: 2024-01-24 18:00:20
 **   Prog: mkdictbi.exe
 **
 **   From: C:\dev\dcmtk_vq\dcmdata\data\dicom.dic
@@ -12604,6 +12604,10 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       EVR_DS, "LROffcenter", 1, 1, "PrivateTag",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "PHILIPS MR/PART" }
+  , { 0x0019, 0x100c, 0x0019, 0x100c,
+      EVR_IS, "Siemens_DiffusionBValue", 1, 1, "PrivateTag",
+      DcmDictRange_Unspecified, DcmDictRange_Unspecified,
+      "SIEMENS MR HEADER" }
   , { 0x0019, 0x100c, 0x0019, 0x100c,
       EVR_DS, "CCOffcenter", 1, 1, "PrivateTag",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
