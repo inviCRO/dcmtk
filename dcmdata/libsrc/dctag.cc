@@ -257,7 +257,6 @@ void DcmTag::updatePrivateCreator(const char *c)
     delete[] privateCreator;
     if (c)
     {
-        printf("found private creator %s\n", c);
         size_t buflen = strlen(c) + 1;
         privateCreator = new char[buflen];
         if (privateCreator)
