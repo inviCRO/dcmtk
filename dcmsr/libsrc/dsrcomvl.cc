@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2000-2010, OFFIS e.V.
+ *  Copyright (C) 2000-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -11,19 +11,12 @@
  *    D-26121 Oldenburg, Germany
  *
  *
- *  Module:  dcmsr
+ *  Module: dcmsr
  *
- *  Author:  Joerg Riesmeier
+ *  Author: Joerg Riesmeier
  *
  *  Purpose:
  *    classes: DSRCompositeReferenceValue
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:41 $
- *  CVS/RCS Revision: $Revision: 1.20 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -34,6 +27,10 @@
 #include "dcmtk/dcmsr/dsrcomvl.h"
 #include "dcmtk/dcmsr/dsrxmld.h"
 
+#include "dcmtk/dcmdata/dcdeftag.h"
+#include "dcmtk/dcmdata/dcuid.h"
+#include "dcmtk/dcmdata/dcvrui.h"
+
 
 DSRCompositeReferenceValue::DSRCompositeReferenceValue()
   : SOPClassUID(),
@@ -43,12 +40,13 @@ DSRCompositeReferenceValue::DSRCompositeReferenceValue()
 
 
 DSRCompositeReferenceValue::DSRCompositeReferenceValue(const OFString &sopClassUID,
-                                                       const OFString &sopInstanceUID)
+                                                       const OFString &sopInstanceUID,
+                                                       const OFBool check)
   : SOPClassUID(),
     SOPInstanceUID()
 {
-    /* use the set methods for checking purposes */
-    setReference(sopClassUID, sopInstanceUID);
+    /* use the set method for checking purposes */
+    setReference(sopClassUID, sopInstanceUID, check);
 }
 
 
@@ -56,7 +54,7 @@ DSRCompositeReferenceValue::DSRCompositeReferenceValue(const DSRCompositeReferen
   : SOPClassUID(referenceValue.SOPClassUID),
     SOPInstanceUID(referenceValue.SOPInstanceUID)
 {
-    /* do not check since this would unexpected to the user */
+    /* do not check since this would be unexpected to the user */
 }
 
 
@@ -67,10 +65,24 @@ DSRCompositeReferenceValue::~DSRCompositeReferenceValue()
 
 DSRCompositeReferenceValue &DSRCompositeReferenceValue::operator=(const DSRCompositeReferenceValue &referenceValue)
 {
-    /* do not check since this would unexpected to the user */
+    /* do not check since this would be unexpected to the user */
     SOPClassUID = referenceValue.SOPClassUID;
     SOPInstanceUID = referenceValue.SOPInstanceUID;
     return *this;
+}
+
+
+OFBool DSRCompositeReferenceValue::operator==(const DSRCompositeReferenceValue &referenceValue) const
+{
+    return (SOPClassUID == referenceValue.SOPClassUID) &&
+           (SOPInstanceUID == referenceValue.SOPInstanceUID);
+}
+
+
+OFBool DSRCompositeReferenceValue::operator!=(const DSRCompositeReferenceValue &referenceValue) const
+{
+    return (SOPClassUID != referenceValue.SOPClassUID) ||
+           (SOPInstanceUID != referenceValue.SOPInstanceUID);
 }
 
 
@@ -83,7 +95,7 @@ void DSRCompositeReferenceValue::clear()
 
 OFBool DSRCompositeReferenceValue::isValid() const
 {
-    return checkSOPClassUID(SOPClassUID) && checkSOPInstanceUID(SOPInstanceUID);
+    return checkSOPClassUID(SOPClassUID).good() && checkSOPInstanceUID(SOPInstanceUID).good();
 }
 
 
@@ -93,16 +105,27 @@ OFBool DSRCompositeReferenceValue::isEmpty() const
 }
 
 
+OFBool DSRCompositeReferenceValue::isComplete() const
+{
+    return !SOPClassUID.empty() && !SOPInstanceUID.empty();
+}
+
+
 OFCondition DSRCompositeReferenceValue::print(STD_NAMESPACE ostream &stream,
                                               const size_t flags) const
 {
-    const char *className = dcmFindNameOfUID(SOPClassUID.c_str());
-    stream << "(";
-    if (className != NULL)
-        stream << className;
-    else
-        stream << "\"" << SOPClassUID << "\"";
-    stream << ",";
+    /* first, determine SOP class component */
+    OFString sopClassString = "\"" + SOPClassUID + "\"";
+    if (!(flags & DSRTypes::PF_printSOPClassUID))
+    {
+        /* look up name of known SOP classes */
+        const char *className = dcmFindNameOfUID(SOPClassUID.c_str());
+        if (className != NULL)
+            sopClassString = className;
+    }
+    /* and then, print it */
+    stream << "(" << sopClassString << ",";
+    /* print SOP instance component (if desired) */
     if (flags & DSRTypes::PF_printSOPInstanceUID)
         stream << "\"" << SOPInstanceUID << "\"";
     stream << ")";
@@ -111,7 +134,8 @@ OFCondition DSRCompositeReferenceValue::print(STD_NAMESPACE ostream &stream,
 
 
 OFCondition DSRCompositeReferenceValue::readXML(const DSRXMLDocument &doc,
-                                                DSRXMLCursor cursor)
+                                                DSRXMLCursor cursor,
+                                                const size_t /*flags*/)
 {
     OFCondition result = SR_EC_CorruptedXMLStructure;
     /* go one node level down */
@@ -121,7 +145,7 @@ OFCondition DSRCompositeReferenceValue::readXML(const DSRXMLDocument &doc,
         doc.getStringFromAttribute(doc.getNamedNode(cursor, "sopclass"), SOPClassUID, "uid");
         doc.getStringFromAttribute(doc.getNamedNode(cursor, "instance"), SOPInstanceUID, "uid");
         /* check whether value is valid */
-        result = (isValid() ? EC_Normal : SR_EC_InvalidValue);
+        result = isValid() ? EC_Normal : SR_EC_InvalidValue;
     }
     return result;
 }
@@ -133,10 +157,8 @@ OFCondition DSRCompositeReferenceValue::writeXML(STD_NAMESPACE ostream &stream,
     if ((flags & DSRTypes::XF_writeEmptyTags) || !isEmpty())
     {
         stream << "<sopclass uid=\"" << SOPClassUID << "\">";
-        /* retrieve name of SOP class */
-        const char *sopClass = dcmFindNameOfUID(SOPClassUID.c_str());
-        if (sopClass != NULL)
-            stream << sopClass;
+        /* retrieve name of SOP class (if known) */
+        stream << dcmFindNameOfUID(SOPClassUID.c_str(), "" /* empty value as default */);
         stream << "</sopclass>" << OFendl;
         stream << "<instance uid=\"" << SOPInstanceUID << "\"/>" << OFendl;
     }
@@ -144,13 +166,15 @@ OFCondition DSRCompositeReferenceValue::writeXML(STD_NAMESPACE ostream &stream,
 }
 
 
-OFCondition DSRCompositeReferenceValue::readItem(DcmItem &dataset)
+OFCondition DSRCompositeReferenceValue::readItem(DcmItem &dataset,
+                                                 const size_t flags)
 {
+    const OFBool acceptViolation = (flags & DSRTypes::RF_acceptInvalidContentItemValue) > 0;
     /* read ReferencedSOPClassUID */
-    OFCondition result = DSRTypes::getAndCheckStringValueFromDataset(dataset, DCM_ReferencedSOPClassUID, SOPClassUID, "1", "1", "ReferencedSOPSequence");
+    OFCondition result = DSRTypes::getAndCheckStringValueFromDataset(dataset, DCM_ReferencedSOPClassUID, SOPClassUID, "1", "1", "ReferencedSOPSequence", acceptViolation);
     /* read ReferencedSOPInstanceUID */
     if (result.good())
-        result = DSRTypes::getAndCheckStringValueFromDataset(dataset, DCM_ReferencedSOPInstanceUID, SOPInstanceUID, "1", "1", "ReferencedSOPSequence");
+        result = DSRTypes::getAndCheckStringValueFromDataset(dataset, DCM_ReferencedSOPInstanceUID, SOPInstanceUID, "1", "1", "ReferencedSOPSequence", acceptViolation);
     return result;
 }
 
@@ -167,18 +191,20 @@ OFCondition DSRCompositeReferenceValue::writeItem(DcmItem &dataset) const
 
 
 OFCondition DSRCompositeReferenceValue::readSequence(DcmItem &dataset,
-                                                     const OFString &type)
+                                                     const DcmTagKey &tagKey,
+                                                     const OFString &type,
+                                                     const size_t flags)
 {
-    /* read ReferencedSOPSequence */
-    DcmSequenceOfItems dseq(DCM_ReferencedSOPSequence);
-    OFCondition result = DSRTypes::getElementFromDataset(dataset, dseq);
-    DSRTypes::checkElementValue(dseq, "1", type, result, "content item");
+    /* read specified sequence with its item */
+    DcmSequenceOfItems *dseq = NULL;
+    OFCondition result = dataset.findAndGetSequence(tagKey, dseq);
+    DSRTypes::checkElementValue(dseq, tagKey, "1", type, result, "content item");
     if (result.good())
     {
         /* read first item */
-        DcmItem *ditem = dseq.getItem(0);
+        DcmItem *ditem = dseq->getItem(0);
         if (ditem != NULL)
-            result = readItem(*ditem);
+            result = readItem(*ditem, flags);
         else
             result = SR_EC_InvalidDocumentTree;
     }
@@ -186,11 +212,12 @@ OFCondition DSRCompositeReferenceValue::readSequence(DcmItem &dataset,
 }
 
 
-OFCondition DSRCompositeReferenceValue::writeSequence(DcmItem &dataset) const
+OFCondition DSRCompositeReferenceValue::writeSequence(DcmItem &dataset,
+                                                      const DcmTagKey &tagKey) const
 {
     OFCondition result = EC_MemoryExhausted;
-    /* write ReferencedSOPSequence */
-    DcmSequenceOfItems *dseq = new DcmSequenceOfItems(DCM_ReferencedSOPSequence);
+    /* write specified sequence with its item */
+    DcmSequenceOfItems *dseq = new DcmSequenceOfItems(tagKey);
     if (dseq != NULL)
     {
         DcmItem *ditem = new DcmItem();
@@ -222,13 +249,17 @@ OFCondition DSRCompositeReferenceValue::renderHTML(STD_NAMESPACE ostream &docStr
     /* render reference */
     docStream << "<a href=\"" << HTML_HYPERLINK_PREFIX_FOR_CGI;
     docStream << "?composite=" << SOPClassUID << "+" << SOPInstanceUID << "\">";
-    const char *className = dcmFindNameOfUID(SOPClassUID.c_str());
-    if (className != NULL)
-        docStream << className;
-    else
-        docStream << "unknown composite object";
+    /* retrieve name of SOP class (if known) */
+    docStream << dcmFindNameOfUID(SOPClassUID.c_str(), "unknown composite object");
     docStream << "</a>";
     return EC_Normal;
+}
+
+
+const OFString DSRCompositeReferenceValue::getSOPClassName(const OFString &defaultName) const
+{
+    /* lookup name associated with the SOP class UID */
+    return SOPClassUID.empty() ? "" : dcmFindNameOfUID(SOPClassUID.c_str(), defaultName.c_str());
 }
 
 
@@ -239,148 +270,173 @@ OFCondition DSRCompositeReferenceValue::getValue(DSRCompositeReferenceValue &ref
 }
 
 
-OFCondition DSRCompositeReferenceValue::setValue(const DSRCompositeReferenceValue &referenceValue)
+OFCondition DSRCompositeReferenceValue::setValue(const DSRCompositeReferenceValue &referenceValue,
+                                                 const OFBool check)
 {
-    return setReference(referenceValue.SOPClassUID, referenceValue.SOPInstanceUID);
+    return setReference(referenceValue.SOPClassUID, referenceValue.SOPInstanceUID, check);
 }
 
 
 OFCondition DSRCompositeReferenceValue::setReference(const OFString &sopClassUID,
-                                                     const OFString &sopInstanceUID)
+                                                     const OFString &sopInstanceUID,
+                                                     const OFBool check)
 {
-    OFCondition result = EC_IllegalParameter;
-    /* check both values before setting them */
-    if (checkSOPClassUID(sopClassUID) && checkSOPInstanceUID(sopInstanceUID))
+    OFCondition result = EC_Normal;
+    /* first, make sure that the mandatory values are non-empty */
+    if (sopClassUID.empty() || sopInstanceUID.empty())
+        result = EC_IllegalParameter;
+    else if (check)
+    {
+        /* then, check whether the passed values are valid */
+        result = checkSOPClassUID(sopClassUID);
+        if (result.good())
+            result = checkSOPInstanceUID(sopInstanceUID);
+    }
+    if (result.good())
     {
         SOPClassUID = sopClassUID;
         SOPInstanceUID = sopInstanceUID;
-        result = EC_Normal;
     }
     return result;
 }
 
 
-OFCondition DSRCompositeReferenceValue::setSOPClassUID(const OFString &sopClassUID)
+OFCondition DSRCompositeReferenceValue::setReference(DcmItem &dataset,
+                                                     const OFBool check)
 {
-    OFCondition result = EC_IllegalParameter;
-    if (checkSOPClassUID(sopClassUID))
+    OFCondition result = setSOPClassUID(dataset, DCM_SOPClassUID, 0 /*pos*/, check);
+    if (result.good())
+        result = setSOPInstanceUID(dataset, DCM_SOPInstanceUID, 0 /*pos*/, check);
+    return result;
+}
+
+
+OFCondition DSRCompositeReferenceValue::setSOPClassUID(const OFString &sopClassUID,
+                                                       const OFBool check)
+{
+    OFCondition result = EC_Normal;
+    /* first, make sure that the mandatory value is non-empty */
+    if (sopClassUID.empty())
+        result = EC_IllegalParameter;
+    else if (check)
     {
+        /* then, check whether the passed value is valid */
+        result = checkSOPClassUID(sopClassUID);
+    }
+    if (result.good())
         SOPClassUID = sopClassUID;
-        result = EC_Normal;
-    }
     return result;
 }
 
 
-OFCondition DSRCompositeReferenceValue::setSOPInstanceUID(const OFString &sopInstanceUID)
+OFCondition DSRCompositeReferenceValue::setSOPClassUID(const DcmElement &delem,
+                                                       const unsigned long pos,
+                                                       const OFBool check)
 {
-    OFCondition result = EC_IllegalParameter;
-    if (checkSOPInstanceUID(sopInstanceUID))
+    OFString sopClassUID;
+    /* first, get the value from the element (need to cast away "const") */
+    OFCondition result = OFconst_cast(DcmElement &, delem).getOFString(sopClassUID, pos);
+    if (result.good())
     {
-        SOPInstanceUID = sopInstanceUID;
-        result = EC_Normal;
+        /* then, check and set the value */
+        result = setSOPClassUID(sopClassUID, check);
     }
     return result;
 }
 
 
-OFBool DSRCompositeReferenceValue::checkSOPClassUID(const OFString &sopClassUID) const
+OFCondition DSRCompositeReferenceValue::setSOPClassUID(DcmItem &dataset,
+                                                       const DcmTagKey &tagKey,
+                                                       const unsigned long pos,
+                                                       const OFBool check)
 {
-    return DSRTypes::checkForValidUIDFormat(sopClassUID);
+    OFString sopClassUID;
+    /* first, get the element value from the dataset */
+    OFCondition result = DSRTypes::getStringValueFromDataset(dataset, tagKey, sopClassUID, pos);
+    if (result.good())
+    {
+        /* then, check and set the value */
+        result = setSOPClassUID(sopClassUID, check);
+    }
+    return result;
 }
 
 
-OFBool DSRCompositeReferenceValue::checkSOPInstanceUID(const OFString &sopInstanceUID) const
+OFCondition DSRCompositeReferenceValue::setSOPInstanceUID(const OFString &sopInstanceUID,
+                                                          const OFBool check)
 {
-    return DSRTypes::checkForValidUIDFormat(sopInstanceUID);
+    OFCondition result = EC_Normal;
+    /* first, make sure that the mandatory value is non-empty */
+    if (sopInstanceUID.empty())
+        result = EC_IllegalParameter;
+    else if (check)
+    {
+        /* then, check whether the passed value is valid */
+        result = checkSOPInstanceUID(sopInstanceUID);
+    }
+    if (result.good())
+        SOPInstanceUID = sopInstanceUID;
+    return result;
 }
 
 
-/*
- *  CVS/RCS Log:
- *  $Log: dsrcomvl.cc,v $
- *  Revision 1.20  2010-10-14 13:14:41  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.19  2009-10-13 14:57:51  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.18  2008-07-17 12:00:09  joergr
- *  Replaced call to getSequenceFromDataset() by getElementFromDataset().
- *
- *  Revision 1.17  2007-11-15 16:43:43  joergr
- *  Fixed coding style to be more consistent.
- *
- *  Revision 1.16  2006/08/15 16:40:03  meichel
- *  Updated the code in module dcmsr to correctly compile when
- *    all standard C++ classes remain in namespace std.
- *
- *  Revision 1.15  2005/12/08 15:47:44  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.14  2003/08/07 13:14:26  joergr
- *  Added readXML functionality.
- *
- *  Revision 1.13  2003/06/04 14:26:54  meichel
- *  Simplified include structure to avoid preprocessor limitation
- *    (max 32 #if levels) on MSVC5 with STL.
- *
- *  Revision 1.12  2002/05/07 12:51:30  joergr
- *  Added output of SOP class name to XML document.
- *
- *  Revision 1.11  2001/10/10 15:29:50  joergr
- *  Additonal adjustments for new OFCondition class.
- *
- *  Revision 1.10  2001/10/02 12:07:07  joergr
- *  Adapted module "dcmsr" to the new class OFCondition. Introduced module
- *  specific error codes.
- *
- *  Revision 1.9  2001/09/28 14:09:51  joergr
- *  Check return value of DcmItem::insert() statements to avoid memory leaks
- *  when insert procedure failes.
- *
- *  Revision 1.8  2001/09/26 13:04:18  meichel
- *  Adapted dcmsr to class OFCondition
- *
- *  Revision 1.7  2001/06/01 15:51:08  meichel
- *  Updated copyright header
- *
- *  Revision 1.6  2000/11/06 11:31:46  joergr
- *  Changes structure of HTML hyperlinks to composite objects (now using pseudo
- *  CGI script).
- *
- *  Revision 1.5  2000/11/01 16:30:32  joergr
- *  Added support for conversion to XML.
- *
- *  Revision 1.4  2000/10/26 14:27:23  joergr
- *  Added check routine for valid UID strings.
- *
- *  Revision 1.3  2000/10/24 15:04:11  joergr
- *  Changed HTML hyperlinks to referenced objects from "dicom://" to "file://"
- *  to facilitate access from Java.
- *
- *  Revision 1.2  2000/10/23 15:01:06  joergr
- *  Added SOP class UID to hyperlink in method renderHTML().
- *
- *  Revision 1.1  2000/10/20 10:14:57  joergr
- *  Renamed class DSRReferenceValue to DSRCompositeReferenceValue.
- *
- *  Revision 1.4  2000/10/19 16:05:46  joergr
- *  Renamed some set methods.
- *  Added optional module name to read method to provide more detailed warning
- *  messages.
- *
- *  Revision 1.3  2000/10/18 17:20:45  joergr
- *  Added check for read methods (VM and type).
- *
- *  Revision 1.2  2000/10/16 12:08:02  joergr
- *  Reformatted print output.
- *  Added new options: number nested items instead of indenting them, print SOP
- *  instance UID of referenced composite objects.
- *
- *  Revision 1.1  2000/10/13 07:52:23  joergr
- *  Added new module 'dcmsr' providing access to DICOM structured reporting
- *  documents (supplement 23).  Doc++ documentation not yet completed.
- *
- *
- */
+OFCondition DSRCompositeReferenceValue::setSOPInstanceUID(const DcmElement &delem,
+                                                          const unsigned long pos,
+                                                          const OFBool check)
+{
+    OFString sopInstanceUID;
+    /* first, get the value from the element (need to cast away "const") */
+    OFCondition result = OFconst_cast(DcmElement &, delem).getOFString(sopInstanceUID, pos);
+    if (result.good())
+    {
+        /* then, check and set the value */
+        result = setSOPInstanceUID(sopInstanceUID, check);
+    }
+    return result;
+}
+
+
+OFCondition DSRCompositeReferenceValue::setSOPInstanceUID(DcmItem &dataset,
+                                                          const DcmTagKey &tagKey,
+                                                          const unsigned long pos,
+                                                          const OFBool check)
+{
+    OFString sopInstanceUID;
+    /* first, get the element value from the dataset */
+    OFCondition result = DSRTypes::getStringValueFromDataset(dataset, tagKey, sopInstanceUID, pos);
+    if (result.good())
+    {
+        /* then, check and set the value */
+        result = setSOPInstanceUID(sopInstanceUID, check);
+    }
+    return result;
+}
+
+
+OFCondition DSRCompositeReferenceValue::checkSOPClassUID(const OFString &sopClassUID,
+                                                         const OFBool /*reportWarnings*/) const
+{
+    OFCondition result = sopClassUID.empty() ? SR_EC_InvalidValue : EC_Normal;
+    if (result.good())
+        result = DcmUniqueIdentifier::checkStringValue(sopClassUID, "1");
+    return result;
+}
+
+
+OFCondition DSRCompositeReferenceValue::checkSOPInstanceUID(const OFString &sopInstanceUID,
+                                                            const OFBool /*reportWarnings*/) const
+{
+    OFCondition result = sopInstanceUID.empty() ? SR_EC_InvalidValue : EC_Normal;
+    if (result.good())
+        result = DcmUniqueIdentifier::checkStringValue(sopInstanceUID, "1");
+    return result;
+}
+
+
+OFCondition DSRCompositeReferenceValue::checkCurrentValue(const OFBool reportWarnings) const
+{
+    OFCondition result = checkSOPClassUID(SOPClassUID, reportWarnings);
+    if (result.good())
+        result = checkSOPInstanceUID(SOPInstanceUID, reportWarnings);
+    return result;
+}

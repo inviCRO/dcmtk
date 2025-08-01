@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2010, OFFIS e.V.
+ *  Copyright (C) 2002-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,22 +17,15 @@
  *
  *  Purpose: class DcmQuantFloydSteinberg
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:14 $
- *  CVS/RCS Revision: $Revision: 1.5 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
 #include "dcmtk/config/osconfig.h"
 #include "dcmtk/dcmimage/diqtfs.h"
-#include "dcmtk/ofstd/offname.h"    /* for OFFilenameCreator::myrand_r */
-
-#define INCLUDE_CTIME
+#include "dcmtk/ofstd/ofstd.h"       /* for OFStandard::myrand_r */
 #include "dcmtk/ofstd/ofstdinc.h"
+#include <ctime>
+
 
 BEGIN_EXTERN_C
 #include <sys/types.h> // needed for time()
@@ -97,36 +90,12 @@ OFCondition DcmQuantFloydSteinberg::initialize(unsigned long cols)
 
   for (unsigned long col = 0; col < columns + 2; ++col)
   {
-      thisrerr[col] = OFFilenameCreator::myrand_r(&now) % ( DcmQuantFloydSteinbergScale * 2 ) - DcmQuantFloydSteinbergScale;
-      thisgerr[col] = OFFilenameCreator::myrand_r(&now) % ( DcmQuantFloydSteinbergScale * 2 ) - DcmQuantFloydSteinbergScale;
-      thisberr[col] = OFFilenameCreator::myrand_r(&now) % ( DcmQuantFloydSteinbergScale * 2 ) - DcmQuantFloydSteinbergScale;
+      thisrerr[col] = OFrand_r(now) % ( DcmQuantFloydSteinbergScale * 2 ) - DcmQuantFloydSteinbergScale;
+      thisgerr[col] = OFrand_r(now) % ( DcmQuantFloydSteinbergScale * 2 ) - DcmQuantFloydSteinbergScale;
+      thisberr[col] = OFrand_r(now) % ( DcmQuantFloydSteinbergScale * 2 ) - DcmQuantFloydSteinbergScale;
       /* (random errors in [-1 .. 1]) */
   }
   fs_direction = 1;
 
   return EC_Normal;
 }
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: diqtfs.cc,v $
- * Revision 1.5  2010-10-14 13:14:14  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.4  2005/12/08 15:42:29  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.3  2003/12/17 16:34:57  joergr
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- *
- * Revision 1.2  2002/11/27 14:16:58  meichel
- * Adapted module dcmimage to use of new header file ofstdinc.h
- *
- * Revision 1.1  2002/01/25 13:32:10  meichel
- * Initial release of new color quantization classes and
- *   the dcmquant tool in module dcmimage.
- *
- *
- */

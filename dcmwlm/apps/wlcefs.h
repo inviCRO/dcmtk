@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1996-2010, OFFIS e.V.
+ *  Copyright (C) 1996-2019, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: Class representing a console engine for basic worklist
  *           management service class providers based on the file system.
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:20:01 $
- *  CVS/RCS Revision: $Revision: 1.11 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -49,12 +42,24 @@ class WlmConsoleEngineFileSystem
     WlmReturnedCharacterSetType opt_returnedCharacterSet;
     /// path to database files
     OFString opt_dfPath;
+    /// path to store request files
+    OFString opt_rfPath;
+    /// format for request files if stored.
+    /// Several placeholders can be used by(denoted by #):<br>
+    ///   \#a: calling application entity title of the peer SCU<br>
+    ///   \#c: called application entity title (AE title of worklist SCP application)<br>
+    ///   \#i: process id of the worklist SCP application process handling the request<br>
+    ///   \#p: patient ID if present, otherwise empty string<br>
+    ///   \#t: timestamp in the format YYYYMMDDhhmmssffffff<br>
+    OFString opt_rfFormat;
     /// port on which this application is listening
     OFCmdUnsignedInt opt_port;
     /// indicates if incoming associations shall be refused or not
     OFBool opt_refuseAssociation;
     /// indicates if incoming associations shall be refused if no implementation class uid is specified
     OFBool opt_rejectWithoutImplementationUID;
+    /// indicates how many seconds the application is supposed to sleep before handling a find request
+    OFCmdUnsignedInt opt_sleepBeforeFindReq;
     /// indicates how long the application shall sleep after a find
     OFCmdUnsignedInt opt_sleepAfterFind;
     /// indicates how long the application shall sleep during a find
@@ -87,7 +92,7 @@ class WlmConsoleEngineFileSystem
     OFCommandLine *cmd;
     /// number of command line arguments, needed for multiprocess mode on WIN32
     int command_argc;
-    /// complete command line, needed for mulitprocess mode on WIN32
+    /// complete command line, needed for multiprocess mode on WIN32
     char **command_argv;
     /// data source which shall be queried on incoming C-Find RQ messages
     WlmDataSource *dataSource;

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2010, OFFIS e.V.
+ *  Copyright (C) 1997-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: enumerations, error constants and helper functions for dcmjpeg
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:17 $
- *  CVS/RCS Revision: $Revision: 1.6 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DJUTILS_H
@@ -33,21 +26,32 @@
 #include "dcmtk/ofstd/ofcond.h"      /* for class OFCondition */
 #include "dcmtk/dcmimgle/diutils.h"  /* for EP_Interpretation */
 #include "dcmtk/oflog/oflog.h"
+#include "dcmtk/dcmjpeg/djdefine.h"
 
 
 // global definitions for logging mechanism provided by the oflog module
 
-OFLogger DCM_dcmjpegGetLogger();
+extern DCMTK_DCMJPEG_EXPORT OFLogger DCM_dcmjpegLogger;
 
-#define DCMJPEG_TRACE(msg) OFLOG_TRACE(DCM_dcmjpegGetLogger(), msg)
-#define DCMJPEG_DEBUG(msg) OFLOG_DEBUG(DCM_dcmjpegGetLogger(), msg)
-#define DCMJPEG_INFO(msg)  OFLOG_INFO(DCM_dcmjpegGetLogger(), msg)
-#define DCMJPEG_WARN(msg)  OFLOG_WARN(DCM_dcmjpegGetLogger(), msg)
-#define DCMJPEG_ERROR(msg) OFLOG_ERROR(DCM_dcmjpegGetLogger(), msg)
-#define DCMJPEG_FATAL(msg) OFLOG_FATAL(DCM_dcmjpegGetLogger(), msg)
+#define DCMJPEG_TRACE(msg) OFLOG_TRACE(DCM_dcmjpegLogger, msg)
+#define DCMJPEG_DEBUG(msg) OFLOG_DEBUG(DCM_dcmjpegLogger, msg)
+#define DCMJPEG_INFO(msg)  OFLOG_INFO(DCM_dcmjpegLogger, msg)
+#define DCMJPEG_WARN(msg)  OFLOG_WARN(DCM_dcmjpegLogger, msg)
+#define DCMJPEG_ERROR(msg) OFLOG_ERROR(DCM_dcmjpegLogger, msg)
+#define DCMJPEG_FATAL(msg) OFLOG_FATAL(DCM_dcmjpegLogger, msg)
 
+
+// include this file in doxygen documentation
+
+/** @file djutils.h
+ *  @brief type definitions and constants for the dcmjpeg module
+ */
+
+
+// forward declarations
 
 class DcmItem;
+
 
 /** describes the different modes of operation of a JPEG codec
  */
@@ -76,7 +80,7 @@ enum E_SubSampling
 {
   /// 4:4:4 sampling (no subsampling)
   ESS_444,
-  /// 4:2:2 sampling (horizontal subsampling of chroma components
+  /// 4:2:2 sampling (horizontal subsampling of chroma components)
   ESS_422,
   /// 4:1:1 sampling (horizontal and vertical subsampling of chroma components)
   ESS_411
@@ -133,7 +137,7 @@ enum E_CompressionColorSpaceConversion
    */
   ECC_lossyRGB,
 
-  /** convert color images to monochrom before compressing
+  /** convert color images to monochrome before compressing
    */
   ECC_monochrome
 };
@@ -181,17 +185,19 @@ enum E_DecompressionColorSpaceConversion
 // CONDITION CONSTANTS
 
 /// IJG codec suspension return
-extern const OFCondition EJ_Suspension;
+extern DCMTK_DCMJPEG_EXPORT const OFConditionConst EJ_Suspension;
 /// Buffer for decompressed image (8 bits/sample) too small
-extern const OFCondition EJ_IJG8_FrameBufferTooSmall;
+extern DCMTK_DCMJPEG_EXPORT const OFConditionConst EJ_IJG8_FrameBufferTooSmall;
 /// Buffer for decompressed image (12 bits/sample) too small
-extern const OFCondition EJ_IJG12_FrameBufferTooSmall;
+extern DCMTK_DCMJPEG_EXPORT const OFConditionConst EJ_IJG12_FrameBufferTooSmall;
 /// Buffer for decompressed image (16 bits/sample) too small
-extern const OFCondition EJ_IJG16_FrameBufferTooSmall;
+extern DCMTK_DCMJPEG_EXPORT const OFConditionConst EJ_IJG16_FrameBufferTooSmall;
 /// Codec does not support this PhotometricInterpretation
-extern const OFCondition EJ_UnsupportedPhotometricInterpretation;
+extern DCMTK_DCMJPEG_EXPORT const OFConditionConst EJ_UnsupportedPhotometricInterpretation;
 /// Codec does not support this kind of color conversion
-extern const OFCondition EJ_UnsupportedColorConversion;
+extern DCMTK_DCMJPEG_EXPORT const OFConditionConst EJ_UnsupportedColorConversion;
+/// Codec does not support this kind of bit depth
+extern DCMTK_DCMJPEG_EXPORT const OFConditionConst EJ_UnsupportedBitDepth;
 
 // reserved condition codes for IJG error messages
 const unsigned short EJCode_IJG8_Compression    = 0x0100;
@@ -204,7 +210,7 @@ const unsigned short EJCode_IJG16_Decompression = 0x0105;
 /** helper class with static methods used from different dcmjpeg classes
  *  (in particular from the encoder and the decoder part).
  */
-class DcmJpegHelper
+class DCMTK_DCMJPEG_EXPORT DcmJpegHelper
 {
 public:
 
@@ -214,31 +220,16 @@ public:
    *  @return photometric interpretation enum, EPI_Unknown if unknown string or attribute missing
    */
   static EP_Interpretation getPhotometricInterpretation(DcmItem *item);
+
+  /** adjusts the padding of a JPEG bitstream in the buffer that has odd length,
+   *  such that the End of Image (EOI) marker ends on an even byte boundary.
+   *  @param buffer pointer to buffer containing compressed JPEG bitstream
+   *  @param bufSize number of bytes used for the JPEG bitstream (including pad byte)
+   */
+  static void fixPadding(
+    Uint8 *buffer,
+    Uint32 bufSize);
+
 };
 
 #endif
-
-/*
- * CVS/RCS Log
- * $Log: djutils.h,v $
- * Revision 1.6  2010-10-14 13:17:17  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.5  2010-03-24 14:58:48  joergr
- * Added new options for the color space conversion during decompression based
- * on the color model that is "guessed" by the underlying JPEG library (IJG).
- *
- * Revision 1.4  2009-10-07 12:44:33  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.3  2005-12-08 16:59:38  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.2  2005/11/30 14:13:13  onken
- * Added OFCondition constant for "unsupported color space conversions"
- *
- * Revision 1.1  2001/11/13 15:56:30  meichel
- * Initial release of module dcmjpeg
- *
- *
- */

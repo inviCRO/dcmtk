@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were partly developed by
@@ -47,88 +47,82 @@
 */
 
 /*
-**          DICOM 93
-**        Electronic Radiology Laboratory
-**      Mallinckrodt Institute of Radiology
-**    Washington University School of Medicine
+**                       DICOM 93
+**            Electronic Radiology Laboratory
+**          Mallinckrodt Institute of Radiology
+**       Washington University School of Medicine
 **
 ** Module Name(s):  constructAssociatePDU
-**      constructAssociateRejectPDU
-**      constructReleasePDU
-**      constructDataPDU
-**      streamAssociatePDU
-**      streamRejectReleaseAbortPDU
-**      streamDataPDUHead
-** Author, Date:  Stephen M. Moore, 14-Apr-1993
-** Intent:        This file contains functions for construction of
-**                DICOM Upper Layer (DUL) Protocol Data Units (PDUs).
-** Last Update:   $Author: joergr $, $Date: 2010-12-01 08:26:36 $
-** Revision:      $Revision: 1.28 $
-** Status:        $State: Exp $
+**                  constructAssociateRejectPDU
+**                  constructReleasePDU
+**                  constructDataPDU
+**                  streamAssociatePDU
+**                  streamRejectReleaseAbortPDU
+**                  streamDataPDUHead
+** Author, Date:    Stephen M. Moore, 14-Apr-1993
+** Intent:          This file contains functions for construction of
+**                  DICOM Upper Layer (DUL) Protocol Data Units (PDUs).
 */
 
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
-
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CSTDIO
-#define INCLUDE_CSTRING
-#include "dcmtk/ofstd/ofstdinc.h"
 
 #include "dcmtk/dcmnet/dicom.h"
 #include "dcmtk/dcmnet/cond.h"
 #include "dcmtk/dcmnet/diutil.h"
 #include "dcmtk/dcmnet/lst.h"
 #include "dcmtk/dcmnet/dul.h"
-#include "dulstruc.h"
+#include "dcmtk/dcmnet/dulstruc.h"
 #include "dulpriv.h"
 #include "dcmtk/ofstd/ofconsol.h"
 
 static OFCondition
 constructSubItem(char *name, unsigned char type,
-     DUL_SUBITEM * applicationContext, unsigned long *rtnlen);
+                 DUL_SUBITEM * applicationContext, unsigned long *rtnlen);
 static OFCondition
 constructPresentationContext(unsigned char associateType,
-           unsigned char contextID,
-           unsigned char reason, char *abstractSyntax,
+                             unsigned char contextID,
+                             unsigned char reason, char *abstractSyntax,
      LST_HEAD ** proposedTransferSyntax, char *acceptedTransferSyntax,
      PRV_PRESENTATIONCONTEXTITEM * context, unsigned long *rtnLength);
 static OFCondition
 constructUserInfo(unsigned char type, DUL_ASSOCIATESERVICEPARAMETERS * params,
-      DUL_USERINFO * userInfo, unsigned long *rtnLen);
+                  DUL_USERINFO * userInfo, unsigned long *rtnLen);
 static OFCondition
 constructMaxLength(unsigned long maxPDU, DUL_MAXLENGTH * max,
-       unsigned long *rtnLen);
+                   unsigned long *rtnLen);
 static OFCondition
 constructSCUSCPRoles(unsigned char type,
-      DUL_ASSOCIATESERVICEPARAMETERS * params, LST_HEAD ** lst,
-         unsigned long *rtnLength);
+                     DUL_ASSOCIATESERVICEPARAMETERS * params,
+                     LST_HEAD ** lst,
+                     unsigned long *rtnLength);
 static OFCondition
 constructSCUSCPSubItem(char *name, unsigned char type, unsigned char scuRole,
-           unsigned char scpRole, PRV_SCUSCPROLE * scuscpItem,
-           unsigned long *length);
+                       unsigned char scpRole, PRV_SCUSCPROLE * scuscpItem,
+                       unsigned long *length);
 static OFCondition
 streamSubItem(DUL_SUBITEM * item, unsigned char *b,
-        unsigned long *len);
+              unsigned long *len);
 static OFCondition
 streamPresentationContext(
           LST_HEAD ** presentationContextList, unsigned char *b,
-        unsigned long *length);
+          unsigned long *length);
 static OFCondition
 streamUserInfo(DUL_USERINFO * userInfo, unsigned char *b,
-         unsigned long *length);
+               unsigned long *length);
 static OFCondition
 streamMaxLength(DUL_MAXLENGTH * max, unsigned char *b,
-    unsigned long *length);
+                unsigned long *length);
 static OFCondition
     streamSCUSCPList(LST_HEAD ** lst, unsigned char *b, unsigned long *length);
 static OFCondition
 streamSCUSCPRole(PRV_SCUSCPROLE * scuscpRole, unsigned char *b,
-     unsigned long *len);
+                 unsigned long *len);
 static OFCondition
 constructExtNeg(unsigned char type,
-    DUL_ASSOCIATESERVICEPARAMETERS * params, SOPClassExtendedNegotiationSubItemList **lst,
-    unsigned long *rtnLength);
+                DUL_ASSOCIATESERVICEPARAMETERS * params,
+                SOPClassExtendedNegotiationSubItemList **lst,
+                unsigned long *rtnLength);
 
 static OFCondition
 streamExtNegList(SOPClassExtendedNegotiationSubItemList *lst, unsigned char *b, unsigned long *length);
@@ -143,8 +137,8 @@ streamExtNeg(SOPClassExtendedNegotiationSubItem* extNeg, unsigned char *b, unsig
 **
 ** Parameter Dictionary:
 **  params    Service parameters describing the Association
-**  type    The PDU type
-**  pdu   The PDU that is to be initialized.
+**  type      The PDU type
+**  pdu       The PDU that is to be initialized.
 **
 ** Return Values:
 **
@@ -157,16 +151,13 @@ OFCondition
 constructAssociatePDU(DUL_ASSOCIATESERVICEPARAMETERS * params,
           unsigned char type, PRV_ASSOCIATEPDU * pdu)
 {
-    unsigned long
-        itemLength;   /* Holds length of an item computed by a
-         * lower level routine. */
-    DUL_PRESENTATIONCONTEXT
-  * presentationCtx;  /* Pointer to loop through presentation
-         * context items */
-    PRV_PRESENTATIONCONTEXTITEM
-  * contextItem;    /* A presentation context item which is
-         * constructed for each presentation context
-         * requested by caller */
+    /* Holds length of an item computed by a lower level routine. */
+    unsigned long itemLength;
+    /* Pointer to loop through presentation context items */
+    DUL_PRESENTATIONCONTEXT * presentationCtx;
+    /* A presentation context item which is constructed for each presentation
+     * context requested by caller */
+    PRV_PRESENTATIONCONTEXTITEM * contextItem;
 
     pdu->type = type;
     pdu->rsv1 = 0;
@@ -181,80 +172,78 @@ constructAssociatePDU(DUL_ASSOCIATESERVICEPARAMETERS * params,
 
     if (strlen(params->calledAPTitle) < 1 || strlen(params->calledAPTitle) > 16)
         return makeDcmnetCondition(DULC_ILLEGALSERVICEPARAMETER, OF_error, "Illegal service parameter: Called AP Title");
-    (void) strcpy(pdu->calledAPTitle, params->calledAPTitle);
+    OFStandard::strlcpy(pdu->calledAPTitle, params->calledAPTitle, sizeof(pdu->calledAPTitle));
     pdu->length += 16;
 
     if (strlen(params->callingAPTitle) < 1 || strlen(params->callingAPTitle) > 16)
         return makeDcmnetCondition(DULC_ILLEGALSERVICEPARAMETER, OF_error, "Illegal service parameter: Calling AP Title");
-    (void) strcpy(pdu->callingAPTitle, params->callingAPTitle);
+    OFStandard::strlcpy(pdu->callingAPTitle, params->callingAPTitle, sizeof(pdu->callingAPTitle));
     pdu->length += 16;
 
     (void) memset(pdu->rsv3, 0, 32);
     pdu->length += 32;
 
     OFCondition cond = constructSubItem(params->applicationContextName,
-   DUL_TYPEAPPLICATIONCONTEXT, &pdu->applicationContext, &itemLength);
+            DUL_TYPEAPPLICATIONCONTEXT, &pdu->applicationContext, &itemLength);
     if (cond.bad())
-  return cond;
+        return cond;
     pdu->length += itemLength;
 
     cond = EC_Normal;
     if (type == DUL_TYPEASSOCIATERQ) {
         DCMNET_DEBUG("Constructing Associate RQ PDU");
-  presentationCtx = (DUL_PRESENTATIONCONTEXT*)LST_Head(&params->requestedPresentationContext);
-  (void) LST_Position(&params->requestedPresentationContext,
-          (LST_NODE*)presentationCtx);
-  while (presentationCtx != NULL && cond.good()) {
-      contextItem = (PRV_PRESENTATIONCONTEXTITEM *)
-    malloc(sizeof(PRV_PRESENTATIONCONTEXTITEM));
-      if (contextItem == NULL) return EC_MemoryExhausted;
+        presentationCtx = (DUL_PRESENTATIONCONTEXT*)LST_Head(&params->requestedPresentationContext);
+        (void) LST_Position(&params->requestedPresentationContext,
+                (LST_NODE*)presentationCtx);
+        while (presentationCtx != NULL && cond.good()) {
+            contextItem = (PRV_PRESENTATIONCONTEXTITEM *)
+                malloc(sizeof(PRV_PRESENTATIONCONTEXTITEM));
+            if (contextItem == NULL) return EC_MemoryExhausted;
 
-      cond = constructPresentationContext(type,
-             presentationCtx->presentationContextID,
-            presentationCtx->result,
-              presentationCtx->abstractSyntax,
-           &presentationCtx->proposedTransferSyntax, NULL,
-            contextItem, &itemLength);
-            OFCondition cond2 = LST_Enqueue(&pdu->presentationContextList, (LST_NODE*)contextItem);
-            if (cond2.bad()) return cond2;
+            cond = constructPresentationContext(type,
+                    presentationCtx->presentationContextID,
+                    presentationCtx->result,
+                    presentationCtx->abstractSyntax,
+                    &presentationCtx->proposedTransferSyntax, NULL,
+                    contextItem, &itemLength);
+            LST_Enqueue(&pdu->presentationContextList, (LST_NODE*)contextItem);
 
-      pdu->length += itemLength;
-      presentationCtx = (DUL_PRESENTATIONCONTEXT*)LST_Next(&params->requestedPresentationContext);
-  }
+            pdu->length += itemLength;
+            presentationCtx = (DUL_PRESENTATIONCONTEXT*)LST_Next(&params->requestedPresentationContext);
+        }
     } else {
         DCMNET_DEBUG("Constructing Associate AC PDU");
-  if (params->acceptedPresentationContext != NULL) {
-      presentationCtx = (DUL_PRESENTATIONCONTEXT*)LST_Head(&params->acceptedPresentationContext);
-      if (presentationCtx != NULL)
-    (void) LST_Position(&params->acceptedPresentationContext,
-            (LST_NODE*)presentationCtx);
-      while (presentationCtx != NULL && cond.good()) {
-    contextItem = (PRV_PRESENTATIONCONTEXTITEM *)
-        malloc(sizeof(*contextItem));
-    if (contextItem == NULL) return EC_MemoryExhausted;
+        if (params->acceptedPresentationContext != NULL) {
+            presentationCtx = (DUL_PRESENTATIONCONTEXT*)LST_Head(&params->acceptedPresentationContext);
+            if (presentationCtx != NULL)
+                (void) LST_Position(&params->acceptedPresentationContext,
+                        (LST_NODE*)presentationCtx);
+            while (presentationCtx != NULL && cond.good()) {
+                contextItem = (PRV_PRESENTATIONCONTEXTITEM *)
+                    malloc(sizeof(*contextItem));
+                if (contextItem == NULL) return EC_MemoryExhausted;
 
-    cond = constructPresentationContext(type,
-             presentationCtx->presentationContextID,
-                presentationCtx->result,
-              presentationCtx->abstractSyntax,
-            NULL, presentationCtx->acceptedTransferSyntax,
-              contextItem, &itemLength);
+                cond = constructPresentationContext(type,
+                        presentationCtx->presentationContextID,
+                        presentationCtx->result,
+                        presentationCtx->abstractSyntax,
+                        NULL, presentationCtx->acceptedTransferSyntax,
+                        contextItem, &itemLength);
 
-                OFCondition cond2 = LST_Enqueue(&pdu->presentationContextList, (LST_NODE*)contextItem);
-                if (cond2.bad()) return cond2;
+                LST_Enqueue(&pdu->presentationContextList, (LST_NODE*)contextItem);
 
-    pdu->length += itemLength;
-    presentationCtx = (DUL_PRESENTATIONCONTEXT*)LST_Next(&params->acceptedPresentationContext);
-      }
-  }
+                pdu->length += itemLength;
+                presentationCtx = (DUL_PRESENTATIONCONTEXT*)LST_Next(&params->acceptedPresentationContext);
+            }
+        }
     }
 
     if (cond.bad())
-  return cond;
+        return cond;
 
     cond = constructUserInfo(type, params, &(pdu->userInfo), &itemLength);
     if (cond.bad())
-  return cond;
+        return cond;
     pdu->length += itemLength;
 
     return EC_Normal;
@@ -271,7 +260,7 @@ constructAssociatePDU(DUL_ASSOCIATESERVICEPARAMETERS * params,
 **  result    Result of rejection
 **  source    Whether service user or provider
 **  reason    Reason for rejection
-**  pdu   The PDU that is to be initialized.
+**  pdu       The PDU that is to be initialized.
 **
 ** Return Values:
 **
@@ -367,9 +356,9 @@ constructReleaseRPPDU(DUL_REJECTRELEASEABORTPDU * pdu)
 **  Construct a ABORT PDU
 **
 ** Parameter Dictionary:
-**  src   Originator of the ABORT PDU (service user/provider)
+**  src       Originator of the ABORT PDU (service user/provider)
 **  reason    Reason for sending the ABORT PDU
-**  pdu   The PDU that is to be initialized as an ABORT PDU
+**  pdu       The PDU that is to be initialized as an ABORT PDU
 **
 ** Return Values:
 **
@@ -378,8 +367,8 @@ constructReleaseRPPDU(DUL_REJECTRELEASEABORTPDU * pdu)
 */
 OFCondition
 constructAbortPDU(unsigned char src, unsigned char reason,
-      DUL_REJECTRELEASEABORTPDU * pdu,
-      unsigned long mode)
+                  DUL_REJECTRELEASEABORTPDU * pdu,
+                  unsigned long mode)
 {
     pdu->type = DUL_TYPEABORT;
     pdu->rsv1 = 0;
@@ -406,16 +395,15 @@ constructAbortPDU(unsigned char src, unsigned char reason,
 **  Construct a data PDU
 **
 ** Parameter Dictionary:
-**  buf   Buffer holding the data that is to be included in the
-**      PDU
-**  length    Length of the data
+**  buf     Buffer holding the data that is to be included in the PDU
+**  length  Length of the data
 **  type    PDU type
 **  presentationContextID
-**      ID of the presentation context (unique value that
-**      distinguishes the context)
+**          ID of the presentation context (unique value that
+**          distinguishes the context)
 **  last    A boolean value to indicate whether or not this PDU
-**      is the last one in the stream
-**  pdu   THe PDU that is to be constructed.
+**          is the last one in the stream
+**  pdu     The PDU that is to be constructed.
 **
 ** Return Values:
 **
@@ -424,12 +412,11 @@ constructAbortPDU(unsigned char src, unsigned char reason,
 */
 
 OFCondition
-constructDataPDU(void *buf, unsigned long length,
-    DUL_DATAPDV type, DUL_PRESENTATIONCONTEXTID presentationContextID,
-     OFBool last, DUL_DATAPDU * pdu)
+constructDataPDU(void *buf, unsigned long length, DUL_DATAPDV type,
+                 DUL_PRESENTATIONCONTEXTID presentationContextID,
+                 OFBool last, DUL_DATAPDU * pdu)
 {
-    unsigned char
-        u;
+    unsigned char u;
 
     pdu->type = DUL_TYPEDATA;
     pdu->rsv1 = 0;
@@ -439,15 +426,15 @@ constructDataPDU(void *buf, unsigned long length,
     u = 0;
     switch (type) {
     case DUL_DATASETPDV:
-  break;
+        break;
     case DUL_COMMANDPDV:
-  u |= 1;
-  break;
+        u |= 1;
+        break;
     default:
-  break;
+        break;
     }
     if (last)
-  u |= 2;
+        u |= 2;
 
     pdu->presentationDataValue.presentationContextID = presentationContextID;
     pdu->presentationDataValue.messageControlHeader = u;
@@ -463,10 +450,10 @@ constructDataPDU(void *buf, unsigned long length,
 **  transmission over the network)
 **
 ** Parameter Dictionary:
-**  assoc   The PDU that is to be converted
-**  b   The PDU to be sent over the network
-**  maxLength Maximum length allowed for the stream
-**  rtnLength Actual length of the constructed PDU
+**  assoc      The PDU that is to be converted
+**  b          The PDU to be sent over the network
+**  maxLength  Maximum length allowed for the stream
+**  rtnLength  Actual length of the constructed PDU
 **
 ** Return Values:
 **
@@ -477,10 +464,9 @@ constructDataPDU(void *buf, unsigned long length,
 
 OFCondition
 streamAssociatePDU(PRV_ASSOCIATEPDU * assoc, unsigned char *b,
-       unsigned long /*maxLength*/, unsigned long *rtnLen)
+                   unsigned long /*maxLength*/, unsigned long *rtnLen)
 {
-    unsigned long
-        subLength;
+    unsigned long subLength;
 
     *b++ = assoc->type;
     *b++ = assoc->rsv1;
@@ -491,10 +477,16 @@ streamAssociatePDU(PRV_ASSOCIATEPDU * assoc, unsigned char *b,
     *b++ = assoc->rsv2[0];
     *b++ = assoc->rsv2[1];
     (void) memset(b, ' ', 32);
-    (void) strncpy((char *) b, assoc->calledAPTitle, strlen(assoc->calledAPTitle));
+
+    // we don't copy the zero bytes at the end of the AEtitle strings
+    // since the PDU requires a space-padded, non zero-padded string.
+    size_t len = strlen(assoc->calledAPTitle);
+    if (len > 16) len = 16;
+    memcpy(b, assoc->calledAPTitle, len);
     b += 16;
-    (void) strncpy((char *) b, assoc->callingAPTitle,
-       strlen(assoc->callingAPTitle));
+    len = strlen(assoc->callingAPTitle);
+    if (len > 16) len = 16;
+    memcpy(b, assoc->callingAPTitle, len);
     b += 16;
     (void) memset(b, 0, 32);
     b += 32;
@@ -503,7 +495,7 @@ streamAssociatePDU(PRV_ASSOCIATEPDU * assoc, unsigned char *b,
 
     OFCondition cond = streamSubItem(&assoc->applicationContext, b, &subLength);
     if (cond.bad())
-  return cond;
+        return cond;
 
     b += subLength;
     *rtnLen += subLength;
@@ -511,13 +503,13 @@ streamAssociatePDU(PRV_ASSOCIATEPDU * assoc, unsigned char *b,
              b, &subLength);
 
     if (cond.bad())
-  return cond;
+        return cond;
 
     b += subLength;
     *rtnLen += subLength;
     cond = streamUserInfo(&assoc->userInfo, b, &subLength);
     if (cond.bad())
-  return cond;
+        return cond;
 
     b += subLength;
     *rtnLen += subLength;
@@ -532,10 +524,10 @@ streamAssociatePDU(PRV_ASSOCIATEPDU * assoc, unsigned char *b,
 **  Construct a Reject Release Abort PDU in the stream format
 **
 ** Parameter Dictionary:
-**  assoc   The PDU that is to be converted
-**  b   The PDU to be sent over the network
-**  maxLength Maximum length allowed for the stream
-**  rtnLength Actual length of the constructed PDU
+**  assoc      The PDU that is to be converted
+**  b          The PDU to be sent over the network
+**  maxLength  Maximum length allowed for the stream
+**  rtnLength  Actual length of the constructed PDU
 **
 ** Return Values:
 **
@@ -573,10 +565,10 @@ streamRejectReleaseAbortPDU(DUL_REJECTRELEASEABORTPDU * pdu,
 **  Construct a Data PDU in the stream format
 **
 ** Parameter Dictionary:
-**  assoc   The PDU that is to be converted
-**  b   The PDU to be sent over the network
-**  maxLength Maximum length allowed for the stream
-**  rtnLength Actual length of the constructed PDU
+**  assoc      The PDU that is to be converted
+**  b          The PDU to be sent over the network
+**  maxLength  Maximum length allowed for the stream
+**  rtnLength  Actual length of the constructed PDU
 **
 ** Return Values:
 **
@@ -654,11 +646,11 @@ streamDataPDUHead(DUL_DATAPDU * pdu, unsigned char *buf,
 **  Construct the subitem part of the PDU
 **
 ** Parameter Dictionary:
-**  name    Data that goes in the subitem PDU
-**  type    Type of the subitem PDU
+**  name      Data that goes in the subitem PDU
+**  type      Type of the subitem PDU
 **  subItem   The subitem PDU that is to be constructed
 **  rtnLength Actual length of the constructed subitem (returned
-**      to caller)
+**            to caller)
 **
 ** Return Values:
 **
@@ -672,13 +664,13 @@ constructSubItem(char *name, unsigned char type,
     if (strlen(name) < 1 || strlen(name) > 64)
     {
         char buf[1024];
-        sprintf(buf,"Illegal service parameter: %s", name);
+        OFStandard::snprintf(buf, 1024, "Illegal service parameter: %s", name);
         return makeDcmnetCondition(DULC_ILLEGALSERVICEPARAMETER, OF_error, buf);
     }
     subItem->type = type;
     subItem->rsv1 = 0;
     subItem->length = (unsigned short) strlen(name);
-    (void) strcpy(subItem->data, name);
+    OFStandard::strlcpy(subItem->data, name, sizeof(subItem->data));
 
     *rtnLength = subItem->length + 4;
     return EC_Normal;
@@ -691,19 +683,19 @@ constructSubItem(char *name, unsigned char type,
 **  Construct the presentation context part of the PDU
 **
 ** Parameter Dictionary:
-**  associateType   Type of the parent Associate PDU
-**  contextID   Unique value identifying this presentation
-**        context
-**  reason      Reason to be included in the result field
-**  abstractSyntax    Used to build teh abstract syntax list
+**  associateType           Type of the parent Associate PDU
+**  contextID               Unique value identifying this presentation
+**                          context
+**  reason                  Reason to be included in the result field
+**  abstractSyntax          Used to build teh abstract syntax list
 **  proposedTransferSyntax  Proposed transfer characteristics (to be
-**        negotiated)
+**                          negotiated)
 **  acceptedTransferSyntax  Accepted transfer characteristics (after
-**        negotiation)
-**  context     The pointer to the actual presentation
-**        context being constructed
-**  rtnLength   Actual length of the entire context being
-**        constructed.
+**                          negotiation)
+**  context                 The pointer to the actual presentation
+**                          context being constructed
+**  rtnLength               Actual length of the entire context being
+**                          constructed.
 **
 **
 ** Return Values:
@@ -716,25 +708,22 @@ static OFCondition
 constructPresentationContext(unsigned char associateType,
            unsigned char contextID,
            unsigned char reason, char *abstractSyntax,
-     LST_HEAD ** proposedTransferSyntax, char *acceptedTransferSyntax,
-         PRV_PRESENTATIONCONTEXTITEM * context, unsigned long *rtnLen)
+           LST_HEAD ** proposedTransferSyntax, char *acceptedTransferSyntax,
+           PRV_PRESENTATIONCONTEXTITEM * context, unsigned long *rtnLen)
 {
     OFCondition cond = EC_Normal;
-    unsigned long
-        length;
-    DUL_SUBITEM
-  * subItem;    /* Subitem pointer created for transfer
-         * syntax items */
-    DUL_TRANSFERSYNTAX
-  * transfer;   /* Pointer to loop through list of transfer
-         * syntaxes */
+    unsigned long length;
+    /* Subitem pointer created for transfer syntax items */
+    DUL_SUBITEM * subItem;
+    /* Pointer to loop through list of transfer syntaxes */
+    DUL_TRANSFERSYNTAX * transfer;
 
     *rtnLen = 0;
 
     if (associateType == DUL_TYPEASSOCIATERQ)
-  context->type = DUL_TYPEPRESENTATIONCONTEXTRQ;
+        context->type = DUL_TYPEPRESENTATIONCONTEXTRQ;
     else
-  context->type = DUL_TYPEPRESENTATIONCONTEXTAC;
+        context->type = DUL_TYPEPRESENTATIONCONTEXTAC;
 
     context->rsv1 = 0;
     context->length = 0;
@@ -746,53 +735,55 @@ constructPresentationContext(unsigned char associateType,
     *rtnLen += 8;
 
     if (associateType == DUL_TYPEASSOCIATERQ) {
-  cond = constructSubItem(abstractSyntax, DUL_TYPEABSTRACTSYNTAX,
-        &(context->abstractSyntax), &length);
-  if (cond.bad())
-      return cond;
-  context->length += (unsigned short) length;
-  *rtnLen += length;
+        cond = constructSubItem(abstractSyntax, DUL_TYPEABSTRACTSYNTAX,
+                &(context->abstractSyntax), &length);
+        if (cond.bad())
+            return cond;
+        context->length += (unsigned short) length;
+        *rtnLen += length;
     } else
-  context->abstractSyntax.length = 0;
+        context->abstractSyntax.length = 0;
 
     context->transferSyntaxList = LST_Create();
     if (context->transferSyntaxList == NULL) return EC_MemoryExhausted;
 
     if (associateType == DUL_TYPEASSOCIATERQ) {
-  transfer = (DUL_TRANSFERSYNTAX*)LST_Head(proposedTransferSyntax);
-  if (transfer == NULL) return DUL_LISTERROR;
-  (void) LST_Position(proposedTransferSyntax, (LST_NODE*)transfer);
+        transfer = (DUL_TRANSFERSYNTAX*)LST_Head(proposedTransferSyntax);
+        if (transfer == NULL) return DUL_LISTERROR;
+        (void) LST_Position(proposedTransferSyntax, (LST_NODE*)transfer);
 
-  while (transfer != NULL) {
-      subItem = (DUL_SUBITEM *) malloc(sizeof(DUL_SUBITEM));
-      if (subItem == NULL) return EC_MemoryExhausted;
+        while (transfer != NULL) {
+            subItem = (DUL_SUBITEM *) malloc(sizeof(DUL_SUBITEM));
+            if (subItem == NULL) return EC_MemoryExhausted;
 
-      cond = constructSubItem(transfer->transferSyntax,
-          DUL_TYPETRANSFERSYNTAX, subItem, &length);
-      if (cond.bad()) return cond;
+            cond = constructSubItem(transfer->transferSyntax,
+                    DUL_TYPETRANSFERSYNTAX, subItem, &length);
+            if (cond.bad())
+            {
+                free(subItem);
+                return cond;
+            }
 
-            OFCondition cond2 = LST_Enqueue(&context->transferSyntaxList, (LST_NODE*)subItem);
-            if (cond2.bad()) return cond2;
+            LST_Enqueue(&context->transferSyntaxList, (LST_NODE*)subItem);
 
-      context->length += (unsigned short) length;
-      *rtnLen += length;
-      transfer = (DUL_TRANSFERSYNTAX*)LST_Next(proposedTransferSyntax);
-  }
+            context->length += (unsigned short) length;
+            *rtnLen += length;
+            transfer = (DUL_TRANSFERSYNTAX*)LST_Next(proposedTransferSyntax);
+        }
     } else {
-  subItem = (DUL_SUBITEM *) malloc(sizeof(*subItem));
-  if (subItem == NULL) return EC_MemoryExhausted;
-  cond = constructSubItem(acceptedTransferSyntax,
-        DUL_TYPETRANSFERSYNTAX, subItem, &length);
-  if (cond.bad()) {
-    free(subItem);
-    return cond;
-  }
+        subItem = (DUL_SUBITEM *) malloc(sizeof(*subItem));
+        if (subItem == NULL) return EC_MemoryExhausted;
+        cond = constructSubItem(acceptedTransferSyntax,
+                DUL_TYPETRANSFERSYNTAX, subItem, &length);
+        if (cond.bad()) {
+            free(subItem);
+            return cond;
+        }
 
-        OFCondition cond2 = LST_Enqueue(&context->transferSyntaxList, (LST_NODE*)subItem);
-        if (cond2.bad()) return cond2;
+        LST_Enqueue(&context->transferSyntaxList, (LST_NODE*)subItem);
 
-  context->length += (unsigned short) length;
-  *rtnLen += length;
+        context->length += (unsigned short) length;
+        *rtnLen += length;
     }
 
     return EC_Normal;
@@ -808,11 +799,11 @@ constructPresentationContext(unsigned char associateType,
 **  in function streamUserInfo().
 **
 ** Parameter Dictionary:
-**  type    Type of the User info part
-**  params    Service parameters describing the Association
-**  userInfo  The user info part that is to be constructed
-**  rtnLength Actual length of the constructed part, returned to
-**      the caller.
+**  type       Type of the User info part
+**  params     Service parameters describing the Association
+**  userInfo   The user info part that is to be constructed
+**  rtnLength  Actual length of the constructed part, returned to
+**             the caller.
 **
 ** Return Values:
 **
@@ -846,10 +837,10 @@ constructUserInfo(unsigned char type, DUL_ASSOCIATESERVICEPARAMETERS * params,
     // construct user info sub-item 52H: implementation class UID
     if (type == DUL_TYPEASSOCIATERQ)
         cond = constructSubItem(params->callingImplementationClassUID,
-          DUL_TYPEIMPLEMENTATIONCLASSUID, &userInfo->implementationClassUID, &length);
+                DUL_TYPEIMPLEMENTATIONCLASSUID, &userInfo->implementationClassUID, &length);
     else
         cond = constructSubItem(params->calledImplementationClassUID,
-            DUL_TYPEIMPLEMENTATIONCLASSUID, &userInfo->implementationClassUID, &length);
+                DUL_TYPEIMPLEMENTATIONCLASSUID, &userInfo->implementationClassUID, &length);
     if (cond.bad()) return cond;
     totalUserInfoLength += length;
     *rtnLen += length;
@@ -870,9 +861,9 @@ constructUserInfo(unsigned char type, DUL_ASSOCIATESERVICEPARAMETERS * params,
      } else {
         if (strlen(params->calledImplementationVersionName) != 0) {
             cond = constructSubItem(params->calledImplementationVersionName,
-              DUL_TYPEIMPLEMENTATIONVERSIONNAME,
-              &userInfo->implementationVersionName,
-              &length);
+                                    DUL_TYPEIMPLEMENTATIONVERSIONNAME,
+                                    &userInfo->implementationVersionName,
+                                    &length);
             if (cond.bad()) return cond;
             totalUserInfoLength += length;
             *rtnLen += length;
@@ -897,7 +888,7 @@ constructUserInfo(unsigned char type, DUL_ASSOCIATESERVICEPARAMETERS * params,
       cond = params->reqUserIdentNeg->streamedLength(length);
       if (cond.bad()) return cond;
       userInfo->usrIdent = new UserIdentityNegotiationSubItemRQ();
-        *(OFstatic_cast(UserIdentityNegotiationSubItemRQ*,userInfo->usrIdent)) = *(OFstatic_cast(UserIdentityNegotiationSubItemRQ*, params->reqUserIdentNeg));
+      *(OFstatic_cast(UserIdentityNegotiationSubItemRQ*,userInfo->usrIdent)) = *(OFstatic_cast(UserIdentityNegotiationSubItemRQ*, params->reqUserIdentNeg));
       totalUserInfoLength += length;
       *rtnLen += length;
     }
@@ -988,80 +979,84 @@ constructSCUSCPRoles(unsigned char type,
   OFCondition cond = EC_Normal;
   if (type == DUL_TYPEASSOCIATERQ)
   {
-    presentationCtx = params->requestedPresentationContext != NULL ?
-      (DUL_PRESENTATIONCONTEXT*)LST_Head(&params->requestedPresentationContext) :
-      (DUL_PRESENTATIONCONTEXT*)NULL;
+      presentationCtx = params->requestedPresentationContext != NULL ?
+          (DUL_PRESENTATIONCONTEXT*)LST_Head(&params->requestedPresentationContext) :
+          (DUL_PRESENTATIONCONTEXT*)NULL;
 
-    if (presentationCtx != NULL)
-      (void) LST_Position(&params->requestedPresentationContext, (LST_NODE*)presentationCtx);
+      if (presentationCtx != NULL)
+          (void) LST_Position(&params->requestedPresentationContext, (LST_NODE*)presentationCtx);
 
-    while (presentationCtx != NULL) {
-      if (presentationCtx->proposedSCRole != DUL_SC_ROLE_DEFAULT) {
-        scuscpItem = (PRV_SCUSCPROLE*)malloc(sizeof(PRV_SCUSCPROLE));
-        if (scuscpItem == NULL) return EC_MemoryExhausted;
-        if (presentationCtx->proposedSCRole == DUL_SC_ROLE_SCU) {
-          scuRole = 1;
-          scpRole = 0;
-        } else if (presentationCtx->proposedSCRole == DUL_SC_ROLE_SCP) {
-          scuRole = 0;
-          scpRole = 1;
-        } else {
-          scuRole = scpRole = 1;
-        }
-        cond = constructSCUSCPSubItem(presentationCtx->abstractSyntax,
-          DUL_TYPESCUSCPROLE, scuRole, scpRole, scuscpItem, &length);
-        if (cond.bad())
-          return cond;
-        *rtnLength += length;
-        cond = LST_Enqueue(lst, (LST_NODE*)scuscpItem);
-        if (cond.bad()) return cond;
+      while (presentationCtx != NULL) {
+          if (presentationCtx->proposedSCRole != DUL_SC_ROLE_DEFAULT) {
+              scuscpItem = (PRV_SCUSCPROLE*)malloc(sizeof(PRV_SCUSCPROLE));
+              if (scuscpItem == NULL) return EC_MemoryExhausted;
+              if (presentationCtx->proposedSCRole == DUL_SC_ROLE_SCU) {
+                  scuRole = 1;
+                  scpRole = 0;
+              } else if (presentationCtx->proposedSCRole == DUL_SC_ROLE_SCP) {
+                  scuRole = 0;
+                  scpRole = 1;
+              } else {
+                  scuRole = scpRole = 1;
+              }
+              cond = constructSCUSCPSubItem(presentationCtx->abstractSyntax,
+                      DUL_TYPESCUSCPROLE, scuRole, scpRole, scuscpItem, &length);
+              if (cond.bad())
+              {
+                  free(scuscpItem);
+                  return cond;
+              }
+              *rtnLength += length;
+              LST_Enqueue(lst, (LST_NODE*)scuscpItem);
+          }
+          presentationCtx = (DUL_PRESENTATIONCONTEXT*)LST_Next(&params->requestedPresentationContext);
       }
-      presentationCtx = (DUL_PRESENTATIONCONTEXT*)LST_Next(&params->requestedPresentationContext);
-    }
   } else {  // type != DUL_TYPEASSOCIATERQ
-    presentationCtx = params->acceptedPresentationContext != NULL ?
-      (DUL_PRESENTATIONCONTEXT*)LST_Head(&params->acceptedPresentationContext) :
-      (DUL_PRESENTATIONCONTEXT*)NULL;
+     /* The implemented behaviour is documented in dul.h (see DUL_SC_ROLE enum definition).
+      * The error case is already handled in ASC_acceptPresentationContext() in assoc.cc.
+      */
+      presentationCtx = params->acceptedPresentationContext != NULL ?
+          (DUL_PRESENTATIONCONTEXT*)LST_Head(&params->acceptedPresentationContext) :
+          (DUL_PRESENTATIONCONTEXT*)NULL;
 
-    if (presentationCtx != NULL)
-      (void) LST_Position(&params->acceptedPresentationContext, (LST_NODE*)presentationCtx);
+      if (presentationCtx != NULL)
+          (void) LST_Position(&params->acceptedPresentationContext, (LST_NODE*)presentationCtx);
 
-    while (presentationCtx != NULL) {
-      // check that the default behavior does not apply
-      if ((presentationCtx->proposedSCRole != DUL_SC_ROLE_DEFAULT) &&
-          (presentationCtx->acceptedSCRole != DUL_SC_ROLE_DEFAULT)) {
-        scuscpItem = (PRV_SCUSCPROLE*)malloc(sizeof(*scuscpItem));
-        if (scuscpItem == NULL) return EC_MemoryExhausted;
-        if (presentationCtx->acceptedSCRole == DUL_SC_ROLE_SCU) {
-          // only accept SCU role for the requester if proposed, see PS 3.7
-          scuRole = (presentationCtx->proposedSCRole != DUL_SC_ROLE_SCP) ? 1 : 0;
-          scpRole = 0;
-        } else if (presentationCtx->acceptedSCRole == DUL_SC_ROLE_SCP) {
-          scuRole = 0;
-          // only accept SCP role for the requester if proposed, see PS 3.7
-          scpRole = (presentationCtx->proposedSCRole != DUL_SC_ROLE_SCU) ? 1 : 0;
-        } else {
-          // only accept roles for the requester if proposed, see PS 3.7
-          scuRole = (presentationCtx->proposedSCRole != DUL_SC_ROLE_SCP) ? 1 : 0;
-          scpRole = (presentationCtx->proposedSCRole != DUL_SC_ROLE_SCU) ? 1 : 0;
-        }
-        // neither SCU nor SCP role accepted
-        if ((scuRole == 0) && (scpRole == 0)) {
-            presentationCtx->acceptedSCRole = DUL_SC_ROLE_NONE;
-            DCMNET_WARN("setting accepted SCP/SCU role to NONE, i.e. both role fields are 0 in SCP/SCU role selection sub-item");
-        }
-        cond = constructSCUSCPSubItem(presentationCtx->abstractSyntax,
-          DUL_TYPESCUSCPROLE, scuRole, scpRole, scuscpItem, &length);
-        if (cond.bad()) {
-          free(scuscpItem);
-          return cond;
-        }
-        *rtnLength += length;
-        cond = LST_Enqueue(lst, (LST_NODE*)scuscpItem);
-        if (cond.bad()) return cond;
+      while (presentationCtx != NULL) {
+          // check that the default behavior does not apply
+          if ((presentationCtx->proposedSCRole != DUL_SC_ROLE_DEFAULT) &&
+                  (presentationCtx->acceptedSCRole != DUL_SC_ROLE_DEFAULT)) {
+              scuscpItem = (PRV_SCUSCPROLE*)malloc(sizeof(*scuscpItem));
+              if (scuscpItem == NULL) return EC_MemoryExhausted;
+              if (presentationCtx->acceptedSCRole == DUL_SC_ROLE_SCU) {
+                  // only accept SCU role for the requester if proposed, see PS 3.7
+                  scuRole = (presentationCtx->proposedSCRole != DUL_SC_ROLE_SCP) ? 1 : 0;
+                  scpRole = 0;
+              } else if (presentationCtx->acceptedSCRole == DUL_SC_ROLE_SCP) {
+                  scuRole = 0;
+                  // only accept SCP role for the requester if proposed, see PS 3.7
+                  scpRole = (presentationCtx->proposedSCRole != DUL_SC_ROLE_SCU) ? 1 : 0;
+              } else {
+                  // only accept roles for the requester if proposed, see PS 3.7
+                  scuRole = (presentationCtx->proposedSCRole != DUL_SC_ROLE_SCP) ? 1 : 0;
+                  scpRole = (presentationCtx->proposedSCRole != DUL_SC_ROLE_SCU) ? 1 : 0;
+              }
+              // neither SCU nor SCP role accepted
+              if ((scuRole == 0) && (scpRole == 0)) {
+                  presentationCtx->acceptedSCRole = DUL_SC_ROLE_NONE;
+                  DCMNET_WARN("setting accepted SCP/SCU role to NONE, i.e. both role fields are 0 in SCP/SCU role selection sub-item");
+              }
+              cond = constructSCUSCPSubItem(presentationCtx->abstractSyntax,
+                      DUL_TYPESCUSCPROLE, scuRole, scpRole, scuscpItem, &length);
+              if (cond.bad()) {
+                  free(scuscpItem);
+                  return cond;
+              }
+              *rtnLength += length;
+              LST_Enqueue(lst, (LST_NODE*)scuscpItem);
+          }
+          presentationCtx = (DUL_PRESENTATIONCONTEXT*)LST_Next(&params->acceptedPresentationContext);
       }
-      presentationCtx = (DUL_PRESENTATIONCONTEXT*)LST_Next(&params->acceptedPresentationContext);
-    }
   }
   return EC_Normal;
 }
@@ -1078,8 +1073,9 @@ constructSCUSCPRoles(unsigned char type,
 */
 static OFCondition
 constructExtNeg(unsigned char type,
-    DUL_ASSOCIATESERVICEPARAMETERS * params, SOPClassExtendedNegotiationSubItemList **lst,
-    unsigned long *rtnLength)
+                DUL_ASSOCIATESERVICEPARAMETERS * params,
+                SOPClassExtendedNegotiationSubItemList **lst,
+                unsigned long *rtnLength)
 {
     unsigned long length;
     *rtnLength = 0;
@@ -1100,7 +1096,7 @@ constructExtNeg(unsigned char type,
             SOPClassExtendedNegotiationSubItem* extNeg = *i;
             extNeg->itemType = 0x56;
             // recompute the length fields
-            extNeg->sopClassUIDLength = extNeg->sopClassUID.length();
+            extNeg->sopClassUIDLength = OFstatic_cast(unsigned short, extNeg->sopClassUID.length());
             extNeg->itemLength = 2 + extNeg->sopClassUIDLength + extNeg->serviceClassAppInfoLength;
             length = 4 + extNeg->itemLength;
             *rtnLength += length;
@@ -1118,12 +1114,12 @@ constructExtNeg(unsigned char type,
 **  Construct a SCU-SCP subitem part in the parent PDU
 **
 ** Parameter Dictionary:
-**  name    SOP Class UID
-**  type    Type of the SCU-SCP subitem
-**  scuRole   Role played by the SCU
-**  scpRole   Role played by the SCP
+**  name        SOP Class UID
+**  type        Type of the SCU-SCP subitem
+**  scuRole     Role played by the SCU
+**  scpRole     Role played by the SCP
 **  scuscpItem  The subitem to be constructed
-**  length    Length of the subitm that is constructed
+**  length      Length of the subitm that is constructed
 **
 ** Return Values:
 **
@@ -1134,13 +1130,13 @@ constructExtNeg(unsigned char type,
 */
 static OFCondition
 constructSCUSCPSubItem(char *name, unsigned char type, unsigned char scuRole,
-           unsigned char scpRole, PRV_SCUSCPROLE * scuscpItem,
-           unsigned long *length)
+                       unsigned char scpRole, PRV_SCUSCPROLE * scuscpItem,
+                       unsigned long *length)
 {
     if (strlen(name) < 1 || strlen(name) > 64)
     {
         char buf[1024];
-        sprintf(buf,"Illegal service parameter: %s", name);
+        OFStandard::snprintf(buf, 1024, "Illegal service parameter: %s", name);
         return makeDcmnetCondition(DULC_ILLEGALSERVICEPARAMETER, OF_error, buf);
     }
 
@@ -1149,7 +1145,7 @@ constructSCUSCPSubItem(char *name, unsigned char type, unsigned char scuRole,
     scuscpItem->SCURole = scuRole;
     scuscpItem->SCPRole = scpRole;
     scuscpItem->length = (unsigned short) (strlen(name) + 2 + 2);
-    (void) strcpy(scuscpItem->SOPClassUID, name);
+    OFStandard::strlcpy(scuscpItem->SOPClassUID, name, sizeof(scuscpItem->SOPClassUID));
 
     *length = scuscpItem->length + 4;
     return EC_Normal;
@@ -1162,8 +1158,8 @@ constructSCUSCPSubItem(char *name, unsigned char type, unsigned char scuRole,
 **
 ** Parameter Dictionary:
 **  item    The subitem that is to be converted
-**  b   The stream version of the subitem
-**  len   Length of the stream format
+**  b       The stream version of the subitem
+**  len     Length of the stream format
 **
 ** Return Values:
 **
@@ -1173,10 +1169,9 @@ constructSCUSCPSubItem(char *name, unsigned char type, unsigned char scuRole,
 
 static OFCondition
 streamSubItem(DUL_SUBITEM * item, unsigned char *b,
-        unsigned long *len)
+              unsigned long *len)
 {
-    unsigned short
-        length;
+    unsigned short length;
 
     length = item->length;
 
@@ -1212,13 +1207,10 @@ static OFCondition
 streamPresentationContext(LST_HEAD ** presentationContextList,
         unsigned char *b, unsigned long *length)
 {
-    PRV_PRESENTATIONCONTEXTITEM
-    * presentation;
-    DUL_SUBITEM
-  * transfer;
+    PRV_PRESENTATIONCONTEXTITEM * presentation;
+    DUL_SUBITEM * transfer;
     OFCondition cond = EC_Normal;
-    unsigned long
-        subLength;
+    unsigned long subLength;
 
     *length = 0;
 
@@ -1227,38 +1219,38 @@ streamPresentationContext(LST_HEAD ** presentationContextList,
     (void) LST_Position(presentationContextList, (LST_NODE*)presentation);
 
     while (presentation != NULL) {
-  *b++ = presentation->type;
-  *b++ = presentation->rsv1;
+        *b++ = presentation->type;
+        *b++ = presentation->rsv1;
 
-  COPY_SHORT_BIG(presentation->length, b);
-  b += 2;
-  *b++ = presentation->contextID;
-  *b++ = presentation->rsv2;
-  *b++ = presentation->result;
-  *b++ = presentation->rsv3;
-  *length += 8;
+        COPY_SHORT_BIG(presentation->length, b);
+        b += 2;
+        *b++ = presentation->contextID;
+        *b++ = presentation->rsv2;
+        *b++ = presentation->result;
+        *b++ = presentation->rsv3;
+        *length += 8;
 
-  if (presentation->abstractSyntax.length != 0) {
-      cond = streamSubItem(&presentation->abstractSyntax, b, &subLength);
-      if (cond.bad())
-    return cond;
-      b += subLength;
-      *length += subLength;
-  }
-  transfer = (DUL_SUBITEM*)LST_Head(&presentation->transferSyntaxList);
-  if (transfer == NULL) return DUL_LISTERROR;
-  (void) LST_Position(&presentation->transferSyntaxList, (LST_NODE*)transfer);
-  while (transfer != NULL) {
-      if (transfer->length != 0) {
-    cond = streamSubItem(transfer, b, &subLength);
-    if (cond.bad())
-        return cond;
-    b += subLength;
-    *length += subLength;
-      }
-      transfer = (DUL_SUBITEM*)LST_Next(&presentation->transferSyntaxList);
-  }
-  presentation = (PRV_PRESENTATIONCONTEXTITEM*)LST_Next(presentationContextList);
+        if (presentation->abstractSyntax.length != 0) {
+            cond = streamSubItem(&presentation->abstractSyntax, b, &subLength);
+            if (cond.bad())
+                return cond;
+            b += subLength;
+            *length += subLength;
+        }
+        transfer = (DUL_SUBITEM*)LST_Head(&presentation->transferSyntaxList);
+        if (transfer == NULL) return DUL_LISTERROR;
+        (void) LST_Position(&presentation->transferSyntaxList, (LST_NODE*)transfer);
+        while (transfer != NULL) {
+            if (transfer->length != 0) {
+                cond = streamSubItem(transfer, b, &subLength);
+                if (cond.bad())
+                    return cond;
+                b += subLength;
+                *length += subLength;
+            }
+            transfer = (DUL_SUBITEM*)LST_Next(&presentation->transferSyntaxList);
+        }
+        presentation = (PRV_PRESENTATIONCONTEXTITEM*)LST_Next(presentationContextList);
     }
     return EC_Normal;
 }
@@ -1269,9 +1261,8 @@ streamPresentationContext(LST_HEAD ** presentationContextList,
 **  Convert the stream user info part of the PDU into stream format
 **
 ** Parameter Dictionary:
-**  userInfo  The user info structure to be converted to stream
-**      format
-**  b   The stream version (output)
+**  userInfo  The user info structure to be converted to stream format
+**  b         The stream version (output)
 **  length    Length of the stream version
 **
 ** Return Values:
@@ -1282,10 +1273,9 @@ streamPresentationContext(LST_HEAD ** presentationContextList,
 
 static OFCondition
 streamUserInfo(DUL_USERINFO * userInfo, unsigned char *b,
-         unsigned long *length)
+               unsigned long *length)
 {
-    unsigned long
-        subLength;
+    unsigned long subLength;
 
     *length = 0;
     *b++ = userInfo->type;
@@ -1297,14 +1287,14 @@ streamUserInfo(DUL_USERINFO * userInfo, unsigned char *b,
     // stream user info sub-item 51H: maximum length
     OFCondition cond = streamMaxLength(&userInfo->maxLength, b, &subLength);
     if (cond.bad())
-  return cond;
+        return cond;
     b += subLength;
     *length += subLength;
 
     // stream user info sub-item 52H: implementation class UID
     cond = streamSubItem(&userInfo->implementationClassUID, b, &subLength);
     if (cond.bad())
-  return cond;
+        return cond;
     b += subLength;
     *length += subLength;
 
@@ -1320,51 +1310,51 @@ streamUserInfo(DUL_USERINFO * userInfo, unsigned char *b,
 
     // stream user info sub-item 55H: implementation version name
     if (userInfo->implementationVersionName.length != 0) {
-  cond = streamSubItem(&userInfo->implementationVersionName, b, &subLength);
-  if (cond.bad())
-      return cond;
-  b += subLength;
-  *length += subLength;
+        cond = streamSubItem(&userInfo->implementationVersionName, b, &subLength);
+        if (cond.bad())
+            return cond;
+        b += subLength;
+        *length += subLength;
     }
 #endif
 
     // stream one or more user info sub-items 54H: SCP/SCU role selection
     if (LST_Count(&userInfo->SCUSCPRoleList) != 0) {
-  cond = streamSCUSCPList(&userInfo->SCUSCPRoleList, b, &subLength);
-  if (cond.bad())
-      return cond;
-  b += subLength;
-  *length += subLength;
+        cond = streamSCUSCPList(&userInfo->SCUSCPRoleList, b, &subLength);
+        if (cond.bad())
+            return cond;
+        b += subLength;
+        *length += subLength;
     }
 
 #ifndef OLD_USER_INFO_SUB_ITEM_ORDER
     // stream user info sub-item 55H: implementation version name
     if (userInfo->implementationVersionName.length != 0) {
-  cond = streamSubItem(&userInfo->implementationVersionName, b, &subLength);
-  if (cond.bad())
-      return cond;
-  b += subLength;
-  *length += subLength;
+        cond = streamSubItem(&userInfo->implementationVersionName, b, &subLength);
+        if (cond.bad())
+            return cond;
+        b += subLength;
+        *length += subLength;
     }
 #endif
 
     // stream one or more user info sub-items 56H: extended negotiation
     if (userInfo->extNegList != NULL) {
-  cond = streamExtNegList(userInfo->extNegList, b, &subLength);
-  if (cond.bad())
-      return cond;
-  b += subLength;
-  *length += subLength;
+        cond = streamExtNegList(userInfo->extNegList, b, &subLength);
+        if (cond.bad())
+            return cond;
+        b += subLength;
+        *length += subLength;
     }
 
-  // stream user info sub-item 58H: user identity negotiation
-  if (userInfo->usrIdent != NULL) {
-    cond = userInfo->usrIdent->stream(b, subLength /*out*/);
-    if (cond.bad())
-      return cond;
-    b += subLength;
-    *length += subLength;
-  }
+    // stream user info sub-item 58H: user identity negotiation
+    if (userInfo->usrIdent != NULL) {
+        cond = userInfo->usrIdent->stream(b, subLength /*out*/);
+        if (cond.bad())
+            return cond;
+        b += subLength;
+        *length += subLength;
+    }
 
     return EC_Normal;
 }
@@ -1375,9 +1365,8 @@ streamUserInfo(DUL_USERINFO * userInfo, unsigned char *b,
 **  Convert the Max Length structure into stream format
 **
 ** Parameter Dictionary:
-**  max   Max Length structure to be converted to
-**      stream format
-**  b   The stream version (output)
+**  max       Max Length structure to be converted to stream format
+**  b         The stream version (output)
 **  length    Length of the stream version
 **
 ** Return Values:
@@ -1406,8 +1395,8 @@ streamMaxLength(DUL_MAXLENGTH * max, unsigned char *b,
 **  Convert the SCU-SCP list into stream format
 **
 ** Parameter Dictionary:
-**  list    SCU-SCP list
-**  b   The stream version (output)
+**  list      SCU-SCP list
+**  b         The stream version (output)
 **  length    Length of the stream version
 **
 ** Return Values:
@@ -1420,24 +1409,22 @@ streamMaxLength(DUL_MAXLENGTH * max, unsigned char *b,
 static OFCondition
 streamSCUSCPList(LST_HEAD ** lst, unsigned char *b, unsigned long *length)
 {
-    PRV_SCUSCPROLE
-    * scuscpRole;
+    PRV_SCUSCPROLE * scuscpRole;
     OFCondition cond = EC_Normal;
-    unsigned long
-        localLength;
+    unsigned long localLength;
 
     *length = 0;
     scuscpRole = (PRV_SCUSCPROLE*)LST_Head(lst);
     if (scuscpRole != NULL)
-  (void) LST_Position(lst, (LST_NODE*)scuscpRole);
+        (void) LST_Position(lst, (LST_NODE*)scuscpRole);
     while (scuscpRole != NULL) {
-  localLength = 0;
-  cond = streamSCUSCPRole(scuscpRole, b, &localLength);
-  if (cond.bad())
-      return cond;
-  *length += localLength;
-  b += localLength;
-  scuscpRole = (PRV_SCUSCPROLE*)LST_Next(lst);
+        localLength = 0;
+        cond = streamSCUSCPRole(scuscpRole, b, &localLength);
+        if (cond.bad())
+            return cond;
+        *length += localLength;
+        b += localLength;
+        scuscpRole = (PRV_SCUSCPROLE*)LST_Next(lst);
     }
     return EC_Normal;
 }
@@ -1449,9 +1436,9 @@ streamSCUSCPList(LST_HEAD ** lst, unsigned char *b, unsigned long *length)
 **
 ** Parameter Dictionary:
 **  scuscpRole  SCU-SCP role list that is to be converted to
-**      stream format
-**  b   The stream version (output)
-**  length    Length of the stream version
+**              stream format
+**  b           The stream version (output)
+**  length      Length of the stream version
 **
 ** Return Values:
 **
@@ -1462,10 +1449,9 @@ streamSCUSCPList(LST_HEAD ** lst, unsigned char *b, unsigned long *length)
 */
 static OFCondition
 streamSCUSCPRole(PRV_SCUSCPROLE * scuscpRole, unsigned char *b,
-     unsigned long *len)
+                 unsigned long *len)
 {
-    unsigned short
-        length;
+    unsigned short length;
 
     length = scuscpRole->length;
 
@@ -1474,7 +1460,7 @@ streamSCUSCPRole(PRV_SCUSCPROLE * scuscpRole, unsigned char *b,
     COPY_SHORT_BIG(length, b);
     b += 2;
 
-    length = strlen(scuscpRole->SOPClassUID);
+    length = OFstatic_cast(unsigned short, strlen(scuscpRole->SOPClassUID));
     COPY_SHORT_BIG(length, b);
     b += 2;
 
@@ -1520,7 +1506,7 @@ streamExtNeg(SOPClassExtendedNegotiationSubItem* extNeg, unsigned char *b, unsig
 
     extNeg->itemType = 0x56;
     // recompute the length fields
-    extNeg->sopClassUIDLength = extNeg->sopClassUID.length();
+    extNeg->sopClassUIDLength = OFstatic_cast(unsigned short, extNeg->sopClassUID.length());
     extNeg->itemLength = 2 + extNeg->sopClassUIDLength + extNeg->serviceClassAppInfoLength;
 
     *b++ = extNeg->itemType;
@@ -1541,108 +1527,3 @@ streamExtNeg(SOPClassExtendedNegotiationSubItem* extNeg, unsigned char *b, unsig
 
     return EC_Normal;
 }
-
-/*
-** CVS Log
-** $Log: dulconst.cc,v $
-** Revision 1.28  2010-12-01 08:26:36  joergr
-** Added OFFIS copyright header (beginning with the year 1994).
-**
-** Revision 1.27  2010-10-14 13:14:28  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.26  2010-09-08 07:31:29  uli
-** Fix wrong use of logical invert. A bit-wise invert is meant here.
-**
-** Revision 1.25  2010-08-26 09:25:10  joergr
-** Fixed incorrect behavior of association acceptors during SCP/SCU role
-** selection negotiation.
-**
-** Revision 1.24  2010-08-24 09:21:29  uli
-** Fixed a NULL pointer dereference if ASC_acknowledgeAssociation() was called
-** without a previous ASC_acceptContextsWithPreferredTransferSyntaxes().
-**
-** Revision 1.23  2010-03-05 08:37:23  uli
-** Fixed possible memory leak in case of error during construction
-** of sub-items. This was found with cppcheck.
-**
-** Revision 1.22  2009-12-16 16:56:52  onken
-** Fixed bug in scu/scp role negotation.
-**
-** Revision 1.21  2009-11-18 11:53:59  uli
-** Switched to logging mechanism provided by the "new" oflog module.
-**
-** Revision 1.20  2008-04-17 15:27:35  onken
-** Reworked and extended User Identity Negotiation code.
-**
-** Revision 1.19  2007-09-28 13:15:45  onken
-** Fixed crash of network code when processing association requests without any
-** offered presentation contexts. Minor changes in source formatting.
-**
-** Revision 1.18  2007/09/07 08:49:29  onken
-** Added basic support for Extended Negotiation of User Identity.
-**
-** Revision 1.17  2006/08/15 16:04:29  meichel
-** Updated the code in module dcmnet to correctly compile when
-**   all standard C++ classes remain in namespace std.
-**
-** Revision 1.16  2005/12/08 15:44:49  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.15  2004/06/16 12:51:34  meichel
-** Fixed minor bug in DUL backward compatibility code
-**
-** Revision 1.14  2004/02/25 12:31:17  meichel
-** Added global option flag for compatibility with very old DCMTK releases in the
-**   DICOM upper layer and ACSE code. Default is automatic handling, which should
-**   work in most cases.
-**
-** Revision 1.13  2003/06/02 16:44:11  meichel
-** Renamed local variables to avoid name clashes with STL
-**
-** Revision 1.12  2002/11/27 13:04:44  meichel
-** Adapted module dcmnet to use of new header file ofstdinc.h
-**
-** Revision 1.11  2002/11/26 15:37:02  meichel
-** Changed DUL code to always send A-ASSOCIATE user information sub-items
-**   in ascending order.
-**
-** Revision 1.10  2001/11/01 13:49:09  wilkens
-** Added lots of comments.
-**
-** Revision 1.9  2001/10/12 10:18:38  meichel
-** Replaced the CONDITION types, constants and functions in the dcmnet module
-**   by an OFCondition based implementation which eliminates the global condition
-**   stack.  This is a major change, caveat emptor!
-**
-** Revision 1.8  2000/03/03 14:11:23  meichel
-** Implemented library support for redirecting error messages into memory
-**   instead of printing them to stdout/stderr for GUI applications.
-**
-** Revision 1.7  2000/02/23 15:12:45  meichel
-** Corrected macro for Borland C++ Builder 4 workaround.
-**
-** Revision 1.6  2000/02/01 10:24:12  meichel
-** Avoiding to include <stdlib.h> as extern "C" on Borland C++ Builder 4,
-**   workaround for bug in compiler header files.
-**
-** Revision 1.5  1999/04/19 08:38:58  meichel
-** Added experimental support for extended SOP class negotiation.
-**
-** Revision 1.4  1997/07/21 08:47:21  andreas
-** - Replace all boolean types (BOOLEAN, CTNBOOLEAN, DICOM_BOOL, BOOL)
-**   with one unique boolean type OFBool.
-**
-** Revision 1.3  1997/07/04 09:24:54  meichel
-** Simplified some sizeof() constructs to avoid compiler warnings
-**   on the IBM xlC compiler (AIX 3.x).
-**
-** Revision 1.2  1996/06/20 07:35:49  hewett
-** Removed inclusion of system header already included by dcompat.h
-** and made sure that dcompat.h is always included (via dicom.h).
-**
-** Revision 1.1.1.1  1996/03/26 18:38:46  hewett
-** Initial Release.
-**
-**
-*/

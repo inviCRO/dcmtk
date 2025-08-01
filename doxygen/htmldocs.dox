@@ -10,24 +10,34 @@ DCMTK contains the following sub-packages, each in its own sub-directory:
 
 \li \ref mod_config
 \li \ref mod_dcmdata
+\li \ref mod_dcmect
+\li \ref mod_dcmfg
 \li \ref mod_dcmimage
 \li \ref mod_dcmimgle
+\li \ref mod_dcmiod
 \li \ref mod_dcmjpeg
 \li \ref mod_dcmjpls
 \li \ref mod_dcmnet
+\li \ref mod_dcmpmap
 \li \ref mod_dcmpstat
+\li \ref mod_dcmqrdb
+\li \ref mod_dcmrt
+\li \ref mod_dcmseg
 \li \ref mod_dcmsign
 \li \ref mod_dcmsr
 \li \ref mod_dcmtls
+\li \ref mod_dcmtract
 \li \ref mod_dcmwlm
-\li \ref mod_dcmqrdb
 \li \ref mod_oflog
 \li \ref mod_ofstd
 
 \if MODULE_DCMJP2K \li \ref mod_dcmjp2k \endif
+\if MODULE_DCMPRINT \li \ref mod_dcmprint \endif
+\if MODULE_DCMPRSCP \li \ref mod_dcmprscp \endif
 \if MODULE_DCMPPS \li \ref mod_dcmpps \endif
+\if MODULE_DCMPPSCU \li \ref mod_dcmppscu \endif
 \if MODULE_DCMSTCOM \li \ref mod_dcmstcom \endif
-\if MODULE_DCMRT \li \ref mod_dcmrt \endif
+
 
 Each sub-directory (except config) contains further sub-directories for
 application source code (apps), library source code (libsrc), library
@@ -45,7 +55,7 @@ For answers to frequently asked questions please consult the
 information can be found.
 
 If you find bugs or other problems with this software we would appreciate
-hearing about them.  Please send electronic mail to \b dicom-bugs/at/offis/dot/de.
+hearing about them.  Please send electronic mail to \b bugs/at/dcmtk/dot/org.
 Please try to describe the problem in detail and if possible give a suggested
 fix.
 

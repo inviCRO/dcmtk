@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,19 +18,13 @@
  *  Purpose:
  *    classes: DVPSIPCMessage
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:36 $
- *  CVS/RCS Revision: $Revision: 1.7 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DVPSMSG_H
 #define DVPSMSG_H
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
+#include "dcmtk/dcmpstat/dpdefine.h"
 #include "dcmtk/dcmdata/dctypes.h"    /* for Uint32 */
 #include "dcmtk/ofstd/ofstring.h"     /* for class OFString */
 
@@ -39,7 +33,7 @@ class DcmTransportConnection;
 /** class for IPC message exchange between different processes of the
  *  DICOMscope application
  */
-class DVPSIPCMessage
+class DCMTK_DCMPSTAT_EXPORT DVPSIPCMessage
 {
 public:
 
@@ -71,7 +65,7 @@ public:
   void addStringToPayload(const char *str);
 
   /** adds an integer into the message payload.
-   *  @param value to write
+   *  @param i value to write
    */
   void addIntToPayload(Uint32 i);
 
@@ -143,7 +137,7 @@ private:
   /** resize payload if necessary such that at least i bytes can be written
    *  @param i number of bytes required in buffer
    */
-  void resizePayload(Uint32 i);
+  void resizePayload(size_t i);
 
   /// type of message
   Uint32 messageType;
@@ -165,7 +159,7 @@ private:
 /** a client for IPC message exchange between different processes of the
  *  DICOMscope application
  */
-class DVPSIPCClient
+class DCMTK_DCMPSTAT_EXPORT DVPSIPCClient
 {
 public:
 
@@ -182,53 +176,53 @@ public:
   virtual ~DVPSIPCClient();
 
   /** sends ApplicationTerminates notification to server.
-   *  @param Uint32 message status, see constants defined in DVPSIPCMessage
+   *  @param status Uint32 message status, see constants defined in DVPSIPCMessage
    */
   void notifyApplicationTerminates(Uint32 status);
 
   /** sends ReceivedUnencryptedDICOMConnection notification to server.
-   *  @param Uint32 message status, see constants defined in DVPSIPCMessage
+   *  @param status Uint32 message status, see constants defined in DVPSIPCMessage
    *  @param txt textual description of notification for server
    */
   void notifyReceivedUnencryptedDICOMConnection(Uint32 status, const char *txt);
 
   /** sends ReceivedEncryptedDICOMConnection notification to server.
-   *  @param Uint32 message status, see constants defined in DVPSIPCMessage
+   *  @param status Uint32 message status, see constants defined in DVPSIPCMessage
    *  @param txt textual description of notification for server
    */
   void notifyReceivedEncryptedDICOMConnection(Uint32 status, const char *txt);
 
   /** sends ConnectionClosed notification to server.
-   *  @param Uint32 message status, see constants defined in DVPSIPCMessage
+   *  @param status Uint32 message status, see constants defined in DVPSIPCMessage
    */
   void notifyConnectionClosed(Uint32 status);
 
   /** sends ConnectionAborted notification to server.
-   *  @param Uint32 message status, see constants defined in DVPSIPCMessage
+   *  @param status Uint32 message status, see constants defined in DVPSIPCMessage
    *  @param txt textual description of notification for server
    */
   void notifyConnectionAborted(Uint32 status, const char *txt);
 
   /** sends RequestedUnencryptedDICOMConnection notification to server.
-   *  @param Uint32 message status, see constants defined in DVPSIPCMessage
+   *  @param status Uint32 message status, see constants defined in DVPSIPCMessage
    *  @param txt textual description of notification for server
    */
   void notifyRequestedUnencryptedDICOMConnection(Uint32 status, const char *txt);
 
   /** sends RequestedEncryptedDICOMConnection notification to server.
-   *  @param Uint32 message status, see constants defined in DVPSIPCMessage
+   *  @param status Uint32 message status, see constants defined in DVPSIPCMessage
    *  @param txt textual description of notification for server
    */
   void notifyRequestedEncryptedDICOMConnection(Uint32 status, const char *txt);
 
   /** sends ReceivedDICOMObject notification to server.
-   *  @param Uint32 message status, see constants defined in DVPSIPCMessage
+   *  @param status Uint32 message status, see constants defined in DVPSIPCMessage
    *  @param txt textual description of DICOM object
    */
   void notifyReceivedDICOMObject(Uint32 status, const char *txt);
 
   /** sends SentDICOMObject notification to server.
-   *  @param Uint32 message status, see constants defined in DVPSIPCMessage
+   *  @param status Uint32 message status, see constants defined in DVPSIPCMessage
    *  @param txt textual description of DICOM object
    */
   void notifySentDICOMObject(Uint32 status, const char *txt);
@@ -277,30 +271,3 @@ private:
 
 
 #endif
-
-/*
- *  $Log: dvpsmsg.h,v $
- *  Revision 1.7  2010-10-14 13:16:36  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.6  2010-10-07 14:31:36  joergr
- *  Removed leading underscore characters from preprocessor symbols (reserved).
- *
- *  Revision 1.5  2005/12/08 16:03:52  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.4  2003/07/04 13:27:38  meichel
- *  Replaced forward declarations for OFString with explicit includes,
- *    needed when compiling with HAVE_STD_STRING
- *
- *  Revision 1.3  2001/06/01 15:50:18  meichel
- *  Updated copyright header
- *
- *  Revision 1.2  2000/11/08 18:38:15  meichel
- *  Updated dcmpstat IPC protocol for additional message parameters
- *
- *  Revision 1.1  2000/10/10 12:24:36  meichel
- *  Added extensions for IPC message communication
- *
- *
- */

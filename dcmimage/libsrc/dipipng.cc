@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2003-2010, OFFIS e.V.
+ *  Copyright (C) 2003-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: Implements PNG interface for plugable image formats
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:14 $
- *  CVS/RCS Revision: $Revision: 1.8 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -35,6 +28,7 @@
 #include "dcmtk/dcmimgle/diimage.h"
 #include "dcmtk/dcmimage/dipipng.h"
 #include "dcmtk/dcmdata/dcuid.h"      /* for dcmtk version */
+#include "dcmtk/ofstd/ofdiag.h"
 
 BEGIN_EXTERN_C
 #ifdef HAVE_LIBPNG_PNG_H
@@ -49,6 +43,7 @@ DiPNGPlugin::DiPNGPlugin()
 : DiPluginFormat()
 , interlaceType(E_pngInterlaceAdam7)
 , metainfoType(E_pngFileMetainfo)
+, bitsPerSample(8)
 {
 }
 
@@ -57,6 +52,8 @@ DiPNGPlugin::~DiPNGPlugin()
 {
 }
 
+#include DCMTK_DIAGNOSTIC_PUSH
+#include DCMTK_DIAGNOSTIC_IGNORE_VISUAL_STUDIO_OBJECT_DESTRUCTION_WARNING
 
 int DiPNGPlugin::write(
   DiImage *image,
@@ -66,8 +63,9 @@ int DiPNGPlugin::write(
   volatile int result = 0;  // gcc -W requires volatile here because of longjmp
   if ((image != NULL) && (stream != NULL))
   {
-    /* create bitmap with 8 bits per sample */
-    const void *data = image->getOutputData(frame, 8 /*bits*/, 0 /*planar*/);
+    /* create bitmap with 8 or 16 bits per sample */
+    const int bit_depth = bitsPerSample;
+    const void *data = image->getOutputData(frame, bit_depth /*bits*/, 0 /*planar*/);
     if (data != NULL)
     {
       png_struct *png_ptr = NULL;
@@ -78,11 +76,10 @@ int DiPNGPlugin::write(
       volatile png_textp  text_ptr = NULL;
       png_time ptime;
 
-      int width  = image->getColumns();
-      int height = image->getRows();
+      const int width  = image->getColumns();
+      const int height = image->getRows();
       int color_type;
       int bpp;            // bytesperpixel
-      int bit_depth = 8;
 
       int row;
 
@@ -107,13 +104,14 @@ int DiPNGPlugin::write(
         return 0;
       }
 
-      if((image->getInternalColorModel() == EPI_Monochrome1) || (image->getInternalColorModel() == EPI_Monochrome2))
+      if( (image->getInternalColorModel() == EPI_Monochrome1) ||
+          (image->getInternalColorModel() == EPI_Monochrome2) )
       {
         color_type = PNG_COLOR_TYPE_GRAY;
-        bpp = 1;
+        bpp = bit_depth / 8;
       } else {
         color_type = PNG_COLOR_TYPE_RGB;
-        bpp = 3;
+        bpp = 3 * bit_depth / 8;
       }
 
       int opt_interlace = 0;
@@ -175,6 +173,10 @@ int DiPNGPlugin::write(
         row_ptr[row] = pix_ptr;
       }
 
+      // swap bytes (if needed)
+      if ( (bit_depth == 16) && (gLocalByteOrder != EBO_BigEndian) )
+        png_set_swap( png_ptr );
+
       // write image
       png_write_image( png_ptr, row_ptr );
 
@@ -182,7 +184,7 @@ int DiPNGPlugin::write(
       png_write_end( png_ptr, info_ptr );
 
       // finish
-      png_destroy_write_struct( &png_ptr, NULL );
+      png_destroy_write_struct( &png_ptr, &info_ptr );
       delete[] row_ptr;
       if( text_ptr ) delete[] text_ptr;
       result = 1;
@@ -191,6 +193,8 @@ int DiPNGPlugin::write(
 
   return result;
 }
+
+#include DCMTK_DIAGNOSTIC_POP
 
 
 void DiPNGPlugin::setInterlaceType(DiPNGInterlace itype)
@@ -204,21 +208,29 @@ void DiPNGPlugin::setMetainfoType(DiPNGMetainfo minfo)
   metainfoType = minfo;
 }
 
+
+void DiPNGPlugin::setBitsPerSample(const int bpp)
+{
+  if( (bpp == 8) || (bpp == 16) )
+    bitsPerSample = bpp;
+}
+
+
 OFString DiPNGPlugin::getLibraryVersionString()
 {
-    OFString versionStr = "LIBPNG, Version ";
-    char cver[10];
-    png_uint_32 ver = png_access_version_number();
-    if( ver < 999999 ) {
-        sprintf( cver, "%li.%li.%li",
-                        OFstatic_cast(long int, (ver/10000)%100),
-                        OFstatic_cast(long int, (ver/100)%100),
-                        OFstatic_cast(long int, ver%100) );
-    }else{
-        sprintf( cver, "unknown" );
-    }
-    versionStr.append( cver );
-    return versionStr;
+  OFString versionStr = "LIBPNG, Version ";
+  char cver[10];
+  png_uint_32 ver = png_access_version_number();
+  if( ver < 999999 ) {
+    sprintf( cver, "%li.%li.%li",
+                   OFstatic_cast(long int, (ver/10000)%100),
+                   OFstatic_cast(long int, (ver/100)%100),
+                   OFstatic_cast(long int, ver%100) );
+  }else{
+    sprintf( cver, "unknown" );
+  }
+  versionStr.append( cver );
+  return versionStr;
 }
 
 #else /* WITH_LIBPNG */
@@ -226,35 +238,3 @@ OFString DiPNGPlugin::getLibraryVersionString()
 int dipipng_cc_dummy_to_keep_linker_from_moaning = 0;
 
 #endif
-
-
-/*
- * CVS/RCS Log:
- * $Log: dipipng.cc,v $
- * Revision 1.8  2010-10-14 13:14:14  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.7  2010-08-06 08:41:36  uli
- * Fixed some more compiler warnings.
- *
- * Revision 1.6  2005-12-08 15:42:26  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.5  2004/04/07 12:07:52  joergr
- * Additional modifications for new-style type casts.
- *
- * Revision 1.4  2004/02/06 11:20:00  joergr
- * Distinguish more clearly between const and non-const access to pixel data.
- *
- * Revision 1.3  2004/01/21 12:57:32  meichel
- * Adapted PNG export plugin to new configure test, fixed issue with local
- *   variable that could be clobbered by longjmp().
- *
- * Revision 1.2  2003/12/17 16:34:57  joergr
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- *
- * Revision 1.1  2003/02/11 13:18:38  meichel
- * Added PNG export option to dcm2pnm and dcmj2pnm
- *
- *
- */

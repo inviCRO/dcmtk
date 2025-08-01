@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2001-2010, OFFIS e.V.
+ *  Copyright (C) 2001-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,21 +18,15 @@
  *  Purpose:
  *    classes: DVSignatureHandler
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:37 $
- *  CVS/RCS Revision: $Revision: 1.11 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DVSIGHDL_H
 #define DVSIGHDL_H
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
-#include "dcmtk/ofstd/ofstream.h"
 #include "dcmtk/dcmpstat/dvpstyp.h"
+#include "dcmtk/dcmpstat/dpdefine.h"
+#include "dcmtk/ofstd/ofstream.h"
 #include "dcmtk/ofstd/ofstring.h"
 #include "dcmtk/dcmsign/sicertvf.h"
 #include "dcmtk/dcmdata/dcerror.h"
@@ -48,7 +42,7 @@ class DcmTagKey;
 
 /** handler for all digital signature related functions in dcmpstat
  */  
-class DVSignatureHandler
+class DCMTK_DCMPSTAT_EXPORT DVSignatureHandler
 {
 public:
   /** constructor
@@ -74,8 +68,9 @@ public:
   const char *getCurrentSignatureValidationOverview() const;
 
   /** updates the digital signature information for the given object type.
-   *  If compiled without WITH_OPENSSL, always reports that no signatures
-   *  were found in the object.
+   *  @remark This class is only functional if DCMTK is compiled with
+   *  OpenSSL support enabled. If compiled without, it always reports
+   *  that no signatures were found in the object.
    *  @param dataset dataset to be checked for digital signatures
    *  @param objtype object type of dataset
    *  @param onRead true if the dataset is just being read, false if it is being written
@@ -127,7 +122,8 @@ public:
    *  is signed by a digital signature on the dataset level, or if any
    *  of the attributes is a sequence that contains one or more signatures
    *  in its items.  Otherwise returns false.
-   *  If compiled without WITH_OPENSSL, always returns false.
+   *  @remark this method is only functional if DCMTK is compiled with
+   *  OpenSSL support enabled. Otherwise it always returns false.
    *  @param item item or dataset to be tested
    *  @param tagList list of attributes (tags) to be looked up inside the dataset
    *  @return true if any of the given attributes is affected by a digital signature,
@@ -142,7 +138,7 @@ public:
    *    separately.  If main dataset is to be signed, it must be included in this stack.
    *  @param attributesNotToSignInMainDataset list of attribute tags that should be
    *    omitted from the signature on the main dataset level
-   *  @param usedID user ID in configuration file, must not be NULL
+   *  @param userID user ID in configuration file, must not be NULL
    *  @param passwd passwd password for private key, may be NULL
    *  @return EC_Normal if successful, an error code otherwise.
    */
@@ -220,6 +216,9 @@ private:
 
 #ifdef WITH_OPENSSL  
   /// the certificate verifier, available only if compiled with OpenSSL support
+  /// @remark This member is only available if DCMTK is compiled with
+  /// OpenSSL support enabled.
+
   SiCertificateVerifier certVerifier;  
 #endif
 
@@ -229,45 +228,3 @@ private:
 };
 
 #endif
-
-/*
- *  $Log: dvsighdl.h,v $
- *  Revision 1.11  2010-10-14 13:16:37  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.10  2006/08/15 16:57:01  meichel
- *  Updated the code in module dcmpstat to correctly compile when
- *    all standard C++ classes remain in namespace std.
- *
- *  Revision 1.9  2005/12/08 16:04:15  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.8  2004/02/04 15:49:09  joergr
- *  Removed acknowledgements with e-mail addresses from CVS log. Removed leading
- *  underscore characters from preprocessor symbols (reserved symbols).
- *
- *  Revision 1.7  2002/04/16 14:02:04  joergr
- *  Added configurable support for C++ ANSI standard includes (e.g. streams).
- *
- *  Revision 1.6  2001/09/26 15:36:19  meichel
- *  Adapted dcmpstat to class OFCondition
- *
- *  Revision 1.5  2001/06/01 15:50:26  meichel
- *  Updated copyright header
- *
- *  Revision 1.4  2001/05/25 10:07:34  meichel
- *  Modified dcmpstat signature handler to also compile without OpenSSL
- *
- *  Revision 1.3  2001/01/29 14:55:43  meichel
- *  Added new methods for creating signatures and checking the signature
- *    status in module dcmpstat.
- *
- *  Revision 1.2  2001/01/25 17:37:43  meichel
- *  Fixed problem with undefined copy constructor
- *
- *  Revision 1.1  2001/01/25 15:18:05  meichel
- *  Added initial support for verification of digital signatures
- *    in presentation states, images and structured reports to module dcmpstat.
- *
- *
- */

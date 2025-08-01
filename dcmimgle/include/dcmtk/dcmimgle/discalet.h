@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1996-2010, OFFIS e.V.
+ *  Copyright (C) 1996-2016, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Joerg Riesmeier
  *
  *  Purpose: DicomScaleTemplates (Header)
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:27 $
- *  CVS/RCS Revision: $Revision: 1.35 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -55,7 +48,7 @@ static inline void setScaleValues(Uint16 data[],
                                   const Uint16 min,
                                   const Uint16 max)
 {
-    register Uint16 remainder = max % min;
+    Uint16 remainder = max % min;
     Uint16 step0 = max / min;
     Uint16 step1 = max / min;
     if (remainder > OFstatic_cast(Uint16, min / 2))
@@ -65,8 +58,8 @@ static inline void setScaleValues(Uint16 data[],
     } else
         ++step1;
     const double count = OFstatic_cast(double, min) / (OFstatic_cast(double, remainder) + 1);
-    register Uint16 i;
-    register double c = count;
+    Uint16 i;
+    double c = count;
     for (i = 0; i < min; ++i)
     {
         if ((i >= OFstatic_cast(Uint16, c)) && (remainder > 0))
@@ -179,8 +172,7 @@ class DiScaleTemplate
      */
     inline int isSigned() const
     {
-        //const DiPixelRepresentationTemplate<T> rep;
-        DiPixelRepresentationTemplate<T> rep;
+        const DiPixelRepresentationTemplate<T> rep;
         return rep.isSigned();
     }
 
@@ -207,12 +199,12 @@ class DiScaleTemplate
                 (Left >= OFstatic_cast(signed long, Columns)) || (Top >= OFstatic_cast(signed long, Rows)))
             {                                                                         // no image to be displayed
                 DCMIMGLE_DEBUG("clipping area is fully outside the image boundaries");
-                this->fillPixel(dest, value);                                               // ... fill bitmap
+                this->fillPixel(dest, value);                                         // ... fill bitmap
             }
             else if ((this->Src_X == this->Dest_X) && (this->Src_Y == this->Dest_Y))  // no scaling
             {
                 if ((Left == 0) && (Top == 0) && (Columns == this->Src_X) && (Rows == this->Src_Y))
-		  this->copyPixel(src, dest);                                             // copying
+                    this->copyPixel(src, dest);                                       // copying
                 else if ((Left >= 0) && (OFstatic_cast(Uint16, Left + this->Src_X) <= Columns) &&
                          (Top >= 0) && (OFstatic_cast(Uint16, Top + this->Src_Y) <= Rows))
                     clipPixel(src, dest);                                             // clipping
@@ -220,7 +212,7 @@ class DiScaleTemplate
                     clipBorderPixel(src, dest, value);                                // clipping (with border)
             }
             else if ((interpolate == 1) && (this->Bits <= MAX_INTERPOLATION_BITS))
-                this->interpolatePixel(src, dest);                                          // interpolation (pbmplus)
+                this->interpolatePixel(src, dest);                                    // interpolation (pbmplus)
             else if ((interpolate == 4) && (this->Dest_X >= this->Src_X) && (this->Dest_Y >= this->Src_Y) &&
                      (this->Src_X >= 3) && (this->Src_Y >= 3))
                 bicubicPixel(src, dest);                                              // bicubic magnification
@@ -232,11 +224,11 @@ class DiScaleTemplate
             else if ((interpolate >= 1) && (this->Src_X >= this->Dest_X) && (this->Src_Y >= this->Dest_Y))
                 reducePixel(src, dest);                                               // interpolated reduction (c't)
             else if ((interpolate >= 1) && (this->Bits <= MAX_INTERPOLATION_BITS))
-                this->interpolatePixel(src, dest);                                          // interpolation (pbmplus), fallback
+                this->interpolatePixel(src, dest);                                    // interpolation (pbmplus), fallback
             else if ((this->Dest_X % this->Src_X == 0) && (this->Dest_Y % this->Src_Y == 0))
                 replicatePixel(src, dest);                                            // replication
             else if ((this->Src_X % this->Dest_X == 0) && (this->Src_Y % this->Dest_Y == 0))
-                suppressPixel(src, dest);                                             // supression
+                suppressPixel(src, dest);                                             // suppression
             else
                 scalePixel(src, dest);                                                // general scaling
         }
@@ -268,10 +260,10 @@ class DiScaleTemplate
         DCMIMGLE_DEBUG("using clip image to specified area algorithm");
         const unsigned long x_feed = Columns - this->Src_X;
         const unsigned long y_feed = OFstatic_cast(unsigned long, Rows - this->Src_Y) * OFstatic_cast(unsigned long, Columns);
-        register Uint16 x;
-        register Uint16 y;
-        register const T *p;
-        register T *q;
+        Uint16 x;
+        Uint16 y;
+        const T *p;
+        T *q;
         for (int j = 0; j < this->Planes; ++j)
         {
             p = src[j] + OFstatic_cast(unsigned long, Top) * OFstatic_cast(unsigned long, Columns) + Left;
@@ -325,11 +317,11 @@ class DiScaleTemplate
          *  different from most of the other algorithms in this toolkit where the source image is scanned
          *  linearly.
          */
-        register Uint16 x;
-        register Uint16 y;
-        register unsigned long i;
-        register const T *p;
-        register T *q;
+        Uint16 x;
+        Uint16 y;
+        unsigned long i;
+        const T *p;
+        T *q;
         for (int j = 0; j < this->Planes; ++j)
         {
             p = src[j] + s_start;
@@ -380,13 +372,13 @@ class DiScaleTemplate
         const unsigned long x_feed = Columns;
         const unsigned long y_feed = OFstatic_cast(unsigned long, Rows - this->Src_Y) * OFstatic_cast(unsigned long, Columns);
         const T *sp;
-        register Uint16 x;
-        register Uint16 y;
-        register Uint16 dx;
-        register Uint16 dy;
-        register const T *p;
-        register T *q;
-        register T value;
+        Uint16 x;
+        Uint16 y;
+        Uint16 dx;
+        Uint16 dy;
+        const T *p;
+        T *q;
+        T value;
         for (int j = 0; j < this->Planes; ++j)
         {
             sp = src[j] + OFstatic_cast(unsigned long, Top) * OFstatic_cast(unsigned long, Columns) + Left;
@@ -424,10 +416,10 @@ class DiScaleTemplate
         const unsigned int x_divisor = this->Src_X / this->Dest_X;
         const unsigned long x_feed = OFstatic_cast(unsigned long, this->Src_Y / this->Dest_Y) * OFstatic_cast(unsigned long, Columns) - this->Src_X;
         const unsigned long y_feed = OFstatic_cast(unsigned long, Rows - this->Src_Y) * OFstatic_cast(unsigned long, Columns);
-        register Uint16 x;
-        register Uint16 y;
-        register const T *p;
-        register T *q;
+        Uint16 x;
+        Uint16 y;
+        const T *p;
+        T *q;
         for (int j = 0; j < this->Planes; ++j)
         {
             p = src[j] + OFstatic_cast(unsigned long, Top) * OFstatic_cast(unsigned long, Columns) + Left;
@@ -472,8 +464,8 @@ class DiScaleTemplate
 
         if ((x_step != NULL) && (y_step != NULL) && (x_fact != NULL) && (y_fact != NULL))
         {
-            register Uint16 x;
-            register Uint16 y;
+            Uint16 x;
+            Uint16 y;
             if (this->Dest_X < this->Src_X)
                 setScaleValues(x_step, this->Dest_X, this->Src_X);
             else if (this->Dest_X > this->Src_X)
@@ -493,11 +485,11 @@ class DiScaleTemplate
                 OFBitmanipTemplate<Uint16>::setMem(y_step, 1, ymin);  // initialize with default values
             y_step[ymin - 1] += Rows - this->Src_Y;                   // skip to next frame
             const T *sp;
-            register Uint16 dx;
-            register Uint16 dy;
-            register const T *p;
-            register T *q;
-            register T value;
+            Uint16 dx;
+            Uint16 dy;
+            const T *p;
+            T *q;
+            T value;
             for (int j = 0; j < this->Planes; ++j)
             {
                 sp = src[j] + OFstatic_cast(unsigned long, Top) * OFstatic_cast(unsigned long, Columns) + Left;
@@ -550,10 +542,10 @@ class DiScaleTemplate
          *    various bit depths, multi-frame and multi-plane/color images)
          */
 
-        register Uint16 x;
-        register Uint16 y;
-        register const T *p;
-        register T *q;
+        Uint16 x;
+        Uint16 y;
+        const T *p;
+        T *q;
         const T *sp = NULL;                         // initialization avoids compiler warning
         const T *fp;
         T *sq;
@@ -578,9 +570,9 @@ class DiScaleTemplate
                 {
                     for (x = 0; x < this->Src_X; ++x)
                         xvalue[x] = HALFSCALE_FACTOR;
-                    register unsigned long yfill = SCALE_FACTOR;
-                    register unsigned long yleft = syscale;
-                    register int yneed = 1;
+                    unsigned long yfill = SCALE_FACTOR;
+                    unsigned long yleft = syscale;
+                    int yneed = 1;
                     int ysrc = 0;
                     for (y = 0; y < this->Dest_Y; ++y)
                     {
@@ -614,7 +606,7 @@ class DiScaleTemplate
                                 ++ysrc;
                                 yneed = 0;
                             }
-                            register signed long v;
+                            signed long v;
                             for (x = 0, p = sp, q = xtemp; x < this->Src_X; ++x)
                             {
                                 v = xvalue[x] + yfill * OFstatic_cast(signed long, *(p++));
@@ -638,10 +630,10 @@ class DiScaleTemplate
                         }
                         else
                         {
-                            register signed long v = HALFSCALE_FACTOR;
-                            register unsigned long xfill = SCALE_FACTOR;
-                            register unsigned long xleft;
-                            register int xneed = 0;
+                            signed long v = HALFSCALE_FACTOR;
+                            unsigned long xfill = SCALE_FACTOR;
+                            unsigned long xleft;
+                            int xneed = 0;
                             q = sq;
                             for (x = 0, p = xtemp; x < this->Src_X; ++x, ++p)
                             {
@@ -712,12 +704,12 @@ class DiScaleTemplate
         double x_part, y_part;
         double l_factor, r_factor;
         double t_factor, b_factor;
-        register int xi;
-        register int yi;
-        register Uint16 x;
-        register Uint16 y;
-        register const T *p;
-        register T *q;
+        int xi;
+        int yi;
+        Uint16 x;
+        Uint16 y;
+        const T *p;
+        T *q;
 
         /*
          *   based on scaling algorithm from "c't - Magazin fuer Computertechnik" (c't 11/94)
@@ -735,10 +727,23 @@ class DiScaleTemplate
                 {
                     by = y_factor * OFstatic_cast(double, y);
                     ey = y_factor * (OFstatic_cast(double, y) + 1.0);
+                    if (ey > this->Src_Y)
+                    {
+#ifdef DEBUG            // this output is only useful for debugging purposes
+                        DCMIMGLE_TRACE("  limiting value of 'ey' to 'Src_Y': " << ey << " -> " << this->Src_Y);
+#endif
+                        // see reducePixel()
+                        ey = this->Src_Y;
+                    }
                     byi = OFstatic_cast(int, by);
                     eyi = OFstatic_cast(int, ey);
                     if (OFstatic_cast(double, eyi) == ey)
+                    {
+#ifdef DEBUG            // this output is only useful for debugging purposes
+                        DCMIMGLE_TRACE("  decreasing value of 'eyi' by 1: " << eyi << " -> " << (eyi - 1));
+#endif
                         --eyi;
+                    }
                     y_part = OFstatic_cast(double, eyi) / y_factor;
                     b_factor = y_part - OFstatic_cast(double, y);
                     t_factor = (OFstatic_cast(double, y) + 1.0) - y_part;
@@ -747,10 +752,23 @@ class DiScaleTemplate
                         value = 0;
                         bx = x_factor * OFstatic_cast(double, x);
                         ex = x_factor * (OFstatic_cast(double, x) + 1.0);
+                        if (ex > this->Src_X)
+                        {
+#ifdef DEBUG                // this output is only useful for debugging purposes
+                            DCMIMGLE_TRACE("  limiting value of 'ex' to 'Src_X': " << ex << " -> " << this->Src_X);
+#endif
+                            // see reducePixel()
+                            ex = this->Src_X;
+                        }
                         bxi = OFstatic_cast(int, bx);
                         exi = OFstatic_cast(int, ex);
                         if (OFstatic_cast(double, exi) == ex)
+                        {
+#ifdef DEBUG                // this output is only useful for debugging purposes
+                            DCMIMGLE_TRACE("  decreasing value of 'exi' by 1: " << exi << " -> " << (exi - 1));
+#endif
                             --exi;
+                        }
                         x_part = OFstatic_cast(double, exi) / x_factor;
                         l_factor = x_part - OFstatic_cast(double, x);
                         r_factor = (OFstatic_cast(double, x) + 1.0) - x_part;
@@ -810,12 +828,12 @@ class DiScaleTemplate
         double value, sum;
         double l_factor, r_factor;
         double t_factor, b_factor;
-        register int xi;
-        register int yi;
-        register Uint16 x;
-        register Uint16 y;
-        register const T *p;
-        register T *q;
+        int xi;
+        int yi;
+        Uint16 x;
+        Uint16 y;
+        const T *p;
+        T *q;
 
         /*
          *   based on scaling algorithm from "c't - Magazin fuer Computertechnik" (c't 11/94)
@@ -833,10 +851,25 @@ class DiScaleTemplate
                 {
                     by = y_factor * OFstatic_cast(double, y);
                     ey = y_factor * (OFstatic_cast(double, y) + 1.0);
+                    if (ey > this->Src_Y)
+                    {
+#ifdef DEBUG            // this output is only useful for debugging purposes
+                        DCMIMGLE_TRACE("  limiting value of 'ey' to 'Src_Y': " << ey << " -> " << this->Src_Y);
+#endif
+                        // yes, this can happen due to rounding, e.g. double(943) / double(471) * double(471)
+                        // is something like 943.00000000000011368683772161602974 and then, the eyi == ey check
+                        // fails to bring eyi back into range!
+                        ey = this->Src_Y;
+                    }
                     byi = OFstatic_cast(int, by);
                     eyi = OFstatic_cast(int, ey);
                     if (OFstatic_cast(double, eyi) == ey)
+                    {
+#ifdef DEBUG            // this output is only useful for debugging purposes
+                        DCMIMGLE_TRACE("  decreasing value of 'eyi' by 1: " << eyi << " -> " << (eyi - 1));
+#endif
                         --eyi;
+                    }
                     b_factor = 1 + OFstatic_cast(double, byi) - by;
                     t_factor = ey - OFstatic_cast(double, eyi);
                     for (x = 0; x < this->Dest_X; ++x)
@@ -844,10 +877,23 @@ class DiScaleTemplate
                         value = 0;
                         bx = x_factor * OFstatic_cast(double, x);
                         ex = x_factor * (OFstatic_cast(double, x) + 1.0);
+                        if (ex > this->Src_X)
+                        {
+#ifdef DEBUG                // this output is only useful for debugging purposes
+                            DCMIMGLE_TRACE("  limiting value of 'ex' to 'Src_X': " << ex << " -> " << this->Src_X);
+#endif
+                            // see above comment
+                            ex = this->Src_X;
+                        }
                         bxi = OFstatic_cast(int, bx);
                         exi = OFstatic_cast(int, ex);
                         if (OFstatic_cast(double, exi) == ex)
+                        {
+#ifdef DEBUG                // this output is only useful for debugging purposes
+                            DCMIMGLE_TRACE("  decreasing value of 'exi' by 1: " << exi << " -> " << (exi - 1));
+#endif
                             --exi;
+                        }
                         l_factor = 1 + OFstatic_cast(double, bxi) - bx;
                         r_factor = ex - OFstatic_cast(double, exi);
                         offset = OFstatic_cast(unsigned long, byi) * OFstatic_cast(unsigned long, Columns);
@@ -890,11 +936,11 @@ class DiScaleTemplate
         const double y_factor = OFstatic_cast(double, this->Src_Y) / OFstatic_cast(double, this->Dest_Y);
         const unsigned long f_size = OFstatic_cast(unsigned long, Rows) * OFstatic_cast(unsigned long, Columns);
         const unsigned long l_offset = OFstatic_cast(unsigned long, this->Src_Y - 1) * OFstatic_cast(unsigned long, this->Dest_X);
-        register Uint16 x;
-        register Uint16 y;
-        register T *pD;
-        register T *pCurrTemp;
-        register const T *pCurrSrc;
+        Uint16 x;
+        Uint16 y;
+        T *pD;
+        T *pCurrTemp;
+        const T *pCurrSrc;
         Uint16 nSrcIndex;
         double dOff;
         T *pT;
@@ -941,7 +987,10 @@ class DiScaleTemplate
                         dOff = (1.0 < dOff) ? 1.0 : dOff;
                         for (y = 0; y < this->Src_Y; ++y)
                         {
-                            *(pCurrTemp) = OFstatic_cast(T, *(pCurrSrc) + (*(pCurrSrc + 1) - *(pCurrSrc)) * dOff);
+                            // use floating points in order to avoid possible integer overflow
+                            const double v1 = OFstatic_cast(double, *(pCurrSrc));
+                            const double v2 = OFstatic_cast(double, *(pCurrSrc + 1));
+                            *(pCurrTemp) = OFstatic_cast(T, v1 + (v2 - v1) * dOff);
                             pCurrSrc += Columns;
                             pCurrTemp += this->Dest_X;
                         }
@@ -974,7 +1023,10 @@ class DiScaleTemplate
                         dOff = (1.0 < dOff) ? 1.0 : dOff;
                         for (x = this->Dest_X; x != 0; --x)
                         {
-                            *(pD++) = OFstatic_cast(T, *(pCurrTemp) + (*(pCurrTemp + this->Dest_X) - *(pCurrTemp)) * dOff);
+                            // use floating points in order to avoid possible integer overflow
+                            const double v1 = OFstatic_cast(double, *(pCurrTemp));
+                            const double v2 = OFstatic_cast(double, *(pCurrTemp + this->Dest_X));
+                            *(pD++) = OFstatic_cast(T, v1 + (v2 - v1) * dOff);
                             pCurrTemp++;
                         }
                         // don't go beyond the source data
@@ -1014,11 +1066,11 @@ class DiScaleTemplate
         const Uint16 yDelta = OFstatic_cast(Uint16, 1 / y_factor);
         const unsigned long f_size = OFstatic_cast(unsigned long, Rows) * OFstatic_cast(unsigned long, Columns);
         const unsigned long l_offset = OFstatic_cast(unsigned long, this->Src_Y - 1) * OFstatic_cast(unsigned long, this->Dest_X);
-        register Uint16 x;
-        register Uint16 y;
-        register T *pD;
-        register T *pCurrTemp;
-        register const T *pCurrSrc;
+        Uint16 x;
+        Uint16 y;
+        T *pD;
+        T *pCurrTemp;
+        const T *pCurrSrc;
         Uint16 nSrcIndex;
         double dOff;
         T *pT;
@@ -1185,140 +1237,3 @@ class DiScaleTemplate
 };
 
 #endif
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: discalet.h,v $
- * Revision 1.35  2010-10-14 13:16:27  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.34  2010-03-01 09:08:47  uli
- * Removed some unnecessary include directives in the headers.
- *
- * Revision 1.33  2009-11-25 15:49:25  joergr
- * Removed inclusion of header file "ofconsol.h".
- *
- * Revision 1.32  2009-10-28 14:38:17  joergr
- * Fixed minor issues in log output.
- *
- * Revision 1.31  2009-10-28 09:53:40  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.30  2008-05-21 10:12:27  joergr
- * Fixed bug in c't scaling algorithm (expandPixel) which could cause a crash
- * (possible integer underflow/overflow).
- *
- * Revision 1.29  2008-05-20 15:26:45  joergr
- * Fixed small issue in bicubic image scaling algorithm (in clipping mode).
- *
- * Revision 1.28  2008-05-20 13:16:38  joergr
- * Fixed issue with signed pixel data in bicubic interpolation algorithm.
- * Use the pbmplus scaling algorithm as the second best fallback if the c't
- * algorithm cannot be used (e.g. up and down-scaling on different axes).
- * Replaced macro call by inline function (approx. same performance).
- *
- * Revision 1.27  2008-05-20 10:37:00  joergr
- * Added new bilinear and bicubic scaling algorithms for image magnification.
- * Now the c't scaling algorithm is used as a fallback if the preferred
- * algorithm with interpolation is not applicable.
- * Fixed bug in c't scaling algorithm (reducePixel) which could cause a crash.
- *
- * Revision 1.26  2006/08/15 16:30:11  meichel
- * Updated the code in module dcmimgle to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.25  2005/12/08 16:48:09  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.24  2004/04/21 10:00:36  meichel
- * Minor modifications for compilation with gcc 3.4.0
- *
- * Revision 1.23  2004/01/05 14:52:20  joergr
- * Removed acknowledgements with e-mail addresses from CVS log.
- *
- * Revision 1.22  2003/12/23 15:53:22  joergr
- * Replaced post-increment/decrement operators by pre-increment/decrement
- * operators where appropriate (e.g. 'i++' by '++i').
- *
- * Revision 1.21  2003/12/09 10:25:06  joergr
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- * Removed leading underscore characters from preprocessor symbols (reserved
- * symbols). Updated copyright header.
- *
- * Revision 1.20  2002/12/09 13:32:56  joergr
- * Renamed parameter/local variable to avoid name clashes with global
- * declaration left and/or right (used for as iostream manipulators).
- *
- * Revision 1.19  2002/04/16 13:53:12  joergr
- * Added configurable support for C++ ANSI standard includes (e.g. streams).
- *
- * Revision 1.18  2001/06/01 15:49:51  meichel
- * Updated copyright header
- *
- * Revision 1.17  2000/05/03 09:46:29  joergr
- * Removed most informational and some warning messages from release built
- * (#ifndef DEBUG).
- *
- * Revision 1.16  2000/04/28 12:32:33  joergr
- * DebugLevel - global for the module - now derived from OFGlobal (MT-safe).
- *
- * Revision 1.15  2000/04/27 13:08:42  joergr
- * Dcmimgle library code now consistently uses ofConsole for error output.
- *
- * Revision 1.14  2000/03/08 16:24:24  meichel
- * Updated copyright header.
- *
- * Revision 1.13  2000/03/07 16:15:13  joergr
- * Added explicit type casts to make Sun CC 2.0.1 happy.
- *
- * Revision 1.12  2000/03/03 14:09:14  meichel
- * Implemented library support for redirecting error messages into memory
- *   instead of printing them to stdout/stderr for GUI applications.
- *
- * Revision 1.11  1999/11/19 12:37:19  joergr
- * Fixed bug in scaling method "reducePixel" (reported by gcc 2.7.2.1).
- *
- * Revision 1.10  1999/09/17 13:07:20  joergr
- * Added/changed/completed DOC++ style comments in the header files.
- * Enhanced efficiency of some "for" loops.
- *
- * Revision 1.9  1999/08/25 16:41:55  joergr
- * Added new feature: Allow clipping region to be outside the image
- * (overlapping).
- *
- * Revision 1.8  1999/07/23 14:09:24  joergr
- * Added new interpolation algorithm for scaling.
- *
- * Revision 1.7  1999/04/28 14:55:05  joergr
- * Introduced new scheme for the debug level variable: now each level can be
- * set separately (there is no "include" relationship).
- *
- * Revision 1.6  1999/03/24 17:20:24  joergr
- * Added/Modified comments and formatting.
- *
- * Revision 1.5  1999/02/11 16:42:10  joergr
- * Removed inline declarations from several methods.
- *
- * Revision 1.4  1999/02/03 17:35:14  joergr
- * Moved global functions maxval() and determineRepresentation() to class
- * DicomImageClass (as static methods).
- *
- * Revision 1.3  1998/12/22 14:39:44  joergr
- * Added some preparation to enhance interpolated scaling (clipping and
- * scaling) in the future.
- *
- * Revision 1.2  1998/12/16 16:39:45  joergr
- * Implemented combined clipping and scaling for pixel replication and
- * suppression.
- *
- * Revision 1.1  1998/11/27 15:47:11  joergr
- * Added copyright message.
- * Combined clipping and scaling methods.
- *
- * Revision 1.4  1998/05/11 14:53:29  joergr
- * Added CVS/RCS header to each file.
- *
- *
- */

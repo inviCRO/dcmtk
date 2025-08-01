@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2016, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -15,15 +15,8 @@
  *
  *  Author:  Marco Eichelberg
  *
- *  Purpose: 
+ *  Purpose:
  *    class DcmTransferSyntaxMap
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:22 $
- *  CVS/RCS Revision: $Revision: 1.3 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -33,7 +26,7 @@
 #include "dcmtk/config/osconfig.h"
 #include "dcmtk/ofstd/oflist.h"   /* for class OFList<> */
 #include "dcmtk/ofstd/ofcond.h"   /* for class OFCondition */
-#include "dcmtk/dcmnet/dcmsmap.h"  /* for class DcmSimpleMap<> */
+#include "dcmtk/ofstd/ofmap.h"    /* for class OFMap */
 #include "dcmtk/dcmnet/dccfuidh.h" /* for class DcmUIDHandler */
 
 
@@ -45,7 +38,7 @@ typedef OFList<DcmUIDHandler> DcmTransferSyntaxList;
 /** this helper class maintains a map of transfer syntax lists.
  *  Not intended for use by the end user.
  */
-class DcmTransferSyntaxMap
+class DCMTK_DCMNET_EXPORT DcmTransferSyntaxMap
 {
 public:
   /// constructor
@@ -54,6 +47,31 @@ public:
   /// destructor
   ~DcmTransferSyntaxMap();
 
+  /// Copy constructor, performs deep copy
+  DcmTransferSyntaxMap(const DcmTransferSyntaxMap& arg);
+
+  /// Copy assignment operator, performs deep copy
+  DcmTransferSyntaxMap& operator=(const DcmTransferSyntaxMap& arg);
+
+  /** const iterator pointing to start of transfer syntax map
+   *  @return iterator to start of profile map
+   */
+  OFMap<OFString, DcmTransferSyntaxList*>::const_iterator begin();
+
+  /** const iterator pointing to end of transfer syntax map (behind last entry)
+   *  @return iterator to end of profile map
+   */
+  OFMap<OFString, DcmTransferSyntaxList*>::const_iterator end();
+
+  /** Resets DcmTransferSyntaxMap and frees any allocated memory
+   */
+  void clear();
+
+  /** Returns number of entries in transfer syntax map
+   *  @return the number of entries in transfer syntax map
+   */
+  size_t size() const;
+
   /** add new entry to list within map.
    *  If key is new, new list is created. Otherwise transfer syntax
    *  is appended to existing list.
@@ -61,9 +79,7 @@ public:
    *  @param transferSyntaxUID transfer syntax UID
    *  @return EC_Normal if successful, an error code otherwise
    */
-  OFCondition add(
-    const char *key,
-    const char *transferSyntaxUID);
+  OFCondition add(const char *key, const char *transferSyntaxUID);
 
   /** checks if the key is known
    *  @param key key name, must not be NULL
@@ -78,33 +94,10 @@ public:
   const DcmTransferSyntaxList *getTransferSyntaxList(const char *key) const;
 
 private:
-  /// private undefined copy constructor
-  DcmTransferSyntaxMap(const DcmTransferSyntaxMap& arg);
-
-  /// private undefined copy assignment operator
-  DcmTransferSyntaxMap& operator=(const DcmTransferSyntaxMap& arg);
 
   /// map of transfer syntax lists
-  DcmSimpleMap<DcmTransferSyntaxList *> map_;
+  OFMap<OFString, DcmTransferSyntaxList *> map_;
 
 };
 
 #endif
-
-/*
- * CVS/RCS Log
- * $Log: dccftsmp.h,v $
- * Revision 1.3  2010-10-14 13:17:22  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.2  2005/12/08 16:02:14  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.1  2003/06/10 14:27:33  meichel
- * Initial release of class DcmAssociationConfiguration and support
- *   classes. This class maintains a list of association negotiation
- *   profiles that can be addressed by symbolic keys. The profiles may
- *   be read from a configuration file.
- *
- *
- */

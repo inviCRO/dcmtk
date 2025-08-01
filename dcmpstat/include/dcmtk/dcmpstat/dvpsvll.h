@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2012, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,19 +18,13 @@
  *  Purpose:
  *    classes: DVPSVOILUT_PList
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:37 $
- *  CVS/RCS Revision: $Revision: 1.11 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DVPSVLL_H
 #define DVPSVLL_H
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
+#include "dcmtk/dcmpstat/dpdefine.h"
 #include "dcmtk/dcmdata/dcitem.h"
 
 class DVPSVOILUT;
@@ -41,7 +35,7 @@ class DVPSVOILUT;
  *  of one image attached to a presentation state.
  */
 
-class DVPSVOILUT_PList
+class DCMTK_DCMPSTAT_EXPORT DVPSVOILUT_PList
 {
 public:
   /// default constructor
@@ -99,44 +93,3 @@ private:
 };
 
 #endif
-
-/*
- *  $Log: dvpsvll.h,v $
- *  Revision 1.11  2010-10-14 13:16:37  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.10  2010-10-07 14:31:36  joergr
- *  Removed leading underscore characters from preprocessor symbols (reserved).
- *
- *  Revision 1.9  2009-11-24 14:12:58  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.8  2009-09-30 10:42:38  uli
- *  Make dcmpstat's include headers self-sufficient by including all
- *  needed headers directly and stop using dctk.h
- *
- *  Revision 1.7  2005-12-08 16:04:12  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.6  2003/06/04 10:18:06  meichel
- *  Replaced private inheritance from template with aggregation
- *
- *  Revision 1.5  2001/09/26 15:36:18  meichel
- *  Adapted dcmpstat to class OFCondition
- *
- *  Revision 1.4  2001/06/01 15:50:25  meichel
- *  Updated copyright header
- *
- *  Revision 1.3  2000/06/02 16:00:54  meichel
- *  Adapted all dcmpstat classes to use OFConsole for log and error output
- *
- *  Revision 1.2  2000/03/08 16:28:59  meichel
- *  Updated copyright header.
- *
- *  Revision 1.1  1998/12/22 17:57:09  meichel
- *  Implemented Presentation State interface for overlays,
- *    VOI LUTs, VOI windows, curves. Added test program that
- *    allows to add curve data to DICOM images.
- *
- *
- */

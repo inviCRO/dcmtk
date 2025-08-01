@@ -1,6 +1,6 @@
-#!/usr/local/bin/perl
+#!/usr/bin/perl
 #
-#  Copyright (C) 1998-2010, OFFIS e.V.
+#  Copyright (C) 1998-2016, OFFIS e.V.
 #  All rights reserved.  See COPYRIGHT file for details.
 #
 #  This software and supporting documentation were developed by
@@ -11,7 +11,7 @@
 #   D-26121 Oldenburg, Germany
 #
 #
-#  Module: dcmpstat
+#  Module: dcmtls
 #
 #  Author: Marco Eichelberg
 #
@@ -19,13 +19,6 @@
 #    This script simplifies the set-up and operation of a Certification
 #    Authority by means of OpenSSL, for use with the TLS-enhanced
 #    DCMTK DICOM Tools.
-#
-#  Last Update:      $Author: joergr $
-#  Update Date:      $Date: 2010-10-14 13:02:47 $
-#  CVS/RCS Revision: $Revision: 1.4 $
-#  Status:           $State: Exp $
-#
-#  CVS/RCS Log at end of file
 #
 
 $const_openssl="openssl";
@@ -82,15 +75,15 @@ usage: dcmtk_ca.pl command [options] arguments
     newca [options] directory
       generate a new Certification Authority; directory must not yet exist.
       -type rsa|dsa                      type of CA certificate (default:rsa)
-      -days days                         validity of CA certificate (365)
-      -bits bits                         bits in CA key (default: 2048)
+      -days days                         validity of CA certificate (730)
+      -bits bits                         bits in CA key (default: 4096)
     mkcert [options] ca_dir certfile keyfile
       generate a new key pair and use the Certification Authority in ca_dir
       to certify the public key; write certificate to certfile and the private
       key to keyfile.
       -type rsa|dsa                      type of certificate (default:rsa)
-      -days days                         validity of certificate (365)
-      -bits bits                         bits in private key (default: 1024)
+      -days days                         validity of certificate (730)
+      -bits bits                         bits in private key (default: 2048)
       -des yes|no                        encrypt private key (default: yes)
       -pkcs12 filename                   export certificate to PKCS#12
       -pkcs12name name                   PKCS#12 symbolic name
@@ -109,7 +102,7 @@ sub createNewCA
   local($days) = $options{'-days'};
   if ($days ne '') { $days = "-days $days"; }
   local($bits) = $options{'-bits'};
-  if ($bits == 0) { $bits = 2048; }
+  if ($bits == 0) { $bits = 4096; }
   local($type) = $options{'-type'};
   local($keytype);
   if ($type eq 'dsa')
@@ -161,7 +154,7 @@ sub createNewCertificate
   if ($days ne '') { $days = "-days $days"; }
   local($ca_certificate) = $options{'-cacert'};
   local($bits) = $options{'-bits'};
-  if ($bits == 0) { $bits = 1024; }
+  if ($bits == 0) { $bits = 2048; }
   local($type) = $options{'-type'};
   local($encryption);
   local($des) = $options{'-des'};
@@ -260,9 +253,9 @@ default_ca	= CA_default		# The default ca section
 
 dir		= ${ca_directory}	# Where everything is kept
 certs		= \$dir/certs		# Where the issued certs are kept
-crl_dir		= \$dir/crl		# Where the issued crl are kept
+crl_dir 	= \$dir/crl		# Where the issued crl are kept
 database	= \$dir/index.txt	# database index file.
-new_certs_dir	= \$dir/newcerts		# default place for new certs.
+new_certs_dir	= \$dir/newcerts	# default place for new certs.
 
 certificate	= \$dir/cacert.pem 	# The CA certificate
 serial		= \$dir/serial 		# The current serial number
@@ -276,9 +269,9 @@ x509_extensions	= usr_cert		# The extentions to add to the cert
 # so this is commented out by default to leave a V1 CRL.
 # crl_extensions	= crl_ext
 
-default_days	= 365			# how long to certify for
-default_crl_days= 30			# how long before next CRL
-default_md	= md5			# which md to use.
+default_days	= 730			# how long to certify for
+default_crl_days= 30	  		# how long before next CRL
+default_md	= sha256	  	# which md to use.
 preserve	= no			# keep passed DN ordering
 
 # A few difference way of specifying how similar the request should look
@@ -310,11 +303,11 @@ emailAddress		= optional
 ####################################################################
 [ req ]
 
-default_bits		= 1024
+default_bits		= 2048
 default_keyfile 	= privkey.pem
 distinguished_name	= req_distinguished_name
 attributes		= req_attributes
-x509_extensions	= v3_ca	# The extentions to add to the self signed cert
+x509_extensions 	= v3_ca	# The extentions to add to the self signed cert
 
 # Passwords for private keys if not present they will be prompted for
 # input_password = secret
@@ -466,21 +459,3 @@ END_OF_CONFIGURATION_FILE
 
   close OUT;
 }
-
-
-#
-#  $Log: dcmtk_ca.pl,v $
-#  Revision 1.4  2010-10-14 13:02:47  joergr
-#  Updated copyright header. Added reference to COPYRIGHT file.
-#
-#  Revision 1.3  2001/06/01 16:51:53  meichel
-#  Fixed bug in CA perl script. mkcert -days option now works.
-#
-#  Revision 1.2  2001/06/01 15:51:14  meichel
-#  Updated copyright header
-#
-#  Revision 1.1  2000/11/14 13:36:33  meichel
-#  Added Perl script that simplifies creation of a Certification Authority,
-#    private keys and X.509 certificates with OpenSSL for use with DCMTK.
-#
-#

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2015, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -19,13 +19,6 @@
  *    class DcmProfileEntry
  *    class DcmProfileMap
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:22 $
- *  CVS/RCS Revision: $Revision: 1.4 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCCFPRMP_H
@@ -34,13 +27,14 @@
 #include "dcmtk/config/osconfig.h"
 #include "dcmtk/ofstd/ofstring.h" /* for class OFString */
 #include "dcmtk/ofstd/ofcond.h"   /* for class OFCondition */
-#include "dcmtk/dcmnet/dcmsmap.h"  /* for class DcmSimpleMap<> */
+#include "dcmtk/ofstd/ofmap.h"    /* for class OFMap */
+#include "dcmtk/dcmnet/dndefine.h"
 
 
 /** this helper class is a profile list entry.
  *  Not intended for use by the end user.
  */
-class DcmProfileEntry
+class DCMTK_DCMNET_EXPORT DcmProfileEntry
 {
 public:
   /** constructor
@@ -55,6 +49,9 @@ public:
 
   /// copy constructor
   DcmProfileEntry(const DcmProfileEntry& arg);
+
+  /// copy assignment operator
+  DcmProfileEntry& operator=(const DcmProfileEntry& arg);
  
   /// destructor
   ~DcmProfileEntry();
@@ -87,9 +84,6 @@ public:
 
 private:
 
-  /// private undefined copy assignment operator
-  DcmProfileEntry& operator=(const DcmProfileEntry& arg);
-
   /// symbolic identifier of the presentation context list
   OFString presentationContextGroup_;
 
@@ -104,7 +98,7 @@ private:
 /** this helper class maintains a map of association negotiation profile keys.
  *  Not intended for use by the end user.
  */
-class DcmProfileMap
+class DCMTK_DCMNET_EXPORT DcmProfileMap
 {
 public:
   /// constructor
@@ -112,6 +106,32 @@ public:
 
   /// destructor
   ~DcmProfileMap();
+
+  /// copy constructor, creates deep copy
+  DcmProfileMap(const DcmProfileMap& arg);
+
+  /// copy constructor, creates deep copy
+  DcmProfileMap& operator=(const DcmProfileMap& arg);
+
+  /** const iterator pointing to start of profile map
+   *  @return iterator to start of profile map
+   */
+  OFMap<OFString, DcmProfileEntry*>::const_iterator begin();
+
+  /** const iterator pointing to end of profile map (behind last profile entry)
+   *  @return iterator to end of profile map
+   */
+  OFMap<OFString, DcmProfileEntry*>::const_iterator end();
+
+  /** return profile entry from profile map by its name
+   *  @param name The name of the profile, empty if unknown
+   *  @return the profile
+   */
+  const DcmProfileEntry* getProfile(const OFString& name);
+
+  /** Resets DcmProfileMap and frees any allocated memory
+   */
+  void clear();
 
   /** add new entry to list within map.
    *  @param key map key, must not exist in map
@@ -151,37 +171,11 @@ public:
   const char *getExtendedNegotiationKey(const char *key) const;
 
 private:
-  /// private undefined copy constructor
-  DcmProfileMap(const DcmProfileMap& arg);
-
-  /// private undefined copy assignment operator
-  DcmProfileMap& operator=(const DcmProfileMap& arg);
 
   /// map of profiles
-  DcmSimpleMap<DcmProfileEntry *> map_;
+  OFMap<OFString, DcmProfileEntry *> map_;
 
 };
 
 
 #endif
-
-/*
- * CVS/RCS Log
- * $Log: dccfprmp.h,v $
- * Revision 1.4  2010-10-14 13:17:22  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.3  2005/12/08 16:02:12  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.2  2003/06/18 08:16:16  meichel
- * Added comparison operators to keep MSVC5 compiler happy
- *
- * Revision 1.1  2003/06/10 14:27:33  meichel
- * Initial release of class DcmAssociationConfiguration and support
- *   classes. This class maintains a list of association negotiation
- *   profiles that can be addressed by symbolic keys. The profiles may
- *   be read from a configuration file.
- *
- *
- */

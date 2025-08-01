@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1993-2010, OFFIS e.V.
+ *  Copyright (C) 1993-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Andrew Hewett
  *
  *  Purpose: class DcmQueryRetrieveOptions
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:41 $
- *  CVS/RCS Revision: $Revision: 1.8 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -40,13 +33,21 @@
 #include "dcmtk/dcmnet/dimse.h"
 
 /// invalid peer for move operation
-extern const OFCondition APP_INVALIDPEER;
+extern DCMTK_DCMQRDB_EXPORT const OFConditionConst QR_EC_InvalidPeer;
+extern DCMTK_DCMQRDB_EXPORT const OFConditionConst QR_EC_IndexDatabaseError;
 
 /** this class encapsulates all the various options that affect the
  *  operation of the SCP, in addition to those defined in the config file
  */
-class DcmQueryRetrieveOptions
+class DCMTK_DCMQRDB_EXPORT DcmQueryRetrieveOptions
 {
+private:
+  /// private undefined copy constructor
+  DcmQueryRetrieveOptions(const DcmQueryRetrieveOptions& other);
+
+  /// private undefined assignment operator
+  DcmQueryRetrieveOptions& operator=(const DcmQueryRetrieveOptions& other);
+
 public:
   /// default constructor
   DcmQueryRetrieveOptions();
@@ -159,44 +160,15 @@ public:
   /// timeout for ACSE operations
   int acse_timeout_;
 
+  // association configuration file name
+  OFString associationConfigFile;
+
+  /// profile name for incoming association configuration
+  OFString incomingProfile;
+
+  /// profile name for outgoing association configuration
+  OFString outgoingProfile;
 };
 
 
 #endif
-
-/*
- * CVS Log
- * $Log: dcmqropt.h,v $
- * Revision 1.8  2010-10-14 13:16:41  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.7  2009-11-24 10:10:42  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.6  2009-08-21 09:50:07  joergr
- * Replaced tabs by spaces and updated copyright date.
- *
- * Revision 1.5  2005/12/08 16:04:25  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.4  2005/11/29 11:27:18  meichel
- * Added new flag keepDBHandleDuringAssociation_ which allows to determine
- *   whether a DB handle is kept open for a complete association or a single
- *   DIMSE message only. Also improved error handling of file locking.
- *
- * Revision 1.3  2005/11/29 10:54:54  meichel
- * Added minimal support for compressed transfer syntaxes to dcmqrscp.
- *   No on-the-fly decompression is performed, but compressed images can
- *   be stored and retrieved.
- *
- * Revision 1.2  2005/11/17 13:44:37  meichel
- * Added command line options for DIMSE and ACSE timeouts
- *
- * Revision 1.1  2005/03/30 13:34:50  meichel
- * Initial release of module dcmqrdb that will replace module imagectn.
- *   It provides a clear interface between the Q/R DICOM front-end and the
- *   database back-end. The imagectn code has been re-factored into a minimal
- *   class structure.
- *
- *
- */

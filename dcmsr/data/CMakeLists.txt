@@ -1,2 +1,2 @@
 # declare installation files
-INSTALL_FILES(${INSTALL_DATDIR} FILES dsr2xml.xsd report.css reportx.css)
+install(FILES dsr2xml.xsd report.css reportx.css DESTINATION "${CMAKE_INSTALL_DATADIR}/dcmtk" COMPONENT data)

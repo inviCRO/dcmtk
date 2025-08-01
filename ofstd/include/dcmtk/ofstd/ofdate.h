@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2010, OFFIS e.V.
+ *  Copyright (C) 2002-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Joerg Riesmeier
  *
  *  Purpose: Class for date functions
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:50 $
- *  CVS/RCS Revision: $Revision: 1.9 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -48,9 +41,9 @@ END_EXTERN_C
 
 /** This class provides a collection of date functions
  */
-class OFDate
+class DCMTK_OFSTD_EXPORT OFDate
 {
-    // allow class OFDateTime to access protected class members
+    /// allow class OFDateTime to access protected class members
     friend class OFDateTime;
 
 
@@ -263,44 +256,7 @@ class OFDate
  *  @param dateVal OFDate object to print
  *  @return reference to the output stream
  */
-STD_NAMESPACE ostream& operator<<(STD_NAMESPACE ostream& stream, const OFDate &dateVal);
+DCMTK_OFSTD_EXPORT STD_NAMESPACE ostream& operator<<(STD_NAMESPACE ostream& stream, const OFDate &dateVal);
 
 
 #endif
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: ofdate.h,v $
- * Revision 1.9  2010-10-14 13:15:50  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.8  2006/08/14 16:42:26  meichel
- * Updated all code in module ofstd to correctly compile if the standard
- *   namespace has not included into the global one with a "using" directive.
- *
- * Revision 1.7  2005/12/08 16:05:54  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.6  2004/01/16 10:30:39  joergr
- * Added setISOFormattedXXX() methods for Date, Time and DateTime.
- *
- * Revision 1.5  2003/09/15 12:12:56  joergr
- * Fixed incorrect/improper comments of the comparision operators. Enhanced
- * comment of the default constructor. Made comparison operators const.
- *
- * Revision 1.4  2003/07/04 13:30:37  meichel
- * Added include for ofstream.h, to make sure ofstream is correctly defined
- *
- * Revision 1.3  2002/05/24 09:43:04  joergr
- * Renamed some parameters/variables to avoid ambiguities.
- *
- * Revision 1.2  2002/04/15 09:38:58  joergr
- * Added "include <sys/types.h>" for struct time_t (required for MSVC).
- *
- * Revision 1.1  2002/04/11 12:12:23  joergr
- * Introduced new standard classes providing date and time functions.
- *
- *
- */

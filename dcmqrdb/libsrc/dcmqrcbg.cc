@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1993-2010, OFFIS e.V.
+ *  Copyright (C) 1993-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: class DcmQueryRetrieveGetContext
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:35 $
- *  CVS/RCS Revision: $Revision: 1.13 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
@@ -33,9 +26,11 @@
 #include "dcmtk/dcmdata/dcdeftag.h"
 #include "dcmtk/dcmqrdb/dcmqropt.h"
 #include "dcmtk/dcmnet/diutil.h"
+#include "dcmtk/dcmnet/dimse.h"       /* for DICOM_WARNING_STATUS */
 #include "dcmtk/dcmdata/dcfilefo.h"
 #include "dcmtk/dcmqrdb/dcmqrdbs.h"
 #include "dcmtk/dcmqrdb/dcmqrdbi.h"
+#include "dcmtk/ofstd/ofstd.h"
 
 BEGIN_EXTERN_C
 #ifdef HAVE_FCNTL_H
@@ -147,24 +142,24 @@ void DcmQueryRetrieveGetContext::callbackHandler(
 
 void DcmQueryRetrieveGetContext::addFailedUIDInstance(const char *sopInstance)
 {
-    int len;
-
+    size_t len;
+    size_t buflen = DIC_UI_LEN+1;
     if (failedUIDs == NULL) {
-        if ((failedUIDs = (char*)malloc(DIC_UI_LEN+1)) == NULL) {
+        if ((failedUIDs = (char*)malloc(buflen)) == NULL) {
             DCMQRDB_ERROR("malloc failure: addFailedUIDInstance");
             return;
         }
-        strcpy(failedUIDs, sopInstance);
+        OFStandard::strlcpy(failedUIDs, sopInstance, buflen);
     } else {
         len = strlen(failedUIDs);
-        if ((failedUIDs = (char*)realloc(failedUIDs,
-            (len+strlen(sopInstance)+2))) == NULL) {
+        buflen = len+strlen(sopInstance)+2;
+        if ((failedUIDs = (char*)realloc(failedUIDs, buflen)) == NULL) {
             DCMQRDB_ERROR("realloc failure: addFailedUIDInstance");
             return;
         }
         /* tag sopInstance onto end of old with '\' between */
-        strcat(failedUIDs, "\\");
-        strcat(failedUIDs, sopInstance);
+        OFStandard::strlcat(failedUIDs, "\\", buflen);
+        OFStandard::strlcat(failedUIDs, sopInstance, buflen);
     }
 }
 
@@ -186,9 +181,8 @@ OFCondition DcmQueryRetrieveGetContext::performGetSubOp(DIC_UI sopClass, DIC_UI 
     lockfd = open(fname, O_RDONLY , 0666);
 #endif
     if (lockfd < 0) {
-        char buf[256];
         /* due to quota system the file could have been deleted */
-        DCMQRDB_ERROR("Get SCP: storeSCU: [file: " << fname << "]: " << OFStandard::strerror(errno, buf, sizeof(buf)));
+        DCMQRDB_ERROR("Get SCP: storeSCU: [file: " << fname << "]: " << OFStandard::getLastSystemErrorCode().message());
         nFailed++;
         addFailedUIDInstance(sopInstance);
         return EC_Normal;
@@ -223,8 +217,8 @@ OFCondition DcmQueryRetrieveGetContext::performGetSubOp(DIC_UI sopClass, DIC_UI 
     }
 
     req.MessageID = msgId;
-    strcpy(req.AffectedSOPClassUID, sopClass);
-    strcpy(req.AffectedSOPInstanceUID, sopInstance);
+    OFStandard::strlcpy(req.AffectedSOPClassUID, sopClass, DIC_UI_LEN + 1);
+    OFStandard::strlcpy(req.AffectedSOPInstanceUID, sopInstance, DIC_UI_LEN + 1);
     req.DataSetType = DIMSE_DATASET_PRESENT;
     req.Priority = priority;
     req.opts = 0;
@@ -259,7 +253,7 @@ OFCondition DcmQueryRetrieveGetContext::performGetSubOp(DIC_UI sopClass, DIC_UI 
         if (rsp.DimseStatus == STATUS_Success) {
             /* everything ok */
             nCompleted++;
-        } else if ((rsp.DimseStatus & 0xf000) == 0xb000) {
+        } else if (DICOM_WARNING_STATUS(rsp.DimseStatus)) {
             /* a warning status message */
             nWarning++;
             DCMQRDB_ERROR("Get SCP: Store Warning: Response Status: " <<
@@ -293,13 +287,13 @@ void DcmQueryRetrieveGetContext::getNextImage(DcmQueryRetrieveDatabaseStatus * d
     char subImgFileName[MAXPATHLEN + 1];    /* sub-operation image file */
 
     /* clear out strings */
-    bzero(subImgFileName, sizeof(subImgFileName));
-    bzero(subImgSOPClass, sizeof(subImgSOPClass));
-    bzero(subImgSOPInstance, sizeof(subImgSOPInstance));
+    memset(subImgFileName, 0, sizeof(subImgFileName));
+    memset(subImgSOPClass, 0, sizeof(subImgSOPClass));
+    memset(subImgSOPInstance, 0, sizeof(subImgSOPInstance));
 
     /* get DB response */
     dbcond = dbHandle.nextMoveResponse(
-        subImgSOPClass, subImgSOPInstance, subImgFileName, &nRemaining, dbStatus);
+        subImgSOPClass, sizeof(subImgSOPClass), subImgSOPInstance, sizeof(subImgSOPInstance), subImgFileName, sizeof(subImgFileName), &nRemaining, dbStatus);
     if (dbcond.bad()) {
         DCMQRDB_ERROR("getSCP: Database: nextMoveResponse Failed ("
             << DU_cmoveStatusString(dbStatus->status()) << "):");
@@ -336,56 +330,3 @@ void DcmQueryRetrieveGetContext::buildFailedInstanceList(DcmDataset ** rspIds)
         failedUIDs = NULL;
     }
 }
-
-
-/*
- * CVS Log
- * $Log: dcmqrcbg.cc,v $
- * Revision 1.13  2010-10-14 13:14:35  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.12  2010-10-01 12:25:29  uli
- * Fixed most compiler warnings in remaining modules.
- *
- * Revision 1.11  2010-09-09 16:54:32  joergr
- * Further code clean-up and minor changes to log messages.
- *
- * Revision 1.10  2010-09-09 15:00:03  joergr
- * Made log messages more consistent. Replaced '\n' by OFendl where appropriate.
- *
- * Revision 1.9  2010-06-03 10:34:57  joergr
- * Replaced calls to strerror() by new helper function OFStandard::strerror()
- * which results in using the thread safe version of strerror() if available.
- *
- * Revision 1.8  2009-12-02 16:22:13  joergr
- * Make sure that dcmSOPClassUIDToModality() never returns NULL when passed to
- * the log stream in order to avoid an application crash.
- * Slightly modified output of progress bar.
- *
- * Revision 1.7  2009-11-24 10:10:42  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.6  2009-08-21 09:54:11  joergr
- * Replaced tabs by spaces and updated copyright date.
- *
- * Revision 1.5  2005/12/08 15:47:05  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.4  2005/11/17 13:44:40  meichel
- * Added command line options for DIMSE and ACSE timeouts
- *
- * Revision 1.3  2005/06/16 08:02:43  meichel
- * Added system include files needed on Solaris
- *
- * Revision 1.2  2005/04/04 14:23:21  meichel
- * Renamed application "dcmqrdb" into "dcmqrscp" to avoid name clash with
- *   dcmqrdb library, which confuses the MSVC build system.
- *
- * Revision 1.1  2005/03/30 13:34:53  meichel
- * Initial release of module dcmqrdb that will replace module imagectn.
- *   It provides a clear interface between the Q/R DICOM front-end and the
- *   database back-end. The imagectn code has been re-factored into a minimal
- *   class structure.
- *
- *
- */

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: Interface of class DcmLongText
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:43 $
- *  CVS/RCS Revision: $Revision: 1.20 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCVRLT_H
@@ -36,7 +29,7 @@
 
 /** a class representing the DICOM value representation 'Long Text' (LT)
  */
-class DcmLongText
+class DCMTK_DCMDATA_EXPORT DcmLongText
   : public DcmCharString
 {
   public:
@@ -63,6 +56,26 @@ class DcmLongText
      *  @return reference to this object
      */
     DcmLongText &operator=(const DcmLongText &obj);
+
+    /** comparison operator that compares the normalized value of this object
+     *  with a given object of the same type. The tag of the element is also
+     *  considered as the first component that is compared, followed by the
+     *  object types (VR, i.e. DCMTK'S EVR) and the comparison of all value
+     *  components of the object, preferably in the order declared in the
+     *  object (if applicable).
+     *  @param  rhs the right hand side of the comparison
+     *  @return 0 if the object values are equal.
+     *    -1 if this element has fewer components than the rhs element.
+     *    Also -1 if the value of the first component that does not match
+     *    is lower in this object than in rhs. Also returned if rhs
+     *    be casted to this object type or both objects are of
+     *    different VR (i.e. the DcmEVR returned by the element's ident()
+     *    call are different).
+     *    1 if either this element has more components than the rhs element, or
+     *    if the first component that does not match is greater in this object
+     *    than in rhs object.
+     */
+    virtual int compare(const DcmElement& rhs) const;
 
     /** clone method
      *  @return deep copy of this object
@@ -91,9 +104,11 @@ class DcmLongText
      */
     virtual DcmEVR ident() const;
 
-    /** check whether stored value conforms to the VR and to the specified VM
+    /** check whether stored value conforms to the VR and to the specified VM.
+     *  Currently, the VR checker only supports ASCII (ISO_IR 6) and Latin-1 (ISO_IR 100).
+     *  All other specific character sets disable the check of the value representation.
      *  @param vm parameter not used for this VR
-     *  @param oldFormat parameter not used for this VR (only for DA, TM, PN)
+     *  @param oldFormat parameter not used for this VR (only for DA, TM)
      *  @return status of the check, EC_Normal if value is correct, an error code otherwise
      */
     virtual OFCondition checkValue(const OFString &vm = "",
@@ -116,7 +131,7 @@ class DcmLongText
                                     const unsigned long pos,
                                     OFBool normalize = OFTrue);
 
-    /** get the string value (all compenents)
+    /** get the string value (all components)
      *  @param stringVal string variable in which the result value is stored
      *  @param normalize remove trailing spaces if OFTrue
      *  @return status, EC_Normal if successful, an error code otherwise
@@ -127,98 +142,16 @@ class DcmLongText
     /* --- static helper functions --- */
 
     /** check whether given string value conforms to the VR "LT" (Long Text)
-     *  @param value string value to be checked (possibly multi-valued)
+     *  @param value string value to be checked
+     *  @param charset character set (according to the value of the SpecificCharacterSet
+     *    element) to be used for checking the string value. The default is ASCII (7-bit).
+     *    Currently, the VR checker only supports ASCII (ISO_IR 6) and Latin-1 (ISO_IR 100).
+     *    All other values disable the check of the value representation, e.g. "UNKNOWN".
      *  @return status of the check, EC_Normal if value is correct, an error code otherwise
      */
-    static OFCondition checkStringValue(const OFString &value);
+    static OFCondition checkStringValue(const OFString &value,
+                                        const OFString &charset = "");
 };
 
 
 #endif // DCVRLT_H
-
-
-/*
-** CVS/RCS Log:
-** $Log: dcvrlt.h,v $
-** Revision 1.20  2010-10-14 13:15:43  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.19  2010-04-23 15:26:13  joergr
-** Specify an appropriate default value for the "vm" parameter of checkValue().
-**
-** Revision 1.18  2010-04-23 14:25:27  joergr
-** Added new method to all VR classes which checks whether the stored value
-** conforms to the VR definition and to the specified VM.
-**
-** Revision 1.17  2010-03-01 09:08:45  uli
-** Removed some unnecessary include directives in the headers.
-**
-** Revision 1.16  2009-08-03 09:05:30  joergr
-** Added methods that check whether a given string value conforms to the VR and
-** VM definitions of the DICOM standards.
-**
-** Revision 1.15  2008-07-17 11:19:49  onken
-** Updated copyFrom() documentation.
-**
-** Revision 1.14  2008-07-17 10:30:23  onken
-** Implemented copyFrom() method for complete DcmObject class hierarchy, which
-** permits setting an instance's value from an existing object. Implemented
-** assignment operator where necessary.
-**
-** Revision 1.13  2005-12-08 16:29:02  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.12  2004/07/01 12:28:25  meichel
-** Introduced virtual clone method for DcmObject and derived classes.
-**
-** Revision 1.11  2002/12/06 12:49:17  joergr
-** Enhanced "print()" function by re-working the implementation and replacing
-** the boolean "showFullData" parameter by a more general integer flag.
-** Added doc++ documentation.
-** Made source code formatting more consistent with other modules/files.
-**
-** Revision 1.10  2001/09/25 17:19:32  meichel
-** Adapted dcmdata to class OFCondition
-**
-** Revision 1.9  2001/06/01 15:48:51  meichel
-** Updated copyright header
-**
-** Revision 1.8  2000/03/08 16:26:24  meichel
-** Updated copyright header.
-**
-** Revision 1.7  1999/03/31 09:25:03  meichel
-** Updated copyright header in module dcmdata
-**
-** Revision 1.6  1998/11/12 16:47:51  meichel
-** Implemented operator= for all classes derived from DcmObject.
-**
-** Revision 1.5  1997/09/11 15:13:15  hewett
-** Modified getOFString method arguments by removing a default value
-** for the pos argument.  By requiring the pos argument to be provided
-** ensures that callers realise getOFString only gets one component of
-** a multi-valued string.
-**
-** Revision 1.4  1997/08/29 08:32:43  andreas
-** - Added methods getOFString and getOFStringArray for all
-**   string VRs. These methods are able to normalise the value, i. e.
-**   to remove leading and trailing spaces. This will be done only if
-**   it is described in the standard that these spaces are not relevant.
-**   These methods do not test the strings for conformance, this means
-**   especially that they do not delete spaces where they are not allowed!
-**   getOFStringArray returns the string with all its parts separated by \
-**   and getOFString returns only one value of the string.
-**   CAUTION: Currently getString returns a string with trailing
-**   spaces removed (if dcmEnableAutomaticInputDataCorrection == OFTrue) and
-**   truncates the original string (since it is not copied!). If you rely on this
-**   behaviour please change your application now.
-**   Future changes will ensure that getString returns the original
-**   string from the DICOM object (NULL terminated) inclusive padding.
-**   Currently, if you call getOF... before calling getString without
-**   normalisation, you can get the original string read from the DICOM object.
-**
-** Revision 1.3  1996/01/05 13:23:07  andreas
-** - changed to support new streaming facilities
-** - more cleanups
-** - merged read / write methods for block and file transfer
-**
-*/

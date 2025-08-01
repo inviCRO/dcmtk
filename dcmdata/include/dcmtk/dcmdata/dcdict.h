@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Andrew Hewett
  *
  *  Purpose: Interface for loadable DICOM data dictionary
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:40 $
- *  CVS/RCS Revision: $Revision: 1.24 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -56,10 +49,20 @@
 #define ENVIRONMENT_PATH_SEPARATOR '\n' /* at least define something unlikely */
 #endif
 
+/*
+** Loading of default dictionary:
+**  DCM_DICT_DEFAULT_USE_NONE: Do not load any default dictionary on startup
+**  DCM_DICT_DEFAULT_USE_BUILTIN: Load builtin dictionary on startup
+**  DCM_DICT_DEFAULT_USE_EXTERNAL: Load external (i.e. file-based) dictionary on startup
+*/
+#define DCM_DICT_DEFAULT_USE_NONE     0
+#define DCM_DICT_DEFAULT_USE_BUILTIN  1
+#define DCM_DICT_DEFAULT_USE_EXTERNAL 2
+
 
 /** this class implements a loadable DICOM Data Dictionary
  */
-class DcmDataDictionary
+class DCMTK_DCMDATA_EXPORT DcmDataDictionary
 {
 public:
 
@@ -186,11 +189,13 @@ private:
     OFBool loadSkeletonDictionary();
 
     /** looks up the given directory entry in the two dictionaries.
+     *  @param entry the entry to look up
      *  @return pointer to entry if found, NULL otherwise
      */
     const DcmDictEntry* findEntry(const DcmDictEntry& entry) const;
 
     /** deletes the given entry from either dictionary
+     * @param entry the entry to delete
      */
     void deleteEntry(const DcmDictEntry& entry);
 
@@ -214,20 +219,18 @@ private:
 };
 
 
-/** encapsulates a data dictionary with access methods which allow safe
- *  read and write access from multiple threads in parallel.
- *  A read/write lock is used to protect threads from each other.
- *  This allows parallel read-only access by multiple threads, which is
- *  the most common case.
+/** global singleton dicom dictionary that is used by DCMTK in order to lookup
+ *  attribute VR, tag names and so on.  The dictionary is internally populated
+ *  on first use, if the user accesses it via rdlock() or wrlock().  The
+ *  dictionary allows safe read (shared) and write (exclusive) access from
+ *  multiple threads in parallel.
  */
-class GlobalDcmDataDictionary
+class DCMTK_DCMDATA_EXPORT GlobalDcmDataDictionary
 {
 public:
   /** constructor.
-   *  @param loadBuiltin if true, the dictionary constructor calls loadBuiltinDictionary().
-   *  @param loadExternal if true, the dictionary constructor calls loadExternalDictionaries().
    */
-  GlobalDcmDataDictionary(OFBool loadBuiltin, OFBool loadExternal);
+  GlobalDcmDataDictionary();
 
   /** destructor
    */
@@ -245,9 +248,13 @@ public:
    */
   DcmDataDictionary& wrlock();
 
-  /** unlocks the read or write lock which must have been acquired previously.
+  /** unlocks the read lock which must have been acquired previously.
    */
-  void unlock();
+  void rdunlock();
+
+  /** unlocks the write lock which must have been acquired previously.
+   */
+  void wrunlock();
 
   /** checks if a data dictionary has been loaded. This method acquires and
    *  releases a read lock. It must not be called with another lock on the
@@ -272,12 +279,19 @@ private:
    */
   GlobalDcmDataDictionary(const GlobalDcmDataDictionary &);
 
+  /** create the data dictionary instance for this class. Used for first
+   * intialization.  The caller must not have dataDictLock locked.
+   */
+  void createDataDict();
+
   /** the data dictionary managed by this class
    */
-  DcmDataDictionary dataDict;
+  DcmDataDictionary *dataDict;
 
 #ifdef WITH_THREADS
   /** the read/write lock used to protect access from multiple threads
+   *  @remark this member is only available if DCMTK is compiled with thread
+   *  support enabled.
    */
   OFReadWriteLock dataDictLock;
 #endif
@@ -285,7 +299,7 @@ private:
 
 
 /** The Global DICOM Data Dictionary.
- *  Will be created before main() starts.
+ *  Will be created before main() starts and gets populated on its first use.
  *  Tries to load a builtin data dictionary (if compiled in).
  *  Tries to load data dictionaries from files specified by
  *  the DCMDICTPATH environment variable.  If this environment
@@ -295,101 +309,6 @@ private:
  *  is likely to cause unexpected behaviour in the dcmdata
  *  toolkit classes.
  */
-extern GlobalDcmDataDictionary dcmDataDict;
+extern DCMTK_DCMDATA_EXPORT GlobalDcmDataDictionary dcmDataDict;
 
 #endif
-
-
-/*
-** CVS/RCS Log:
-** $Log: dcdict.h,v $
-** Revision 1.24  2010-10-14 13:15:40  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.23  2010-10-04 14:44:39  joergr
-** Replaced "#ifdef _REENTRANT" by "#ifdef WITH_THREADS" where appropriate (i.e.
-** in all cases where OFMutex, OFReadWriteLock, etc. are used).
-**
-** Revision 1.22  2009-02-05 13:13:51  joergr
-** Added reload method to data dictionary class.
-**
-** Revision 1.21  2008-08-15 09:27:14  meichel
-** Added type cast to fix a warning
-**
-** Revision 1.20  2005/12/08 16:28:09  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.19  2004/01/16 14:07:27  joergr
-** Removed acknowledgements with e-mail addresses from CVS log.
-**
-** Revision 1.18  2002/07/23 14:21:25  meichel
-** Added support for private tag data dictionaries to dcmdata
-**
-** Revision 1.17  2002/02/27 14:21:20  meichel
-** Declare dcmdata read/write locks only when compiled in multi-thread mode
-**
-** Revision 1.16  2001/06/01 15:48:38  meichel
-** Updated copyright header
-**
-** Revision 1.15  2000/05/03 14:19:08  meichel
-** Added new class GlobalDcmDataDictionary which implements read/write lock
-**   semantics for safe access to the DICOM dictionary from multiple threads
-**   in parallel. The global dcmDataDict now uses this class.
-**
-** Revision 1.14  2000/03/08 16:26:13  meichel
-** Updated copyright header.
-**
-** Revision 1.13  1999/03/31 09:24:35  meichel
-** Updated copyright header in module dcmdata
-**
-** Revision 1.12  1998/07/15 15:48:45  joergr
-** Removed several compiler warnings reported by gcc 2.8.1 with
-** additional options, e.g. missing copy constructors and assignment
-** operators, initialization of member variables in the body of a
-** constructor instead of the member initialization list, hiding of
-** methods by use of identical names, uninitialized member variables,
-** missing const declaration of char pointers. Replaced tabs by spaces.
-**
-** Revision 1.11  1997/08/26 14:02:56  hewett
-** New data structures for data-dictionary.  The main part of the
-** data-dictionary is now stored in an hash table using an optimized
-** hash function.  This new data structure reduces data-dictionary
-** load times by a factor of 4!  he data-dictionary specific linked-list
-** has been replaced by a linked list derived from OFList class
-** (see ofstd/include/oflist.h).
-** The only interface modifications are related to iterating over the entire
-** data dictionary which should not be needed by "normal" applications.
-**
-** Revision 1.10  1997/07/21 08:25:07  andreas
-** - Replace all boolean types (BOOLEAN, CTNBOOLEAN, DICOM_BOOL, BOOL)
-**   with one unique boolean type OFBool.
-**
-** Revision 1.9  1997/05/22 13:15:54  hewett
-** Added method DcmDataDictionary::isDictionaryLoaded() to ask if a full
-** data dictionary has been loaded.  This method should be used in tests
-** rather that querying the number of entries (a sekelton dictionary is
-** now always present).
-**
-** Revision 1.8  1997/05/13 13:58:41  hewett
-** Added member function (loadSkeletomDictionary) to preload of a few
-** essential attribute descriptions into the data dictionary (e.g. Item
-** and ItemDelimitation tags).
-**
-** Revision 1.7  1996/09/18 16:37:10  hewett
-** Added capability to search data dictionary by tag name.
-**
-** Revision 1.6  1996/03/22 13:09:12  hewett
-** Moved the definition of DCM_DICT_DEFAULT_PATH to the system
-** dependent configuration files included via "osconfig.h".
-**
-** Revision 1.5  1996/03/21 09:50:38  hewett
-** Added a  method numberOfEntries() to return the total number of
-** dictionary entries.
-**
-** Revision 1.4  1996/03/20 16:43:49  hewett
-** Updated for revised data dictionary.  Repeating tags are now handled better.
-** A linear list of repeating tags has been introduced with a subset ordering
-** mechanism to ensure that dictionary searches locate the most precise
-** dictionary entry.
-**
-*/

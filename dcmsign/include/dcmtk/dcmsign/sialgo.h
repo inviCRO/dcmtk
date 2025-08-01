@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2019, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,23 +18,16 @@
  *  Purpose:
  *    classes: SiAlgorithm
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:24 $
- *  CVS/RCS Revision: $Revision: 1.6 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef SIALGO_H
 #define SIALGO_H
 
 #include "dcmtk/config/osconfig.h"
-#include "dcmtk/dcmsign/sitypes.h"
 
 #ifdef WITH_OPENSSL
 
+#include "dcmtk/dcmsign/sitypes.h"
 #include "dcmtk/ofstd/oftypes.h"
 
 /** 
@@ -42,8 +35,10 @@
  *  signature creation and verification.
  *  All public key algorithm classes should inherit from this class.
  *  Instances of derived classes contain a single private or public key.
+ *  @remark this class is only available if DCMTK is compiled with
+ *  OpenSSL support enabled.
  */
-class SiAlgorithm
+class DCMTK_DCMSIGN_EXPORT SiAlgorithm
 {    
 public:
 
@@ -105,28 +100,3 @@ public:
 
 #endif
 #endif
-
-/*
- *  $Log: sialgo.h,v $
- *  Revision 1.6  2010-10-14 13:17:24  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.5  2005-12-08 16:04:30  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.4  2003/06/04 14:21:03  meichel
- *  Simplified include structure to avoid preprocessor limitation
- *    (max 32 #if levels) on MSVC5 with STL.
- *
- *  Revision 1.3  2001/09/26 14:30:19  meichel
- *  Adapted dcmsign to class OFCondition
- *
- *  Revision 1.2  2001/06/01 15:50:47  meichel
- *  Updated copyright header
- *
- *  Revision 1.1  2000/11/07 16:48:52  meichel
- *  Initial release of dcmsign module for DICOM Digital Signatures
- *
- *
- */
-

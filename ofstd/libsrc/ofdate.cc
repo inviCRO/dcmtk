@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2010, OFFIS e.V.
+ *  Copyright (C) 2002-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,22 +17,13 @@
  *
  *  Purpose: Class for date functions (Source)
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:53 $
- *  CVS/RCS Revision: $Revision: 1.9 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
 #include "dcmtk/config/osconfig.h"
 #include "dcmtk/ofstd/ofdate.h"
-
-#define INCLUDE_CSTDIO
-#define INCLUDE_CTIME
 #include "dcmtk/ofstd/ofstdinc.h"
+#include <ctime>
 
 
 /*------------------*
@@ -209,7 +200,7 @@ OFBool OFDate::setCurrentDate()
 OFBool OFDate::setCurrentDate(const time_t &tt)
 {
     OFBool status = OFFalse;
-#if defined(_REENTRANT) && !defined(_WIN32) && !defined(__CYGWIN__)
+#ifdef HAVE_LOCALTIME_R
     // use localtime_r instead of localtime
     struct tm ltBuf;
     struct tm *lt = &ltBuf;
@@ -311,39 +302,3 @@ STD_NAMESPACE ostream& operator<<(STD_NAMESPACE ostream& stream, const OFDate &d
         stream << string;
     return stream;
 }
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: ofdate.cc,v $
- * Revision 1.9  2010-10-14 13:14:53  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.8  2006/08/14 16:42:46  meichel
- * Updated all code in module ofstd to correctly compile if the standard
- *   namespace has not included into the global one with a "using" directive.
- *
- * Revision 1.7  2005/12/08 15:48:55  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.6  2004/01/16 10:35:18  joergr
- * Added setISOFormattedXXX() methods for Date, Time and DateTime.
- *
- * Revision 1.5  2003/09/15 12:15:07  joergr
- * Made comparison operators const.
- *
- * Revision 1.4  2002/11/27 11:23:10  meichel
- * Adapted module ofstd to use of new header file ofstdinc.h
- *
- * Revision 1.3  2002/05/24 09:44:26  joergr
- * Renamed some parameters/variables to avoid ambiguities.
- *
- * Revision 1.2  2002/04/15 09:40:47  joergr
- * Removed "include <sys/types.h>" from implementation file.
- *
- * Revision 1.1  2002/04/11 12:14:33  joergr
- * Introduced new standard classes providing date and time functions.
- *
- *
- */

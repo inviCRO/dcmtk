@@ -1,19 +1,36 @@
-# declare directories containing used libraries
-LINK_DIRECTORIES(${dcmdata_BINARY_DIR} ${ofstd_BINARY_DIR} ${oflog_BINARY_DIR} ${ZLIB_LIBDIR} ${LIBXML_LIBDIR})
-
 # declare executables
-FOREACH(PROGRAM i2dbmp tstpath tstchval tstpread tvrdatim)
-  ADD_EXECUTABLE(${PROGRAM} ${PROGRAM})
-ENDFOREACH(PROGRAM)
+DCMTK_ADD_EXECUTABLE(dcmdata_tests
+  tchval.cc
+  tdict.cc
+  telemlen.cc
+  tests.cc
+  tfilter.cc
+  tgenuid.cc
+  ti2dbmp.cc
+  titem.cc
+  tmatch.cc
+  tnewdcme.cc
+  tparent.cc
+  tparser.cc
+  tpath.cc
+  tpread.cc
+  tsequen.cc
+  tspchrs.cc
+  tstrval.cc
+  tvrcomp.cc
+  tvrdatim.cc
+  tvrds.cc
+  tvrfd.cc
+  tvrol.cc
+  tvrov.cc
+  tvrpn.cc
+  tvrsv.cc
+  tvrui.cc
+  tvruv.cc
+)
 
 # make sure executables are linked to the corresponding libraries
-FOREACH(PROGRAM tstpath tstchval tstpread tvrdatim)
-  TARGET_LINK_LIBRARIES(${PROGRAM} dcmdata oflog ofstd ${ZLIB_LIBS} ${THREAD_LIBS} ${WIN32_STD_LIBRARIES})
-ENDFOREACH(PROGRAM)
+DCMTK_TARGET_LINK_MODULES(dcmdata_tests i2d dcmdata oflog ofstd)
 
-TARGET_LINK_LIBRARIES(i2dbmp libi2d dcmdata oflog ofstd ${ZLIB_LIBS} ${THREAD_LIBS} ${WIN32_STD_LIBRARIES})
-
-# declare installation files
-#FOREACH(PROGRAM i2dbmp tstpath tstchval tstpread tvrdatim)
-#  INSTALL_TARGETS(${INSTALL_BINDIR} ${PROGRAM})
-#ENDFOREACH(PROGRAM)
+# This macro parses tests.cc and registers all tests
+DCMTK_ADD_TESTS(dcmdata)

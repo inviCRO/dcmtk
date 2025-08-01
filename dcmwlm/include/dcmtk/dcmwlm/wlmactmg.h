@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1996-2010, OFFIS e.V.
+ *  Copyright (C) 1996-2019, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose: Activity manager class for basic worklist management service
  *           class provider engines.
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:39 $
- *  CVS/RCS Revision: $Revision: 1.18 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef WlmActivityManager_h
@@ -38,12 +31,11 @@
 
 class WlmDataSource;
 class OFCondition;
-class OFConsole;
 
 /** This class encapsulates data structures and operations for basic worklist management service
  *  class providers.
  */
-class WlmActivityManager
+class DCMTK_DCMWLM_EXPORT WlmActivityManager
 {
   protected:
     /// data source connection object
@@ -52,13 +44,15 @@ class WlmActivityManager
     OFCmdUnsignedInt opt_port;
     /// indicates if the application shall refuse any association
     OFBool opt_refuseAssociation;
-    /// indicates if the application shall reject associations without implementation class uids
+    /// indicates if the application shall reject associations without implementation class UIDs
     OFBool opt_rejectWithoutImplementationUID;
+    /// indicates how many seconds the application is supposed to sleep before handling a find request
+    OFCmdUnsignedInt opt_sleepBeforeFindReq;
     /// indicates how long the application shall sleep after a find
     OFCmdUnsignedInt opt_sleepAfterFind;
     /// indicates how long the application shall sleep during a find
     OFCmdUnsignedInt opt_sleepDuringFind;
-    /// max pdu size
+    /// max PDU size
     OFCmdUnsignedInt opt_maxPDU;
     /// preferred network transfer syntax
     E_TransferSyntax opt_networkTransferSyntax;
@@ -87,10 +81,20 @@ class WlmActivityManager
     int numberOfSupportedAbstractSyntaxes;
     /// table of processes for non-single process mode
     OFList<WlmProcessSlotType*> processTable;
+    /// the directory where to store request files to
+    OFString opt_requestFilePath;
+    /// the format used for the request file names.
+    /// Several placeholders can be used by(denoted by #) :
+    ///   \#a: calling application entity title of the peer SCU
+    ///   \#c: called application entity title (AE title of worklist SCP application)
+    ///   \#i process id of the worklist SCP application process handling the request
+    ///   \#p: patient ID if present, otherwise empty string
+    ///   \ #t: timestamp in the format YYYYMMDDhhmmssffffff
+    OFString opt_requestFileFormat;
 
       /** This function takes care of receiving, negotiating and accepting/refusing an
        *  association request. Additionally, it handles the request the association
-       *  requesting application transmits after a connection isd established.
+       *  requesting application transmits after a connection is established.
        *  @param net Contains network parameters.
        */
     OFCondition WaitForAssociation( T_ASC_Network *net );
@@ -102,7 +106,7 @@ class WlmActivityManager
     void CleanChildren();
 
       /** This function negotiates a presentation context which will be used by this application
-       *  and the other DICOM appliation that requests an association.
+       *  and the other DICOM application that requests an association.
        *  @param assoc The association (network connection to another DICOM application).
        */
     OFCondition NegotiateAssociation( T_ASC_Association *assoc );
@@ -119,7 +123,7 @@ class WlmActivityManager
        */
     void RemoveProcessFromTable( int pid );
 
-      /** This function takes care of refusing an assocation request.
+      /** This function takes care of refusing an association request.
        *  @param assoc  The association (network connection to another DICOM application).
        *  @param reason The reason why the association request will be refused.
        */
@@ -178,6 +182,7 @@ class WlmActivityManager
        *  @param opt_portv                           The port on which the application is supposed to listen.
        *  @param opt_refuseAssociationv              Specifies if an association shall always be refused by the SCP.
        *  @param opt_rejectWithoutImplementationUIDv Specifies if the application shall reject an association if no implementation class UID is provided by the calling SCU.
+       *  @param opt_sleepBeforeFindReqv             Specifies how many seconds the application is supposed to sleep before handling a C-FIND-Req.
        *  @param opt_sleepAfterFindv                 Specifies how many seconds the application is supposed to sleep after having handled a C-FIND-Rsp.
        *  @param opt_sleepDuringFindv                Specifies how many seconds the application is supposed to sleep during the handling of a C-FIND-Rsp.
        *  @param opt_maxPDUv                         Maximum length of a PDU that can be received in bytes.
@@ -188,26 +193,27 @@ class WlmActivityManager
        *  @param opt_blockModev                      Specifies the blocking mode for DIMSE operations
        *  @param opt_dimse_timeoutv                  Specifies the timeout for DIMSE operations
        *  @param opt_acse_timeoutv                   Specifies the timeout for ACSE operations
-       *  @param opt_forkedChildv                    Indicates, whether this process was "forked" from a parent process, default: false
-			 *  @param argcv															 Number of commandline arguments given
-			 *  @param argvv															 Complete command line
+       *  @param opt_forkedChild                     Indicates, whether this process was "forked" from a parent process, default: false
+       *  @param argcv                               Number of commandline arguments given
+       *  @param argvv                               Complete command line
        */
     WlmActivityManager(
-        WlmDataSource *dataSourcev, 
-        OFCmdUnsignedInt opt_portv, 
-        OFBool opt_refuseAssociationv, 
-        OFBool opt_rejectWithoutImplementationUIDv, 
-        OFCmdUnsignedInt opt_sleepAfterFindv, 
-        OFCmdUnsignedInt opt_sleepDuringFindv, 
-        OFCmdUnsignedInt opt_maxPDUv, 
-        E_TransferSyntax opt_networkTransferSyntaxv, 
-        OFBool opt_failInvalidQueryv, 
-        OFBool opt_singleProcessv, 
-        int opt_maxAssociationsv, 
+        WlmDataSource *dataSourcev,
+        OFCmdUnsignedInt opt_portv,
+        OFBool opt_refuseAssociationv,
+        OFBool opt_rejectWithoutImplementationUIDv,
+        OFCmdUnsignedInt opt_sleepBeforeFindReqv,
+        OFCmdUnsignedInt opt_sleepAfterFindv,
+        OFCmdUnsignedInt opt_sleepDuringFindv,
+        OFCmdUnsignedInt opt_maxPDUv,
+        E_TransferSyntax opt_networkTransferSyntaxv,
+        OFBool opt_failInvalidQueryv,
+        OFBool opt_singleProcessv,
+        int opt_maxAssociationsv,
         T_DIMSE_BlockingMode opt_blockModev,
         int opt_dimse_timeoutv,
         int opt_acse_timeoutv,
-        OFBool opt_forkedChild = OFFalse,
+        OFBool opt_forkedChildv = OFFalse,
         int argcv = 0,
         char *argvv[] = NULL );
 
@@ -221,74 +227,22 @@ class WlmActivityManager
        *  @return Value that is supposed to be returned from main().
        */
     OFCondition StartProvidingService();
+
+      /** Set directory to store request files to. If set to empty path (default),
+       *  request files are not stored.
+       *  @param path   Path to directory where request files should be stored to.
+       *                Must exist and be writable for worklist application.
+       *  @param format The format used for the request file names.
+       *                Several placeholders can be used by (denoted by #):<br>
+       *                \#a: calling application entity title of the peer SCU<br>
+       *                \#c: called application entity title (AE title of worklist SCP application)<br>
+       *                \#i: process id of the worklist SCP application process handling the request<br>
+       *                \#p: patient ID if present, otherwise empty string<br>
+       *                \#t: timestamp in the format YYYYMMDDhhmmssffffff<br>
+       *                Default is #t.dump.
+       *  @return       OFTrue if path is accepted, OFFalse otherwise
+       */
+    OFBool setRequestFilePath(const OFString& path="", const OFString& format="#t.dump");
 };
 
 #endif
-
-/*
-** CVS Log
-** $Log: wlmactmg.h,v $
-** Revision 1.18  2010-10-14 13:16:39  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.17  2009-11-24 10:40:01  uli
-** Switched to logging mechanism provided by the "new" oflog module.
-**
-** Revision 1.16  2009-09-30 08:40:34  uli
-** Make dcmwlm's include headers self-sufficient by including all
-** needed headers directly.
-**
-** Revision 1.15  2006-12-15 14:49:21  onken
-** Removed excessive use char* and C-array in favour of OFString and
-** OFList. Simplified some implementation details.
-**
-** Revision 1.14  2006/08/14 15:30:58  onken
-** Added WIN32 multiprocess mode to wlmscpfs.
-**
-** Revision 1.13  2005/12/08 16:05:43  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.12  2005/11/17 13:45:39  meichel
-** Added command line options for DIMSE and ACSE timeouts
-**
-** Revision 1.11  2003/07/02 09:17:55  wilkens
-** Updated documentation to get rid of doxygen warnings.
-**
-** Revision 1.10  2002/12/16 11:08:36  wilkens
-** Added missing #include "osconfig.h" to certain files.
-**
-** Revision 1.9  2002/12/12 16:48:35  wilkens
-** Added some code to avoid compiler warning (unreachable code) on Sun CC 2.0.1.
-**
-** Revision 1.8  2002/08/05 09:09:59  wilkens
-** Modfified the project's structure in order to be able to create a new
-** application which contains both wlmscpdb and ppsscpdb.
-**
-** Revision 1.7  2002/07/17 13:10:37  wilkens
-** Corrected some minor logical errors in the wlmscpdb sources and completely
-** updated the wlmscpfs so that it does not use the original wlistctn sources
-** any more but standard wlm sources which are now used by all three variants
-** of wlmscps.
-**
-** Revision 1.6  2002/06/10 11:25:06  wilkens
-** Made some corrections to keep gcc 2.95.3 quiet.
-**
-** Revision 1.5  2002/04/18 14:20:09  wilkens
-** Modified Makefiles. Updated latest changes again. These are the latest
-** sources. Added configure file.
-**
-** Revision 1.4  2002/01/08 19:10:04  joergr
-** Minor adaptations to keep the gcc compiler on Linux and Solaris happy.
-** Currently only the "file version" of the worklist SCP is supported on
-** Unix systems.
-**
-** Revision 1.3  2002/01/08 17:45:34  joergr
-** Reformatted source files (replaced Windows newlines by Unix ones, replaced
-** tabulator characters by spaces, etc.)
-**
-** Revision 1.2  2002/01/08 17:35:39  joergr
-** Reworked database support after trials at the hospital (modfied by MC/JR on
-** 2002-01-08).
-**
-**
-*/

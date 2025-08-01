@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2010, OFFIS e.V.
+ *  Copyright (C) 1997-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: A simple string class
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:50 $
- *  CVS/RCS Revision: $Revision: 1.30 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef OFSTRING_H
@@ -33,13 +26,14 @@
 
 #include "dcmtk/ofstd/oftypes.h"       /* for OFBool */
 #include "dcmtk/ofstd/ofcast.h"
+#include "dcmtk/ofstd/ofdefine.h"
 
 
 // makes sure that resulting C string is never NULL
 #define OFSTRING_GUARD(c_string) ((c_string != NULL) ? (c_string) : "")
 
 
-#ifdef HAVE_STD_STRING
+#ifdef HAVE_STL_STRING
 /*
 ** Use the ANSI Standard string class
 */
@@ -49,18 +43,13 @@
 #define OFString std::string
 #define OFString_npos std::string::npos
 
-#else /* not HAVE_STD_STRING */
+#else /* not HAVE_STL_STRING */
 
 /*
 ** Declare our own string class
 */
 
-#define INCLUDE_CASSERT
-#define INCLUDE_CSTRING
-#define INCLUDE_CSTDLIB
-#define INCLUDE_LIBC
-#define INCLUDE_UNISTD
-#include "dcmtk/ofstd/ofstdinc.h"
+#include <cassert>
 
 #include "dcmtk/ofstd/ofstream.h"
 #include "dcmtk/ofstd/oftypes.h"
@@ -83,7 +72,7 @@ static const size_t OFString_npos = (OFstatic_cast(size_t, -1));
 /** a simple string class that implements a subset of std::string.
  *  It does not implement iterators or traits and is not optimized for speed.
  */
-class OFString
+class DCMTK_OFSTD_EXPORT OFString
 {
 public:
     /*
@@ -226,6 +215,13 @@ public:
      *  @return reference to this object
      */
     OFString& assign(const char* s, size_t n);
+
+    /** constructs a temporary string from the input and assigns it to the current string.
+     *  @param s pointer to an array of char. Must not be NULL.
+     *  @param e pointer to the first element of the array that should not be included.
+     *  @return reference to this object
+     */
+    OFString& assign(const char* s, const char* e);
 
     /** constructs a temporary string from the input and assigns it to the current string.
      *  @param s pointer to a zero-terminated C string. Must not be NULL.
@@ -488,8 +484,8 @@ public:
      */
     OFString substr(size_t pos = 0, size_t n = OFString_npos) const;
 
-    /** swaps the contents of the two strings. The time
-     *  complexity of this function is linear.
+    /** swaps the contents of the two strings. The time complexity of this
+     *  function is constant.
      *  @param s string to swap with
      */
     void swap(OFString& s);
@@ -848,7 +844,7 @@ private:
  *  @param s string to print
  *  @return reference to stream
  */
-STD_NAMESPACE ostream& operator<< (STD_NAMESPACE ostream& o, const OFString& s);
+DCMTK_OFSTD_EXPORT STD_NAMESPACE ostream& operator<< (STD_NAMESPACE ostream& o, const OFString& s);
 
 /** reads a string of characters from input stream i into s. Any
  *  whitespace is treated as a string terminator.
@@ -856,357 +852,253 @@ STD_NAMESPACE ostream& operator<< (STD_NAMESPACE ostream& o, const OFString& s);
  *  @param s string to print
  *  @return reference to stream
  */
-STD_NAMESPACE istream& operator>> (STD_NAMESPACE istream& i, OFString& s);
+DCMTK_OFSTD_EXPORT STD_NAMESPACE istream& operator>> (STD_NAMESPACE istream& i, OFString& s);
 
 /** appends the string rhs to lhs.
  *  @param lhs left-hand side string
  *  @param rhs right-hand side string
  *  @return concatenated string, by value
  */
-OFString operator+ (const OFString& lhs, const OFString& rhs);
+DCMTK_OFSTD_EXPORT OFString operator+ (const OFString& lhs, const OFString& rhs);
 
 /** appends the string rhs to lhs.
  *  @param lhs left-hand side string, pointer to a zero-terminated C string. Must not be NULL.
  *  @param rhs right-hand side string
  *  @return concatenated string, by value
  */
-OFString operator+ (const char* lhs, const OFString& rhs);
+DCMTK_OFSTD_EXPORT OFString operator+ (const char* lhs, const OFString& rhs);
 
 /** appends the string rhs to lhs.
  *  @param lhs left-hand side string, single character
  *  @param rhs right-hand side string
  *  @return concatenated string, by value
  */
-OFString operator+ (char lhs, const OFString& rhs);
+DCMTK_OFSTD_EXPORT OFString operator+ (char lhs, const OFString& rhs);
 
 /** appends the string rhs to lhs.
  *  @param lhs left-hand side string
  *  @param rhs right-hand side string, pointer to a zero-terminated C string. Must not be NULL.
  *  @return concatenated string, by value
  */
-OFString operator+ (const OFString& lhs, const char* rhs);
+DCMTK_OFSTD_EXPORT OFString operator+ (const OFString& lhs, const char* rhs);
 
 /** appends the string rhs to lhs.
  *  @param lhs left-hand side string
  *  @param rhs right-hand side string, single character
  *  @return concatenated string, by value
  */
-OFString operator+ (const OFString& lhs, char rhs);
+DCMTK_OFSTD_EXPORT OFString operator+ (const OFString& lhs, char rhs);
 
 /** returns true if lhs.compare(rhs) is zero, otherwise false.
  *  @param lhs left-hand side string
  *  @param rhs right-hand side string
  *  @return true if strings are equal, false otherwise
  */
-OFBool operator== (const OFString& lhs, const OFString& rhs);
+DCMTK_OFSTD_EXPORT OFBool operator== (const OFString& lhs, const OFString& rhs);
 
 /** returns true if lhs.compare(rhs) is zero, otherwise false.
  *  @param lhs left-hand side string, pointer to a zero-terminated C string. Must not be NULL.
  *  @param rhs right-hand side string
  *  @return true if strings are equal, false otherwise
  */
-OFBool operator== (const char* lhs, const OFString& rhs);
+DCMTK_OFSTD_EXPORT OFBool operator== (const char* lhs, const OFString& rhs);
 
 /** returns true if lhs.compare(rhs) is zero, otherwise false.
  *  @param lhs left-hand side string, single character
  *  @param rhs right-hand side string
  *  @return true if strings are equal, false otherwise
  */
-OFBool operator== (char lhs, const OFString& rhs);
+DCMTK_OFSTD_EXPORT OFBool operator== (char lhs, const OFString& rhs);
 
 /** returns true if lhs.compare(rhs) is zero, otherwise false.
  *  @param lhs left-hand side string
  *  @param rhs right-hand side string, pointer to a zero-terminated C string. Must not be NULL.
  *  @return true if strings are equal, false otherwise
  */
-OFBool operator== (const OFString& lhs, const char* rhs);
+DCMTK_OFSTD_EXPORT OFBool operator== (const OFString& lhs, const char* rhs);
 
 /** returns true if lhs.compare(rhs) is zero, otherwise false.
  *  @param lhs left-hand side string
  *  @param rhs right-hand side string, single character
  *  @return true if strings are equal, false otherwise
  */
-OFBool operator== (const OFString& lhs, char rhs);
+DCMTK_OFSTD_EXPORT OFBool operator== (const OFString& lhs, char rhs);
 
 /** returns true if lhs.compare(rhs) < 0, otherwise false.
  *  @param lhs left-hand side string
  *  @param rhs right-hand side string
  *  @return true if lhs < rhs, false otherwise
  */
-OFBool operator< (const OFString& lhs, const OFString& rhs);
+DCMTK_OFSTD_EXPORT OFBool operator< (const OFString& lhs, const OFString& rhs);
 
 /** returns true if lhs.compare(rhs) < 0, otherwise false.
  *  @param lhs left-hand side string, pointer to a zero-terminated C string. Must not be NULL.
  *  @param rhs right-hand side string
  *  @return true if lhs < rhs, false otherwise
  */
-OFBool operator< (const char* lhs, const OFString& rhs);
+DCMTK_OFSTD_EXPORT OFBool operator< (const char* lhs, const OFString& rhs);
 
 /** returns true if lhs.compare(rhs) < 0, otherwise false.
  *  @param lhs left-hand side string, single character
  *  @param rhs right-hand side string
  *  @return true if lhs < rhs, false otherwise
  */
-OFBool operator< (char lhs, const OFString& rhs);
+DCMTK_OFSTD_EXPORT OFBool operator< (char lhs, const OFString& rhs);
 
 /** returns true if lhs.compare(rhs) < 0, otherwise false.
  *  @param lhs left-hand side string
  *  @param rhs right-hand side string, pointer to a zero-terminated C string. Must not be NULL.
  *  @return true if lhs < rhs, false otherwise
  */
-OFBool operator< (const OFString& lhs, const char* rhs);
+DCMTK_OFSTD_EXPORT OFBool operator< (const OFString& lhs, const char* rhs);
 
 /** returns true if lhs.compare(rhs) < 0, otherwise false.
  *  @param lhs left-hand side string
  *  @param rhs right-hand side string, single character
  *  @return true if lhs < rhs, false otherwise
  */
-OFBool operator< (const OFString& lhs, char rhs);
+DCMTK_OFSTD_EXPORT OFBool operator< (const OFString& lhs, char rhs);
 
 /** returns !(rhs < lhs)
  *  @param lhs left-hand side string
  *  @param rhs right-hand side string
  *  @return true if lhs <= rhs, false otherwise
  */
-OFBool operator<= (const OFString& lhs, const OFString& rhs);
+DCMTK_OFSTD_EXPORT OFBool operator<= (const OFString& lhs, const OFString& rhs);
 
 /** returns !(rhs < lhs)
  *  @param lhs left-hand side string, pointer to a zero-terminated C string. Must not be NULL.
  *  @param rhs right-hand side string
  *  @return true if lhs <= rhs, false otherwise
  */
-OFBool operator<= (const char* lhs, const OFString& rhs);
+DCMTK_OFSTD_EXPORT OFBool operator<= (const char* lhs, const OFString& rhs);
 
 /** returns !(rhs < lhs)
  *  @param lhs left-hand side string, single character
  *  @param rhs right-hand side string
  *  @return true if lhs <= rhs, false otherwise
  */
-OFBool operator<= (char lhs, const OFString& rhs);
+DCMTK_OFSTD_EXPORT OFBool operator<= (char lhs, const OFString& rhs);
 
 /** returns !(rhs < lhs)
  *  @param lhs left-hand side string
  *  @param rhs right-hand side string, pointer to a zero-terminated C string. Must not be NULL.
  *  @return true if lhs <= rhs, false otherwise
  */
-OFBool operator<= (const OFString& lhs, const char* rhs);
+DCMTK_OFSTD_EXPORT OFBool operator<= (const OFString& lhs, const char* rhs);
 
 /** returns !(rhs < lhs)
  *  @param lhs left-hand side string
  *  @param rhs right-hand side string, single character
  *  @return true if lhs <= rhs, false otherwise
  */
-OFBool operator<= (const OFString& lhs, char rhs);
+DCMTK_OFSTD_EXPORT OFBool operator<= (const OFString& lhs, char rhs);
 
 /** returns !(lhs == rhs)
  *  @param lhs left-hand side string
  *  @param rhs right-hand side string
  *  @return true if lhs != rhs, false otherwise
  */
-OFBool operator!= (const OFString& lhs, const OFString& rhs);
+DCMTK_OFSTD_EXPORT OFBool operator!= (const OFString& lhs, const OFString& rhs);
 
 /** returns !(lhs == rhs)
  *  @param lhs left-hand side string, pointer to a zero-terminated C string. Must not be NULL.
  *  @param rhs right-hand side string
  *  @return true if lhs != rhs, false otherwise
  */
-OFBool operator!= (const char* lhs, const OFString& rhs);
+DCMTK_OFSTD_EXPORT OFBool operator!= (const char* lhs, const OFString& rhs);
 
 /** returns !(lhs == rhs)
  *  @param lhs left-hand side string, single character
  *  @param rhs right-hand side string
  *  @return true if lhs != rhs, false otherwise
  */
-OFBool operator!= (char lhs, const OFString& rhs);
+DCMTK_OFSTD_EXPORT OFBool operator!= (char lhs, const OFString& rhs);
 
 /** returns !(lhs == rhs)
  *  @param lhs left-hand side string
  *  @param rhs right-hand side string, pointer to a zero-terminated C string. Must not be NULL.
  *  @return true if lhs != rhs, false otherwise
  */
-OFBool operator!= (const OFString& lhs, const char* rhs);
+DCMTK_OFSTD_EXPORT OFBool operator!= (const OFString& lhs, const char* rhs);
 
 /** returns !(lhs == rhs)
  *  @param lhs left-hand side string
  *  @param rhs right-hand side string, single character
  *  @return true if lhs != rhs, false otherwise
  */
-OFBool operator!= (const OFString& lhs, char rhs);
+DCMTK_OFSTD_EXPORT OFBool operator!= (const OFString& lhs, char rhs);
 
 /** returns (rhs < lhs)
  *  @param lhs left-hand side string
  *  @param rhs right-hand side string
  *  @return true if lhs > rhs, false otherwise
  */
-OFBool operator> (const OFString& lhs, const OFString& rhs);
+DCMTK_OFSTD_EXPORT OFBool operator> (const OFString& lhs, const OFString& rhs);
 
 /** returns (rhs < lhs)
  *  @param lhs left-hand side string, pointer to a zero-terminated C string. Must not be NULL.
  *  @param rhs right-hand side string
  *  @return true if lhs > rhs, false otherwise
  */
-OFBool operator> (const char* lhs, const OFString& rhs);
+DCMTK_OFSTD_EXPORT OFBool operator> (const char* lhs, const OFString& rhs);
 
 /** returns (rhs < lhs)
  *  @param lhs left-hand side string, single character
  *  @param rhs right-hand side string
  *  @return true if lhs > rhs, false otherwise
  */
-OFBool operator> (char lhs, const OFString& rhs);
+DCMTK_OFSTD_EXPORT OFBool operator> (char lhs, const OFString& rhs);
 
 /** returns (rhs < lhs)
  *  @param lhs left-hand side string
  *  @param rhs right-hand side string, pointer to a zero-terminated C string. Must not be NULL.
  *  @return true if lhs > rhs, false otherwise
  */
-OFBool operator> (const OFString& lhs, const char* rhs);
+DCMTK_OFSTD_EXPORT OFBool operator> (const OFString& lhs, const char* rhs);
 
 /** returns (rhs < lhs)
  *  @param lhs left-hand side string
  *  @param rhs right-hand side string, single character
  *  @return true if lhs > rhs, false otherwise
  */
-OFBool operator> (const OFString& lhs, char rhs);
+DCMTK_OFSTD_EXPORT OFBool operator> (const OFString& lhs, char rhs);
 
 /** returns !(lhs < rhs)
  *  @param lhs left-hand side string
  *  @param rhs right-hand side string
  *  @return true if lhs >= rhs, false otherwise
  */
-OFBool operator>= (const OFString& lhs, const OFString& rhs);
+DCMTK_OFSTD_EXPORT OFBool operator>= (const OFString& lhs, const OFString& rhs);
 
 /** returns !(lhs < rhs)
  *  @param lhs left-hand side string, pointer to a zero-terminated C string. Must not be NULL.
  *  @param rhs right-hand side string
  *  @return true if lhs >= rhs, false otherwise
  */
-OFBool operator>= (const char* lhs, const OFString& rhs);
+DCMTK_OFSTD_EXPORT OFBool operator>= (const char* lhs, const OFString& rhs);
 
 /** returns !(lhs < rhs)
  *  @param lhs left-hand side string, single character
  *  @param rhs right-hand side string
  *  @return true if lhs >= rhs, false otherwise
  */
-OFBool operator>= (char lhs, const OFString& rhs);
+DCMTK_OFSTD_EXPORT OFBool operator>= (char lhs, const OFString& rhs);
 
 /** returns !(lhs < rhs)
  *  @param lhs left-hand side string
  *  @param rhs right-hand side string, pointer to a zero-terminated C string. Must not be NULL.
  *  @return true if lhs >= rhs, false otherwise
  */
-OFBool operator>= (const OFString& lhs, const char* rhs);
+DCMTK_OFSTD_EXPORT OFBool operator>= (const OFString& lhs, const char* rhs);
 
 /** returns !(lhs < rhs)
  *  @param lhs left-hand side string
  *  @param rhs right-hand side string, single character
  *  @return true if lhs >= rhs, false otherwise
  */
-OFBool operator>= (const OFString& lhs, char rhs);
+DCMTK_OFSTD_EXPORT OFBool operator>= (const OFString& lhs, char rhs);
 
-#endif /* HAVE_STD_STRING */
+#endif /* HAVE_STL_STRING */
 
 #endif /* OFSTRING_H */
-
-
-/*
-** CVS/RCS Log:
-** $Log: ofstring.h,v $
-** Revision 1.30  2010-10-14 13:15:50  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.29  2010-08-19 12:07:55  uli
-** Made OFString follow the C++ standard for std::string::assign().
-**
-** Revision 1.28  2010-07-26 07:31:17  joergr
-** Fixed typo (and revised documentation on the OFSTRING_GUARD macro).
-**
-** Revision 1.27  2010-07-21 14:25:10  joergr
-** Introduced new guard macro that makes sure that a C string is never NULL.
-** Useful when passing a C string to a OFString constructor or an output stream.
-**
-** Revision 1.26  2010-04-26 12:22:30  uli
-** Fixed a some minor doxygen warnings.
-**
-** Revision 1.25  2009-09-28 14:07:34  joergr
-** Introduced new member variable that stores the current length of the string.
-** This yields in a significant performance improvement when compiled in debug
-** mode.
-**
-** Revision 1.24  2009-08-19 10:42:42  joergr
-** Added iterator declarations and required methods.
-**
-** Revision 1.23  2009-08-07 14:31:08  joergr
-** Fixed incorrect implementation of find_first_not_of() and find_last_not_of().
-**
-** Revision 1.22  2007/02/20 13:12:59  joergr
-** Fixed wrong comment in compare() method.
-**
-** Revision 1.21  2006/08/14 16:42:26  meichel
-** Updated all code in module ofstd to correctly compile if the standard
-**   namespace has not included into the global one with a "using" directive.
-**
-** Revision 1.20  2005/12/08 16:06:07  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.19  2004/08/03 11:45:42  meichel
-** Headers libc.h and unistd.h are now included via ofstdinc.h
-**
-** Revision 1.18  2004/01/16 10:30:12  joergr
-** Removed acknowledgements with e-mail addresses from CVS log.
-**
-** Revision 1.17  2003/08/07 11:44:55  joergr
-** Slightly modified header comments to conform to doxygen syntax.
-**
-** Revision 1.16  2003/07/09 13:57:43  meichel
-** Adapted type casts to new-style typecast operators defined in ofcast.h
-**
-** Revision 1.15  2003/07/04 13:31:51  meichel
-** Fixed issues with compiling with HAVE_STD_STRING
-**
-** Revision 1.14  2003/06/12 13:13:51  joergr
-** Fixed inconsistent API documentation reported by Doxygen.
-**
-** Revision 1.13  2002/11/27 11:23:06  meichel
-** Adapted module ofstd to use of new header file ofstdinc.h
-**
-** Revision 1.12  2002/04/16 13:36:03  joergr
-** Added configurable support for C++ ANSI standard includes (e.g. streams).
-**
-** Revision 1.11  2001/12/04 16:48:16  meichel
-** Completed doc++ documentation, fixed bug in OFString::copy.
-**
-** Revision 1.10  2001/11/02 13:18:53  meichel
-** Removed character sequences that could be interpreted as ISO C++ trigraphs
-**
-** Revision 1.9  2001/06/01 15:51:35  meichel
-** Updated copyright header
-**
-** Revision 1.8  2000/03/08 16:36:02  meichel
-** Updated copyright header.
-**
-** Revision 1.7  2000/02/23 15:13:44  meichel
-** Corrected macro for Borland C++ Builder 4 workaround.
-**
-** Revision 1.6  2000/02/01 10:09:37  meichel
-** Avoiding to include <stdlib.h> as extern "C" on Borland C++ Builder 4,
-**   workaround for bug in compiler header files.
-**
-** Revision 1.5  1998/11/27 12:42:52  joergr
-** Added copyright message to source files and changed CVS header.
-**
-** Revision 1.4  1997/09/01 10:00:12  hewett
-** Added absent $ terminator to RCS/CVS Revision keyword in header.
-**
-** Revision 1.3  1997/07/14 13:37:31  meichel
-** Simplified OFString code to allow compilation with Sun CC 2.0.1
-**
-** Revision 1.2  1997/07/07 14:05:24  hewett
-** Renamed the constant OFnpos to OFString_npos to look more like
-** the real ANSI constant string::npos.
-**
-** Revision 1.1  1997/07/07 11:52:18  meichel
-** Added string class OFString to ofstd library.
-** This class implements a subset of the ANSI C++ "string" class.
-**
-**
-*/

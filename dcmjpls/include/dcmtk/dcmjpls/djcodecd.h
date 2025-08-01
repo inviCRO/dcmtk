@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2007-2010, OFFIS e.V.
+ *  Copyright (C) 2007-2020, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: codec classes for JPEG-LS decoders.
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:19 $
- *  CVS/RCS Revision: $Revision: 1.6 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCMJPLS_DJCODECD_H
@@ -32,6 +25,7 @@
 #include "dcmtk/config/osconfig.h"
 #include "dcmtk/dcmdata/dccodec.h"  /* for class DcmCodec */
 #include "dcmtk/ofstd/ofstring.h"
+#include "dcmtk/dcmjpls/dldefine.h"
 
 /* forward declaration */
 class DJLSCodecParameter;
@@ -42,7 +36,7 @@ class DJLSCodecParameter;
  *  This class only supports decompression, it neither implements
  *  encoding nor transcoding.
  */
-class DJLSDecoderBase: public DcmCodec
+class DCMTK_DCMJPLS_EXPORT DJLSDecoderBase: public DcmCodec
 {
 public:
 
@@ -60,6 +54,10 @@ public:
    *  @param cp codec parameters for this codec
    *  @param objStack stack pointing to the location of the pixel data
    *    element in the current dataset.
+   *  @param removeOldRep boolean flag that should be set to false before this method call
+   *    and will be set to true if the codec modifies the DICOM dataset such
+   *    that the pixel data of the original representation may not be usable
+   *    anymore.
    *  @return EC_Normal if successful, an error code otherwise.
    */
   virtual OFCondition decode(
@@ -67,7 +65,8 @@ public:
     DcmPixelSequence * pixSeq,
     DcmPolymorphOBOW& uncompressedPixelData,
     const DcmCodecParameter * cp,
-    const DcmStack& objStack) const;
+    const DcmStack & objStack,
+    OFBool& removeOldRep) const;
 
   /** decompresses a single frame from the given pixel sequence and
    *  stores the result in the given buffer.
@@ -117,6 +116,10 @@ public:
    *  @param cp codec parameters for this codec
    *  @param objStack stack pointing to the location of the pixel data
    *    element in the current dataset.
+   *  @param removeOldRep boolean flag that should be set to false before this method call
+   *    and will be set to true if the codec modifies the DICOM dataset such
+   *    that the pixel data of the original representation may not be usable
+   *    anymore.
    *  @return EC_Normal if successful, an error code otherwise.
    */
   virtual OFCondition encode(
@@ -125,7 +128,8 @@ public:
     const DcmRepresentationParameter * toRepParam,
     DcmPixelSequence * & pixSeq,
     const DcmCodecParameter *cp,
-    DcmStack & objStack) const;
+    DcmStack & objStack,
+    OFBool& removeOldRep) const;
 
   /** transcodes (re-compresses) the given compressed DICOM image and stores
    *  the result in the given toPixSeq element.
@@ -139,6 +143,10 @@ public:
    *  @param cp codec parameters for this codec
    *  @param objStack stack pointing to the location of the pixel data
    *    element in the current dataset.
+   *  @param removeOldRep boolean flag that should be set to false before this method call
+   *    and will be set to true if the codec modifies the DICOM dataset such
+   *    that the pixel data of the original representation may not be usable
+   *    anymore.
    *  @return EC_Normal if successful, an error code otherwise.
    */
   virtual OFCondition encode(
@@ -148,7 +156,8 @@ public:
     const DcmRepresentationParameter * toRepParam,
     DcmPixelSequence * & toPixSeq,
     const DcmCodecParameter * cp,
-    DcmStack & objStack) const;
+    DcmStack & objStack,
+    OFBool& removeOldRep) const;
 
   /** checks if this codec is able to convert from the
    *  given current transfer syntax to the given new
@@ -182,6 +191,12 @@ public:
     OFString &decompressedColorModel) const;
 
 private:
+
+  /** returns the transfer syntax that this particular codec
+   *  is able to Decode
+   *  @return supported transfer syntax
+   */
+  virtual E_TransferSyntax supportedTransferSyntax() const = 0;
 
   // static private helper methods
 
@@ -318,7 +333,7 @@ private:
 
 /** codec class for JPEG-LS lossless only TS decoding
  */
-class DJLSLosslessDecoder : public DJLSDecoderBase
+class DCMTK_DCMJPLS_EXPORT DJLSLosslessDecoder : public DJLSDecoderBase
 {
   /** returns the transfer syntax that this particular codec
    *  is able to Decode
@@ -329,7 +344,7 @@ class DJLSLosslessDecoder : public DJLSDecoderBase
 
 /** codec class for JPEG-LS lossy and lossless TS decoding
  */
-class DJLSNearLosslessDecoder : public DJLSDecoderBase
+class DCMTK_DCMJPLS_EXPORT DJLSNearLosslessDecoder : public DJLSDecoderBase
 {
   /** returns the transfer syntax that this particular codec
    *  is able to encode
@@ -339,49 +354,3 @@ class DJLSNearLosslessDecoder : public DJLSDecoderBase
 };
 
 #endif
-
-/*
- * CVS/RCS Log:
- * $Log: djcodecd.h,v $
- * Revision 1.6  2010-10-14 13:17:19  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.5  2010-10-12 12:32:22  uli
- * Avoid redundant findAndGet*() calls.
- *
- * Revision 1.4  2010-03-01 10:35:28  uli
- * Renamed include guards to avoid name clash with e.g. dcmjpeg.
- *
- * Revision 1.3  2009-11-17 16:57:14  joergr
- * Added new method that allows for determining the color model of the
- * decompressed image.
- *
- * Revision 1.2  2009-10-07 13:16:47  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.1  2009-07-29 14:46:46  meichel
- * Initial release of module dcmjpls, a JPEG-LS codec for DCMTK based on CharLS
- *
- * Revision 1.2  2008-05-29 10:54:05  meichel
- * Implemented new method DcmPixelData::getUncompressedFrame
- *   that permits frame-wise access to compressed and uncompressed
- *   objects without ever loading the complete object into main memory.
- *   For this new method to work with compressed images, all classes derived from
- *   DcmCodec need to implement a new method decodeFrame(). For now, only
- *   dummy implementations returning an error code have been defined.
- *
- * Revision 1.1  2007/06/15 14:35:45  meichel
- * Renamed CMake project and include directory from dcmjpgls to dcmjpls
- *
- * Revision 1.4  2007/06/15 10:39:15  meichel
- * Completed implementation of decoder, which now correctly processes all
- *   of the NEMA JPEG-LS sample images, including fragmented frames.
- *
- * Revision 1.3  2007/06/14 12:36:14  meichel
- * Further code clean-up. Updated doxygen comments.
- *
- * Revision 1.2  2007/06/13 16:41:07  meichel
- * Code clean-up and removal of dead code
- *
- *
- */

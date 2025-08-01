@@ -1,16 +1,35 @@
 /*!
 
-\page mod_dcmsr dcmsr: a structured report library and utility apps
+\page mod_dcmsr dcmsr: a structured reporting library and utility apps
 
 This module contains classes to read, write, create, modify, access, print and
-render DICOM Structured Reporting documents (formerly Supplement 23). The list
-of supported SOP classes is provided in DSRTypes::E_DocumentType.
+render DICOM Structured Reporting (SR) documents. The list of supported SOP
+classes is provided in DSRTypes::E_DocumentType.
 
 The main interface classes are:
 \li \b DSRDocument
 \li \b DSRDocumentTree
+\li \b DSRDocumentSubTree
+\li \b DSRDocumentTreeNode
 \li \b DSRContentItem
 \li \b DSRCodedEntryValue
+
+Here are some further classes that are useful when implementing SR templates:
+\li \b DSRBasicCodedEntry
+\li \b DSRContextGroup
+\li \b DSRRootTemplate
+\li \b DSRSubTemplate
+
+Currently, the following SR templates are implemented (see notes for details):
+\li \b TID300_Measurement
+\li \b TID1001_ObservationContext
+\li \b TID1204_LanguageOfContentItemAndDescendants
+\li \b TID1411_VolumetricROIMeasurements
+\li \b TID1419_ROIMeasurements_Measurement
+\li \b TID1500_MeasurementReport
+\li \b TID1501_MeasurementGroup
+\li \b TID1600_ImageLibrary
+\li \b TID4019_AlgorithmIdentification
 
 \section Tools
 
@@ -44,15 +63,18 @@ if (status.good())
 \endcode
 
 The following example shows how to create a DICOM Structured Report and save
-it to a file (see \ref src_mkreport "mkreport" source file for details):
+it to a file (further details can be found in the \ref src_mkreport "mkreport"
+source file):
 
 \code
 DSRDocument document;
 document.setPatientName("Doe^John");
 /* ... */
-document.getTree().addContentItem(DSRTypes::RT_isRoot, DSRTypes::VT_Container);
-document.getTree().getCurrentContentItem().setConceptName(DSRCodedEntryValue(/* some code */));
-document.getTree().addContentItem(DSRTypes::RT_hasObsContext, DSRTypes::VT_Code, DSRTypes::AM_belowCurrent);
+DSRDocumentTree &tree = document.getTree();
+tree.addContentItem(DSRTypes::RT_isRoot, DSRTypes::VT_Container);
+tree.getCurrentContentItem().setConceptName(DSRCodedEntryValue(/* some code */));
+tree.addChildContentItem(DSRTypes::RT_hasObsContext, DSRTypes::VT_Code, CODE_DCM_ObserverType);
+tree.getCurrentContentItem().setCodeValue(CODE_DCM_Person);
 /* ... */
 DcmFileFormat fileformat;
 OFCondition status = document.write(*fileformat.getDataset())
@@ -69,15 +91,16 @@ Alternatively, many properties of the document tree can be accessed and
 modified directly as the following example shows:
 
 \code
-DSRDocument document(DSRTypes::DT_KeyObjectDoc);
+DSRDocument document(DSRTypes::DT_KeyObjectSelectionDocument);
 /* ... */
-document.getTree().addContentItem(DSRTypes::RT_isRoot, DSRTypes::VT_Container);
-DSRCodedEntryValue *codePtr = document.getTree().getCurrentContentItem().getConceptNamePtr();
+DSRDocumentTree &tree = document.getTree();
+tree.addContentItem(DSRTypes::RT_isRoot, DSRTypes::VT_Container);
+DSRCodedEntryValue *codePtr = tree.getCurrentContentItem().getConceptNamePtr();
 if (codePtr != NULL)
   codePtr->setCode("113000", "DCM", "Of Interest");
 /* ... */
-document.getTree().addContentItem(DSRTypes::RT_contains, DSRTypes::VT_Image);
-DSRImageReferenceValue *imagePtr = document.getTree().getCurrentContentItem().getImageReferencePtr();
+tree.addContentItem(DSRTypes::RT_contains, DSRTypes::VT_Image);
+DSRImageReferenceValue *imagePtr = tree.getCurrentContentItem().getImageReferencePtr();
 if (imagePtr != NULL)
 {
   imagePtr->setValue(DSRImageReferenceValue(UID_UltrasoundMultiframeImageStorage, /* image UID */));
@@ -86,6 +109,65 @@ if (imagePtr != NULL)
   imagePtr->getFrameList().addItem(5);
 }
 /* ... */
+\endcode
+
+In addition, there are specific DSRDocumentTree::addContentItem() and
+DSRDocumentTree::addChildContentItem() methods that expect a pointer to a newly
+created DSRDocumentTreeNode instance.
+
+Iterating over a document tree and searching for content items that meet
+certain criteria can be achieved in various ways. Here are two of them:
+
+\code
+DSRDocument document;
+/* ... */
+DSRDocumentTree &tree = document.getTree();
+/* #1: search for content items with a certain concept name */
+if (tree.gotoNamedNode(CODE_DCM_ProcedureReported))
+{
+  do {
+    const DSRDocumentTreeNode *node = tree.getNode();
+    /* and check for expected value type */
+    if ((node != NULL) && (node->getValueType() == DSRTypes::VT_Code))
+    {
+      /* do something useful with the CODE content item */
+    }
+  } while (tree.gotoNextNamedNode(CODE_DCM_ProcedureReported, OFFalse /*searchIntoSub*/));
+}
+/* #2: search for content items using a more complex filter */
+DSRDocumentTreeNodeAndFilter filter;
+filter.addFilter(new DSRDocumentTreeNodeValueTypeFilter(DSRTypes::VT_Code));
+filter.addFilter(new DSRDocumentTreeNodeRelationshipTypeFilter(DSRTypes::RT_hasConceptMod));
+filter.addFilter(new DSRDocumentTreeNodeHasChildrenFilter());
+if (tree.gotoMatchingNode(filter))
+{
+  /* found first "has concept mod CODE" content item that has children */
+}
+\endcode
+
+The final example shows how to deal with SR templates, e.g. when creating a
+DICOM Structured Report that is based on TID 1500 (Measurement Report):
+
+\code
+TID1500_MeasurementReport report(CMR_CID7021::ImagingMeasurementReport);
+report.setLanguage(CID5000_Languages::English);
+report.getObservationContext().addPersonObserver("Doe^Jane", "Some Organization");
+/* ... */
+CMR_TID1411_in_TID1500 &volumetric = report.getVolumetricROIMeasurements();
+volumetric.setActivitySession("1");
+volumetric.setTrackingIdentifier("aorta reference region");
+/* ... */
+CMR_TID1419_in_TID1411_in_TID1500 &measurement = volumetric.getMeasurement();
+measurement.createNewMeasurement(CMR_CID7469::Volume, CMR_TID1419_in_TID1411_in_TID1500::MeasurementValue("15", CMR_CID7181::CubicMillimeter));
+measurement.setDerivation(CMR_CID7464::StandardDeviation);
+/* ... */
+DSRDocument document;
+document.setPatientName("Last Name^First Name");
+/* ... */
+if (document.setTreeFromRootTemplate(report).good())
+  document.print(cout, DSRTypes::PF_printTemplateIdentification);
+else
+  cerr << "Error: cannot set template content as document tree" << endl;
 \endcode
 
 */

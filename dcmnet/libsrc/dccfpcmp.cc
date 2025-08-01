@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2003-2010, OFFIS e.V.
+ *  Copyright (C) 2003-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -15,16 +15,9 @@
  *
  *  Author:  Marco Eichelberg
  *
- *  Purpose: 
+ *  Purpose:
  *    class DcmPresentationContextItem
  *    class DcmPresentationContextMap
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:28 $
- *  CVS/RCS Revision: $Revision: 1.5 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -51,6 +44,13 @@ DcmPresentationContextItem::~DcmPresentationContextItem()
 {
 }
 
+DcmPresentationContextItem& DcmPresentationContextItem::operator=(const DcmPresentationContextItem& arg)
+{
+  uid_ = arg.uid_;
+  xferSyntaxGroup_ = arg.xferSyntaxGroup_;
+  return *this;
+}
+
 /* ========================================================= */
 
 DcmPresentationContextMap::DcmPresentationContextMap()
@@ -60,21 +60,79 @@ DcmPresentationContextMap::DcmPresentationContextMap()
 
 DcmPresentationContextMap::~DcmPresentationContextMap()
 {
-  OFListIterator(DcmKeyValuePair<DcmPresentationContextList *> *) first = map_.begin();
-  OFListIterator(DcmKeyValuePair<DcmPresentationContextList *> *) last = map_.end();
+  clear();
+}
+
+DcmPresentationContextMap::DcmPresentationContextMap(const DcmPresentationContextMap& arg)
+{
+  /* Copy all map entries */
+  OFMap<OFString, DcmPresentationContextList *>::const_iterator first = arg.map_.begin();
+  OFMap<OFString, DcmPresentationContextList *>::const_iterator last = arg.map_.end();
   while (first != last)
   {
-    delete (*first)->value();
+    DcmPresentationContextList* copy = new DcmPresentationContextList( *(*first).second );
+    map_.insert( OFPair<const OFString, DcmPresentationContextList*>( (*first).first, copy ) );
     ++first;
-  }  
+  }
+}
+
+DcmPresentationContextMap& DcmPresentationContextMap::operator=(const DcmPresentationContextMap& arg)
+{
+  if (this != &arg )
+  {
+    /* Clear and copy all map entries */
+    this->clear();
+    OFMap<OFString, DcmPresentationContextList *>::const_iterator first = arg.map_.begin();
+    OFMap<OFString, DcmPresentationContextList *>::const_iterator last = arg.map_.end();
+    while (first != last)
+    {
+      DcmPresentationContextList* copy = new DcmPresentationContextList( *(*first).second );
+      map_.insert(OFPair<const OFString, DcmPresentationContextList*>( (*first).first, copy ) );
+      ++first;
+    }
+  }
+  return *this;
+}
+
+void DcmPresentationContextMap::clear()
+{
+  while (map_.size () != 0)
+  {
+    OFMap<OFString, DcmPresentationContextList *>::iterator first = map_.begin();
+    delete (*first).second;
+    map_.erase(first);
+  }
+}
+
+
+OFMap<OFString, DcmPresentationContextList*>::const_iterator DcmPresentationContextMap::begin()
+{
+  return map_.begin();
+}
+
+
+OFMap<OFString, DcmPresentationContextList*>::const_iterator DcmPresentationContextMap::end()
+{
+  return map_.end();
+}
+
+const DcmPresentationContextList* DcmPresentationContextMap::getPresentationContextList(const OFString& pcName)
+{
+  OFMap<OFString,DcmPresentationContextList*>::const_iterator it = map_.find(pcName);
+  if ( it == map_.end() )
+  {
+    return NULL;
+  }
+  else
+    return (*it).second;
 }
 
 OFCondition DcmPresentationContextMap::add(
-  const char *key,
-  const char *abstractSyntaxUID,
-  const char *transferSyntaxKey)
+  const OFString& key,
+  const OFString& abstractSyntaxUID,
+  const OFString& transferSyntaxKey)
 {
-  if ((!key)||(!abstractSyntaxUID)||(!transferSyntaxKey)) return EC_IllegalCall;
+  if ((key.empty())||(abstractSyntaxUID.empty())||(transferSyntaxKey.empty())) return EC_IllegalCall;
 
 
   // perform syntax check of UID
@@ -86,17 +144,22 @@ OFCondition DcmPresentationContextMap::add(
     return makeOFCondition(OFM_dcmnet, 1025, OF_error, s.c_str());
   }
 
+  DcmPresentationContextList* value = NULL;
   OFString skey(key);
-  DcmPresentationContextList * const *value = OFconst_cast(DcmPresentationContextList * const *, map_.lookup(skey));
-  if (value == NULL)
+  OFMap<OFString, DcmPresentationContextList*>::iterator it = map_.find(skey);
+
+  // create new value if not existing yet
+  if (it == map_.end())
   {
-    DcmPresentationContextList *newentry = new DcmPresentationContextList();
-    map_.add(skey, OFstatic_cast(DcmPresentationContextList *, newentry));
-    value = &newentry;
+    DcmPresentationContextList *newentry = new DcmPresentationContextList;
+    map_.insert(OFPair<OFString, DcmPresentationContextList*>(skey, newentry));
+    value = newentry;
   }
+  else // use existing value
+    value = ((*it).second);
 
   // make sure list does not get longer than 128 entries
-  if (((*value)->size()) > 127)
+  if (((value)->size()) > 127)
   {
     OFString s("presentation context list too long (> 128 entries): ");
     s += key;
@@ -104,25 +167,30 @@ OFCondition DcmPresentationContextMap::add(
   }
 
   // insert values into list.
-  (*value)->push_back(DcmPresentationContextItem(uid, OFString(transferSyntaxKey)));
-  return EC_Normal;  
+  (value)->push_back(DcmPresentationContextItem(uid, transferSyntaxKey));
+  return EC_Normal;
 }
 
 OFBool DcmPresentationContextMap::isKnownKey(const char *key) const
 {
   if (!key) return OFFalse;
-  if (map_.lookup(OFString(key))) return OFTrue;
+
+  if (map_.find(OFString(key)) != map_.end()) return OFTrue;
   return OFFalse;
 }
 
 OFBool DcmPresentationContextMap::isKnownAbstractSyntax(
-  const char*key, 
+  const char*key,
   const DcmUIDHandler& abstractSyntax) const
 {
   if (!key) return OFFalse;
 
   OFString skey(key);
-  DcmPresentationContextList * const *value = OFconst_cast(DcmPresentationContextList * const *, map_.lookup(skey));
+  DcmPresentationContextList * const *value = NULL;
+  OFMap<OFString, DcmPresentationContextList*>::const_iterator it = map_.find(OFString(skey));
+  if ( it != map_.end() )
+    value = & ((*it).second);
+
   if (value)
   {
     // check if abstract syntax is in list
@@ -132,7 +200,7 @@ OFBool DcmPresentationContextMap::isKnownAbstractSyntax(
     {
       if ((*first).matches(abstractSyntax)) return OFTrue;
       ++first;
-    }  
+    }
   }
 
   return OFFalse;
@@ -143,33 +211,9 @@ const DcmPresentationContextList *DcmPresentationContextMap::getPresentationCont
   const DcmPresentationContextList *result = NULL;
   if (key)
   {
-    DcmPresentationContextList * const *value = OFconst_cast(DcmPresentationContextList * const *, map_.lookup(OFString(key)));
-    if (value) result = *value;
+    OFMap<OFString, DcmPresentationContextList*>::const_iterator it = map_.find(OFString(key));
+    if (it != map_.end())
+      result = (*it).second;
   }
   return result;
 }
-
-
-/*
- * CVS/RCS Log
- * $Log: dccfpcmp.cc,v $
- * Revision 1.5  2010-10-14 13:14:28  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.4  2005/12/08 15:44:29  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.3  2004/05/06 16:36:30  joergr
- * Added typecasts to keep Sun CC 2.0.1 quiet.
- *
- * Revision 1.2  2004/05/05 12:57:58  meichel
- * Simplified template class DcmSimpleMap<T>, needed for Sun CC 2.0.1
- *
- * Revision 1.1  2003/06/10 14:30:15  meichel
- * Initial release of class DcmAssociationConfiguration and support
- *   classes. This class maintains a list of association negotiation
- *   profiles that can be addressed by symbolic keys. The profiles may
- *   be read from a configuration file.
- *
- *
- */

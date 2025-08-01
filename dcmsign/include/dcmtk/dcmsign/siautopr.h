@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2019, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,68 +18,66 @@
  *  Purpose:
  *    classes: SiAuthorizationProfile
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:24 $
- *  CVS/RCS Revision: $Revision: 1.6 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef SIAUTOPR_H
 #define SIAUTOPR_H
 
 #include "dcmtk/config/osconfig.h"
-#include "dcmtk/dcmsign/sibrsapr.h"   /* for SiBaseRSAProfile */
 
 #ifdef WITH_OPENSSL
 
+#include "dcmtk/dcmsign/sibrsapr.h"   /* for SiBaseRSAProfile */
+
 /** Authorization Digital Signature Profile
+ *  @remark this class is only available if DCMTK is compiled with
+ *  OpenSSL support enabled.
  */
-class SiAuthorizationProfile: public SiBaseRSAProfile
+class DCMTK_DCMSIGN_EXPORT SiAuthorizationProfile: public SiBaseRSAProfile
 {
 public:
 
   /// default constructor
-  SiAuthorizationProfile() { }
+  SiAuthorizationProfile();
 
   /// destructor
   virtual ~SiAuthorizationProfile() { }
 
   /** checks whether an attribute with the given tag is required to be signed
-   *  for the current security profile.
+   *  for the current security profile if the attribute is present in the dataset
    *  @param key tag key to be checked
    *  @return true if required, false otherwise.
    */
-  virtual OFBool attributeRequired(const DcmTagKey& key) const;
+  virtual OFBool attributeRequiredIfPresent(const DcmTagKey& key) const;
+
+  /** checks whether all attributes that are required unconditionally
+   *  to be signed in this profile are included in the given tagList.
+   *  @param taglist attribute tag list
+   *  @return true if requirements for profile are fulfilled, false otherwise.
+   */
+  virtual OFBool checkRequiredAttributeList(DcmAttributeTag& tagList) const;
+
+  /** some digital signature profiles specify conditions under which certain
+   *  attributes must be included into the signature.
+   *  This method allows the signature profile to inspect the dataset in order
+   *  to determine whether or not the conditions are met.
+   *  This method should be called before DcmSignature::createSignature() is executed.
+   *  @param item the dataset or item to which the signature will be added
+   *  @return status code
+   */
+  virtual OFCondition inspectSignatureDataset(DcmItem &item);
+
+  /** returns true if this signature profile only applies to main dataset level
+   *  @return OFTrue if this signature profile only applies to main dataset level, OFFalse otherwise
+   */
+  virtual OFBool mainDatasetRequired() const;
+
+private:
+
+  /// flag indicating whether or not the signature dataset contains the raw data module
+  OFBool containsRawData_;
 
 };
 
 #endif
 #endif
-
-/*
- *  $Log: siautopr.h,v $
- *  Revision 1.6  2010-10-14 13:17:24  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.5  2005-12-08 16:04:31  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.4  2003/06/04 14:21:03  meichel
- *  Simplified include structure to avoid preprocessor limitation
- *    (max 32 #if levels) on MSVC5 with STL.
- *
- *  Revision 1.3  2001/11/16 15:50:49  meichel
- *  Adapted digital signature code to final text of supplement 41.
- *
- *  Revision 1.2  2001/06/01 15:50:47  meichel
- *  Updated copyright header
- *
- *  Revision 1.1  2000/11/07 16:48:52  meichel
- *  Initial release of dcmsign module for DICOM Digital Signatures
- *
- *
- */
-

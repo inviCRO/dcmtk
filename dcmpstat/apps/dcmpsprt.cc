@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1999-2010, OFFIS e.V.
+ *  Copyright (C) 1999-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -21,24 +21,10 @@
  *    stored print and hardcopy grayscale images.
  *    Non-grayscale transformations in the presentation state are ignored.
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-11-04 13:56:50 $
- *  CVS/RCS Revision: $Revision: 1.46 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
-
-#define INCLUDE_CCTYPE
-#include "dcmtk/ofstd/ofstdinc.h"
-
-#ifdef HAVE_GUSI_H
-#include <GUSI.h>
-#endif
 
 #include "dcmtk/ofstd/ofstream.h"
 #include "dcmtk/dcmpstat/dviface.h"
@@ -62,21 +48,17 @@ static char rcsid[] = "$dcmtk: " OFFIS_CONSOLE_APPLICATION " v"
   OFFIS_DCMTK_VERSION " " OFFIS_DCMTK_RELEASEDATE " $";
 
 
-int addOverlay(const char *filename,
-               unsigned long xpos,
-               unsigned long ypos,
-               Uint16 *pixel,
-               unsigned long width,
-               unsigned long height,
-               unsigned int gray)
+static int addOverlay(const char *filename,
+                      unsigned long xpos,
+                      unsigned long ypos,
+                      Uint16 *pixel,
+                      unsigned long width,
+                      unsigned long height,
+                      unsigned int gray)
 {
     if ((filename != NULL) && (pixel != NULL))
     {
-#ifdef HAVE_IOS_NOCREATE
-        STD_NAMESPACE ifstream input(filename, STD_NAMESPACE ios::in | STD_NAMESPACE ios::nocreate);
-#else
-        STD_NAMESPACE ifstream input(filename);
-#endif
+        STD_NAMESPACE ifstream input(filename, OFopenmode_in_nocreate);
         if (input)
         {
             char c;
@@ -88,24 +70,26 @@ int addOverlay(const char *filename,
                 input >> ysize;
                 if ((xpos + xsize <= width) && (ypos + ysize <= height))
                 {
-                    unsigned int value;
                     Uint16 *p = pixel + (ypos * width) + xpos;
                     for (unsigned long ys = 0; ys < ysize; ys++)
                     {
                         for (unsigned long xs = 0; xs < xsize; xs++)
                         {
                             while (input.get(c) && !isdigit(OFstatic_cast(unsigned char, c)));  // skip non-numeric chars
-                            input.putback(c);
-                            input >> value;
-                            if (value)
-                                *p = gray;
+                            if (!isdigit(OFstatic_cast(unsigned char, c)))
+                            {
+                              OFLOG_ERROR(dcmpsprtLogger, "syntax error in PBM file '" << filename << "'");
+                              return 0;
+                            }
+                            if (c != '0')
+                                *p = OFstatic_cast(Uint16, gray);
                             p++;
                         }
                         p += (width - xsize);
                     }
                     return 1;
                 } else
-                    OFLOG_ERROR(dcmpsprtLogger, "invalid position for overlay PBM file '" << filename);
+                    OFLOG_ERROR(dcmpsprtLogger, "invalid position for overlay PBM file '" << filename << "'");
             } else
                 OFLOG_ERROR(dcmpsprtLogger, "overlay PBM file '" << filename << "' has no magic number P1");
         } else
@@ -160,8 +144,8 @@ int main(int argc, char *argv[])
     OFBool                    opt_annotationIllumination = OFTrue;
     const char *              opt_annotationString = NULL;
 
-    OFCmdUnsignedInt          opt_illumination = (OFCmdUnsignedInt)-1;
-    OFCmdUnsignedInt          opt_reflection = (OFCmdUnsignedInt)-1;
+    OFCmdUnsignedInt          opt_illumination = OFstatic_cast(OFCmdUnsignedInt, -1);
+    OFCmdUnsignedInt          opt_reflection = OFstatic_cast(OFCmdUnsignedInt, -1);
 
     OFConsoleApplication app(OFFIS_CONSOLE_APPLICATION , "Read DICOM images and presentation states and render print job", rcsid);
     OFCommandLine cmd;
@@ -282,7 +266,7 @@ int main(int argc, char *argv[])
 
     /* evaluate command line */
     prepareCmdLineArgs(argc, argv, OFFIS_CONSOLE_APPLICATION);
-    if (app.parseCommandLine(cmd, argc, argv, OFCommandLine::PF_ExpandWildcards))
+    if (app.parseCommandLine(cmd, argc, argv))
     {
       /* check exclusive options first */
       if (cmd.hasExclusiveOption())
@@ -460,7 +444,7 @@ int main(int argc, char *argv[])
     /* dump printer characteristics if requested */
     const char *currentPrinter = dvi.getCurrentPrinter();
 
-    if ((opt_img_request_size) && (!dvi.getTargetPrinterSupportsRequestedImageSize(opt_printerID)))
+    if ((opt_img_request_size) && (!dvi.getTargetPrinterSupportsRequestedImageSize(currentPrinter)))
       OFLOG_WARN(dcmpsprtLogger, "printer does not support requested image size");
 
     if (EC_Normal != dvi.getPrintHandler().setImageDisplayFormat(opt_columns, opt_rows))
@@ -490,9 +474,9 @@ int main(int argc, char *argv[])
       OFLOG_WARN(dcmpsprtLogger, "cannot set trim, ignoring.");
     if (EC_Normal != dvi.getPrintHandler().setRequestedDecimateCropBehaviour(opt_decimate))
       OFLOG_WARN(dcmpsprtLogger, "cannot set requested decimate/crop behaviour, ignoring.");
-    if ((opt_illumination != (OFCmdUnsignedInt)-1)&&(EC_Normal != dvi.getPrintHandler().setPrintIllumination((Uint16)opt_illumination)))
+    if ((opt_illumination != OFstatic_cast(OFCmdUnsignedInt, -1))&&(EC_Normal != dvi.getPrintHandler().setPrintIllumination(OFstatic_cast(Uint16, opt_illumination))))
       OFLOG_WARN(dcmpsprtLogger, "cannot set illumination to '" << opt_illumination << "', ignoring.");
-    if ((opt_reflection != (OFCmdUnsignedInt)-1)&&(EC_Normal != dvi.getPrintHandler().setPrintReflectedAmbientLight((Uint16)opt_reflection)))
+    if ((opt_reflection != OFstatic_cast(OFCmdUnsignedInt, -1))&&(EC_Normal != dvi.getPrintHandler().setPrintReflectedAmbientLight(OFstatic_cast(Uint16, opt_reflection))))
       OFLOG_WARN(dcmpsprtLogger, "cannot set reflected ambient light to '" << opt_reflection << "', ignoring.");
 
     if ((opt_copies > 0)&&(EC_Normal != dvi.setPrinterNumberOfCopies(opt_copies)))
@@ -660,7 +644,7 @@ int main(int argc, char *argv[])
       {
         // no need to do this manually if we are spooling - spoolPrintJob() will do this anyway.
         OFLOG_WARN(dcmpsprtLogger, "writing DICOM stored print object to database.");
-        if (EC_Normal != dvi.saveStoredPrint(dvi.getTargetPrinterSupportsRequestedImageSize(opt_printerID)))
+        if (EC_Normal != dvi.saveStoredPrint(dvi.getTargetPrinterSupportsRequestedImageSize(currentPrinter)))
         {
           OFLOG_ERROR(dcmpsprtLogger, "error during creation of DICOM stored print object");
         }
@@ -688,168 +672,3 @@ int main(int argc, char *argv[])
 
     return (status != EC_Normal);
 }
-
-
-/*
- * CVS/RCS Log:
- * $Log: dcmpsprt.cc,v $
- * Revision 1.46  2010-11-04 13:56:50  joergr
- * Changed mode of parameter dcmfile-in from multi-optional to multi-mandatory.
- * Use type cast macros (e.g. OFstatic_cast) where appropriate.
- *
- * Revision 1.45  2010-10-20 07:41:36  uli
- * Made sure isalpha() & friends are only called with valid arguments.
- *
- * Revision 1.44  2010-10-14 13:13:45  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.43  2009-11-24 14:12:56  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.42  2009-10-28 09:53:41  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.41  2009-06-04 09:55:51  joergr
- * Added note on --pstate that this option can be specified multiple times.
- * Added new flag that can be used to avoid wrong warning messages (in debug
- * mode) that an option has possibly never been checked.
- *
- * Revision 1.40  2009-04-21 14:10:54  joergr
- * Fixed minor inconsistencies in manpage / syntax usage.
- *
- * Revision 1.39  2008-09-25 16:30:24  joergr
- * Added support for printing the expanded command line arguments.
- * Always output the resource identifier of the command line tool in debug mode.
- *
- * Revision 1.38  2006/08/15 16:57:01  meichel
- * Updated the code in module dcmpstat to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.37  2006/07/27 14:40:06  joergr
- * Changed parameter "exclusive" of method addOption() from type OFBool into an
- * integer parameter "flags". Prepended prefix "PF_" to parseLine() flags.
- * Option "--help" is no longer an exclusive option by default.
- * Made naming conventions for command line parameters more consistent, e.g.
- * used "dcmfile-in", "dcmfile-out" and "bitmap-out".
- *
- * Revision 1.36  2005/12/08 15:46:09  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.35  2005/11/28 15:29:05  meichel
- * File dcdebug.h is not included by any other header file in the toolkit
- *   anymore, to minimize the risk of name clashes of macro debug().
- *
- * Revision 1.34  2004/02/04 15:44:38  joergr
- * Removed acknowledgements with e-mail addresses from CVS log.
- *
- * Revision 1.33  2003/12/01 16:54:44  meichel
- * Fixed handling of LIN OD LUT Shape
- *
- * Revision 1.32  2002/11/27 15:47:54  meichel
- * Adapted module dcmpstat to use of new header file ofstdinc.h
- *
- * Revision 1.31  2002/11/26 08:44:28  meichel
- * Replaced all includes for "zlib.h" with <zlib.h>
- *   to avoid inclusion of zlib.h in the makefile dependencies.
- *
- * Revision 1.30  2002/09/23 18:26:08  joergr
- * Added new command line option "--version" which prints the name and version
- * number of external libraries used (incl. preparation for future support of
- * 'config.guess' host identifiers).
- *
- * Revision 1.29  2002/04/16 14:01:27  joergr
- * Added configurable support for C++ ANSI standard includes (e.g. streams).
- *
- * Revision 1.28  2001/11/09 16:06:05  joergr
- * Renamed some of the getValue/getParam methods to avoid ambiguities reported
- * by certain compilers.
- *
- * Revision 1.27  2001/09/28 13:47:38  joergr
- * Added check whether ios::nocreate exists.
- *
- * Revision 1.26  2001/09/26 15:36:03  meichel
- * Adapted dcmpstat to class OFCondition
- *
- * Revision 1.25  2001/06/07 14:34:09  joergr
- * Removed comment.
- *
- * Revision 1.23  2001/06/01 15:50:09  meichel
- * Updated copyright header
- *
- * Revision 1.22  2000/06/19 16:29:05  meichel
- * Added options for session printing and LIN OD to print tools, fixed
- *   pixel aspect ratio related bug.
- *
- * Revision 1.21  2000/06/14 14:24:39  joergr
- * Added new command line option allowing to add a PBM file as an overlay to
- * the hardcopy grayscale image (very preliminary support, only "P1" files
- * without comments).
- *
- * Revision 1.20  2000/06/14 11:30:15  joergr
- * Added methods to access the attributes Polarity and Requested Image Size.
- *
- * Revision 1.19  2000/06/09 10:19:56  joergr
- * Added support for rendering inverse presentation LUT into print bitmaps.
- *
- * Revision 1.18  2000/05/30 14:01:59  joergr
- * Renamed GrayscaleHardcopy to HardcopyGrayscale (which is the correct term
- * according to the DICOM standard).
- *
- * Revision 1.17  2000/05/03 14:27:27  meichel
- * Updated dcmpstat apps for changes in dcmimgle.
- *
- * Revision 1.16  2000/03/08 16:28:42  meichel
- * Updated copyright header.
- *
- * Revision 1.15  2000/03/07 16:18:10  joergr
- * Removed type specifier 'const' to make Sun CC 2.0.1 happy.
- *
- * Revision 1.14  2000/03/06 18:21:46  joergr
- * Avoid empty statement in the body of if-statements (MSVC6 reports warnings).
- *
- * Revision 1.13  2000/03/03 14:13:27  meichel
- * Implemented library support for redirecting error messages into memory
- *   instead of printing them to stdout/stderr for GUI applications.
- *
- * Revision 1.12  2000/02/01 11:54:36  meichel
- * Avoiding to include <stdlib.h> as extern "C" on Borland C++ Builder 4,
- *   workaround for bug in compiler header files.
- *
- * Revision 1.11  1999/10/28 08:18:32  meichel
- * Added options for setting Max Density and Min Density from command line
- *
- * Revision 1.10  1999/10/19 14:45:27  meichel
- * added support for the Basic Annotation Box SOP Class
- *   as well as access methods for Max Density and Min Density.
- *
- * Revision 1.9  1999/10/07 17:21:42  meichel
- * Reworked management of Presentation LUTs in order to create tighter
- *   coupling between Softcopy and Print.
- *
- * Revision 1.8  1999/09/24 15:24:25  meichel
- * Added support for CP 173 (Presentation LUT clarifications)
- *
- * Revision 1.7  1999/09/23 17:37:09  meichel
- * Added support for Basic Film Session options to dcmpstat print code.
- *
- * Revision 1.6  1999/09/15 17:42:56  meichel
- * Implemented print job dispatcher code for dcmpstat, adapted dcmprtsv
- *   and dcmpsprt applications.
- *
- * Revision 1.5  1999/09/14 18:12:29  meichel
- * Removed unneeded debug output from dcmpsprt
- *
- * Revision 1.4  1999/09/13 15:18:45  meichel
- * Adapted dcmpsprt to print API enhancements
- *
- * Revision 1.3  1999/09/08 16:49:22  meichel
- * Added print API method declarations
- *
- * Revision 1.2  1999/09/01 16:14:11  meichel
- * Completed printer characteristics dump routine
- *
- * Revision 1.1  1999/08/31 16:54:40  meichel
- * Added new sample application that allows to create simple print jobs.
- *
- *
- */

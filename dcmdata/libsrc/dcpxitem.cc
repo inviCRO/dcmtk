@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,22 +17,10 @@
  *
  *  Purpose: Implementation of class DcmPixelItem
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-20 16:44:16 $
- *  CVS/RCS Revision: $Revision: 1.43 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
-
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CSTDIO
-#define INCLUDE_CSTRING
-#include "dcmtk/ofstd/ofstdinc.h"
 
 #include "dcmtk/ofstd/ofstream.h"
 #include "dcmtk/dcmdata/dcpxitem.h"
@@ -61,6 +49,13 @@ DcmPixelItem::DcmPixelItem(const DcmPixelItem &old)
 }
 
 
+DcmPixelItem &DcmPixelItem::operator=(const DcmPixelItem &obj)
+{
+  DcmOtherByteOtherWord::operator=(obj);
+  return *this;
+}
+
+
 OFCondition DcmPixelItem::copyFrom(const DcmObject &rhs)
 {
   if (this != &rhs)
@@ -74,6 +69,75 @@ OFCondition DcmPixelItem::copyFrom(const DcmObject &rhs)
 
 DcmPixelItem::~DcmPixelItem()
 {
+}
+
+
+// ********************************
+
+
+OFBool DcmPixelItem::isNested() const
+{
+    OFBool nested = OFFalse;
+    if (getParent() != NULL)
+    {
+        // check for surrounding structure of a pixel sequence
+        if ((getParent()->ident() == EVR_pixelSQ))
+            nested = OFTrue;
+    }
+    return nested;
+}
+
+
+DcmItem *DcmPixelItem::getParentItem()
+{
+    DcmItem *parentItem = NULL;
+    if (getParent() != NULL)
+    {
+        // make sure that the direct parent has the correct type
+        if (getParent()->ident() == EVR_pixelSQ)
+        {
+            DcmObject *parent = getParent()->getParent();
+            if (parent != NULL)
+            {
+                // make sure that it is really a class derived from DcmItem
+                switch (parent->ident())
+                {
+                    case EVR_metainfo:
+                    case EVR_dataset:
+                    case EVR_item:
+                    case EVR_dirRecord:
+                        parentItem = OFreinterpret_cast(DcmItem *, parent);
+                        break;
+                    default:
+                        DCMDATA_DEBUG("DcmPixelItem::getParentItem() Parent object has wrong class identifier: "
+                            << OFstatic_cast(int, parent->ident())
+                            << " (" << DcmVR(parent->ident()).getVRName() << ")");
+                        break;
+                }
+            }
+        } else {
+            DCMDATA_DEBUG("DcmPixelItem::getParentItem() Direct parent object is not a pixel sequence");
+        }
+    }
+    return parentItem;
+}
+
+
+// ********************************
+
+
+Uint32 DcmPixelItem::calcElementLength(const E_TransferSyntax xfer,
+                                       const E_EncodingType enctype)
+{
+    /* silence unused arguments warnings */
+    OFstatic_cast(void, xfer);
+    OFstatic_cast(void, enctype);
+    /* get length of the pixel data */
+    Uint32 valueLength = getLengthField();
+    /* make sure the value did not overflow, clamp it otherwise. */
+    if (OFStandard::check32BitAddOverflow(valueLength, 8))
+      return OFnumeric_limits<Uint32>::max();
+    return valueLength + 8;
 }
 
 
@@ -124,7 +188,7 @@ OFCondition DcmPixelItem::createOffsetTable(const DcmOffsetList &offsetList)
 {
     OFCondition result = EC_Normal;
 
-    unsigned long numEntries = offsetList.size();
+    size_t numEntries = offsetList.size();
     if (numEntries > 0)
     {
         Uint32 current = 0;
@@ -135,25 +199,35 @@ OFCondition DcmPixelItem::createOffsetTable(const DcmOffsetList &offsetList)
             OFListConstIterator(Uint32) first = offsetList.begin();
             OFListConstIterator(Uint32) last = offsetList.end();
             unsigned long idx = 0;
+            OFBool overflow = OFFalse;
             while ((first != last) && result.good())
             {
-                // check for odd offset values, should never happen at this point
-                if (current & 1)
+                // check for 32-bit unsigned integer overflow (during previous iteration) and report on this
+                if (overflow)
                 {
-                    DCMDATA_WARN("DcmPixelItem: odd frame size (" << current << ") found for frame #"
+                    DCMDATA_WARN("DcmPixelItem: offset value exceeds maximum (32-bit unsigned integer) for frame #"
+                        << (idx + 1) << ", cannot create offset table");
+                    result = EC_InvalidBasicOffsetTable;
+                }
+                // check for odd offset values, should never happen at this point (if list was filled by an encoder)
+                else if (current & 1)
+                {
+                    DCMDATA_WARN("DcmPixelItem: odd offset value (" << current << ") for frame #"
                         << (idx + 1) << ", cannot create offset table");
                     result = EC_InvalidBasicOffsetTable;
                 } else {
+                    // value "current" is proven to be valid
                     array[idx++] = current;
-                    current += *first;
+                    // check for 32-bit unsigned integer overflow (but report only during next iteration)
+                    overflow = !OFStandard::safeAdd(current, *first, current);
                     ++first;
                 }
             }
             if (result.good())
             {
-                result = swapIfNecessary(EBO_LittleEndian, gLocalByteOrder, array, numEntries * sizeof(Uint32), sizeof(Uint32));
+                result = swapIfNecessary(EBO_LittleEndian, gLocalByteOrder, array, OFstatic_cast(Uint32, numEntries * sizeof(Uint32)), sizeof(Uint32));
                 if (result.good())
-                    result = putUint8Array(OFreinterpret_cast(Uint8 *, array), numEntries * sizeof(Uint32));
+                    result = putUint8Array(OFreinterpret_cast(Uint8 *, array), OFstatic_cast(unsigned long, numEntries * sizeof(Uint32)));
             }
             delete[] array;
         } else
@@ -163,52 +237,59 @@ OFCondition DcmPixelItem::createOffsetTable(const DcmOffsetList &offsetList)
 }
 
 
-OFCondition DcmPixelItem::writeXML(STD_NAMESPACE ostream&out,
+OFCondition DcmPixelItem::writeXML(STD_NAMESPACE ostream &out,
                                    const size_t flags)
 {
-    /* XML start tag for "item" */
-    out << "<pixel-item";
-    /* value length in bytes = 0..max */
-    out << " len=\"" << getLengthField() << "\"";
-    /* value loaded = no (or absent)*/
-    if (!valueLoaded())
-        out << " loaded=\"no\"";
-    /* pixel item contains binary data */
-    if (!(flags & DCMTypes::XF_writeBinaryData))
-        out << " binary=\"hidden\"";
-    else if (flags & DCMTypes::XF_encodeBase64)
-        out << " binary=\"base64\"";
-    else
-        out << " binary=\"yes\"";
-    out << ">";
-    /* write element value (if loaded) */
-    if (valueLoaded() && (flags & DCMTypes::XF_writeBinaryData))
+    if (flags & DCMTypes::XF_useNativeModel)
     {
-        /* encode binary data as Base64 */
-        if (flags & DCMTypes::XF_encodeBase64)
+        /* in Native DICOM Model, there is no concept of a "pixel item" */
+        return makeOFCondition(OFM_dcmdata, EC_CODE_CannotConvertToXML, OF_error,
+            "Cannot convert Pixel Item to Native DICOM Model");
+    } else {
+        /* XML start tag for "item" */
+        out << "<pixel-item";
+        /* value length in bytes = 0..max */
+        out << " len=\"" << getLengthField() << "\"";
+        /* value loaded = no (or absent)*/
+        if (!valueLoaded())
+            out << " loaded=\"no\"";
+        /* pixel item contains binary data */
+        if (!(flags & DCMTypes::XF_writeBinaryData))
+            out << " binary=\"hidden\"";
+        else if (flags & DCMTypes::XF_encodeBase64)
+            out << " binary=\"base64\"";
+        else
+            out << " binary=\"yes\"";
+        out << ">";
+        /* write element value (if loaded) */
+        if (valueLoaded() && (flags & DCMTypes::XF_writeBinaryData))
         {
-            /* pixel items always contain 8 bit data, therefore, byte swapping not required */
-            OFStandard::encodeBase64(out, OFstatic_cast(Uint8 *, getValue()), OFstatic_cast(size_t, getLengthField()));
-        } else {
-            /* get and check 8 bit data */
-            Uint8 *byteValues = NULL;
-            if (getUint8Array(byteValues).good() && (byteValues != NULL))
+            /* encode binary data as Base64 */
+            if (flags & DCMTypes::XF_encodeBase64)
             {
-                const unsigned long count = getLengthField();
-                out << STD_NAMESPACE hex << STD_NAMESPACE setfill('0');
-                /* print byte values in hex mode */
-                out << STD_NAMESPACE setw(2) << OFstatic_cast(int, *(byteValues++));
-                for (unsigned long i = 1; i < count; i++)
-                    out << "\\" << STD_NAMESPACE setw(2) << OFstatic_cast(int, *(byteValues++));
-                /* reset i/o manipulators */
-                out << STD_NAMESPACE dec << STD_NAMESPACE setfill(' ');
+                /* pixel items always contain 8 bit data, therefore, byte swapping not required */
+                OFStandard::encodeBase64(out, OFstatic_cast(Uint8 *, getValue()), OFstatic_cast(size_t, getLengthField()));
+            } else {
+                /* get and check 8 bit data */
+                Uint8 *byteValues = NULL;
+                if (getUint8Array(byteValues).good() && (byteValues != NULL))
+                {
+                    const unsigned long count = getLengthField();
+                    out << STD_NAMESPACE hex << STD_NAMESPACE setfill('0');
+                    /* print byte values in hex mode */
+                    out << STD_NAMESPACE setw(2) << OFstatic_cast(int, *(byteValues++));
+                    for (unsigned long i = 1; i < count; i++)
+                        out << "\\" << STD_NAMESPACE setw(2) << OFstatic_cast(int, *(byteValues++));
+                    /* reset i/o manipulators */
+                    out << STD_NAMESPACE dec << STD_NAMESPACE setfill(' ');
+                }
             }
         }
+        /* XML end tag for "item" */
+        out << "</pixel-item>" << OFendl;
+        /* always report success */
+        return EC_Normal;
     }
-    /* XML end tag for "item" */
-    out << "</pixel-item>" << OFendl;
-    /* always report success */
-    return EC_Normal;
 }
 
 
@@ -250,7 +331,7 @@ OFCondition DcmPixelItem::writeSignatureFormat(
               OFBool accessPossible = OFFalse;
 
               /* check that we actually do have access to the element's value.
-               * If the element is unaccessable (which would mean that the value resides
+               * If the element is unaccessible (which would mean that the value resides
                * in file and access to the file fails), write an empty element with
                * zero length.
                */
@@ -373,170 +454,3 @@ OFCondition DcmPixelItem::writeSignatureFormat(
   /* return result value */
   return errorFlag;
 }
-
-
-/*
-** CVS/RCS Log:
-** $Log: dcpxitem.cc,v $
-** Revision 1.43  2010-10-20 16:44:16  joergr
-** Use type cast macros (e.g. OFstatic_cast) where appropriate.
-**
-** Revision 1.42  2010-10-14 13:14:08  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.41  2010-05-27 16:54:27  joergr
-** Added debug message with details on created basic offset table (if any).
-**
-** Revision 1.40  2009-11-13 13:11:21  joergr
-** Fixed minor issues in log output.
-**
-** Revision 1.39  2009-11-04 09:58:10  uli
-** Switched to logging mechanism provided by the "new" oflog module
-**
-** Revision 1.38  2009-09-15 15:02:43  joergr
-** Enhanced implementation of writeXML() by writing hex numbers directly to the
-** output stream instead of creating a temporary string first.
-**
-** Revision 1.37  2009-05-04 14:29:02  meichel
-** Fixed bug in DcmPixelItem::writeSignatureFormat() that caused pixel data
-**   to be removed from the dataset when a digital signature was generated
-**   for a compressed image.
-**
-** Revision 1.36  2009-02-04 17:57:19  joergr
-** Fixes various type mismatches reported by MSVC introduced with OFFile class.
-**
-** Revision 1.35  2009-02-04 10:18:57  joergr
-** Fixed issue with compressed frames of odd length (possibly wrong values in
-** basic offset table).
-**
-** Revision 1.34  2008-07-17 10:31:32  onken
-** Implemented copyFrom() method for complete DcmObject class hierarchy, which
-** permits setting an instance's value from an existing object. Implemented
-** assignment operator where necessary.
-**
-** Revision 1.33  2007-11-29 14:30:21  meichel
-** Write methods now handle large raw data elements (such as pixel data)
-**   without loading everything into memory. This allows very large images to
-**   be sent over a network connection, or to be copied without ever being
-**   fully in memory.
-**
-** Revision 1.32  2007/06/29 14:17:49  meichel
-** Code clean-up: Most member variables in module dcmdata are now private,
-**   not protected anymore.
-**
-** Revision 1.31  2007/06/26 16:24:23  joergr
-** Added new variant of encodeBase64() method that outputs directly to a stream
-** (avoids using a memory buffer for large binary data).
-**
-** Revision 1.30  2006/08/15 15:49:54  meichel
-** Updated all code in module dcmdata to correctly compile when
-**   all standard C++ classes remain in namespace std.
-**
-** Revision 1.29  2005/12/08 15:41:27  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.28  2005/11/24 12:50:59  meichel
-** Fixed bug in code that prepares a byte stream that is fed into the MAC
-**   algorithm when creating or verifying a digital signature. The previous
-**   implementation was non-conformant when signatures included compressed
-**   (encapsulated) pixel data because the item length was included in the byte
-**   stream, while it should not. The global variable dcmEnableOldSignatureFormat
-**   and a corresponding command line option in dcmsign allow to re-enable the old
-**   implementation.
-**
-** Revision 1.27  2004/02/04 16:42:42  joergr
-** Adapted type casts to new-style typecast operators defined in ofcast.h.
-** Removed acknowledgements with e-mail addresses from CVS log.
-**
-** Revision 1.26  2003/06/12 18:21:46  joergr
-** Modified code to use const_iterators where appropriate (required for STL).
-**
-** Revision 1.25  2002/12/06 13:16:59  joergr
-** Enhanced "print()" function by re-working the implementation and replacing
-** the boolean "showFullData" parameter by a more general integer flag.
-** Made source code formatting more consistent with other modules/files.
-**
-** Revision 1.24  2002/11/27 12:06:51  meichel
-** Adapted module dcmdata to use of new header file ofstdinc.h
-**
-** Revision 1.23  2002/08/27 16:55:55  meichel
-** Initial release of new DICOM I/O stream classes that add support for stream
-**   compression (deflated little endian explicit VR transfer syntax)
-**
-** Revision 1.22  2002/05/24 14:51:51  meichel
-** Moved helper methods that are useful for different compression techniques
-**   from module dcmjpeg to module dcmdata
-**
-** Revision 1.21  2002/05/14 08:21:52  joergr
-** Added support for Base64 (MIME) encoded binary data.
-**
-** Revision 1.20  2002/04/25 10:25:49  joergr
-** Added support for XML output of DICOM objects.
-**
-** Revision 1.19  2002/04/16 13:43:20  joergr
-** Added configurable support for C++ ANSI standard includes (e.g. streams).
-**
-** Revision 1.18  2001/11/16 15:55:04  meichel
-** Adapted digital signature code to final text of supplement 41.
-**
-** Revision 1.17  2001/09/25 17:19:53  meichel
-** Adapted dcmdata to class OFCondition
-**
-** Revision 1.16  2001/06/01 15:49:08  meichel
-** Updated copyright header
-**
-** Revision 1.15  2000/04/14 15:55:06  meichel
-** Dcmdata library code now consistently uses ofConsole for error output.
-**
-** Revision 1.14  2000/03/08 16:26:40  meichel
-** Updated copyright header.
-**
-** Revision 1.13  2000/03/03 14:05:35  meichel
-** Implemented library support for redirecting error messages into memory
-**   instead of printing them to stdout/stderr for GUI applications.
-**
-** Revision 1.12  2000/02/23 15:12:00  meichel
-** Corrected macro for Borland C++ Builder 4 workaround.
-**
-** Revision 1.11  2000/02/10 10:52:22  joergr
-** Added new feature to dcmdump (enhanced print method of dcmdata): write
-** pixel data/item value fields to raw files.
-**
-** Revision 1.10  2000/02/03 16:31:26  joergr
-** Fixed bug: encapsulated data (pixel items) have never been loaded using
-** method 'loadAllDataIntoMemory'. Therefore, encapsulated pixel data was
-** never printed with 'dcmdump'.
-** Corrected bug that caused wrong calculation of group length for sequence
-** of items (e.g. encapsulated pixel data).
-**
-** Revision 1.9  2000/02/01 10:12:09  meichel
-** Avoiding to include <stdlib.h> as extern "C" on Borland C++ Builder 4,
-**   workaround for bug in compiler header files.
-**
-** Revision 1.8  1999/03/31 09:25:37  meichel
-** Updated copyright header in module dcmdata
-**
-** Revision 1.7  1998/11/12 16:48:19  meichel
-** Implemented operator= for all classes derived from DcmObject.
-**
-** Revision 1.6  1997/07/07 07:52:29  andreas
-** - Enhanced (faster) byte swapping routine. swapIfNecessary moved from
-**   a method in DcmObject to a general function.
-**
-** Revision 1.5  1997/07/03 15:10:03  andreas
-** - removed debugging functions Bdebug() and Edebug() since
-**   they write a static array and are not very useful at all.
-**   Cdebug and Vdebug are merged since they have the same semantics.
-**   The debugging functions in dcmdata changed their interfaces
-**   (see dcmdata/include/dcdebug.h)
-**
-** Revision 1.4  1997/05/22 16:57:16  andreas
-** - Corrected errors for writing of pixel sequences for encapsulated
-**   transfer syntaxes.
-**
-** Revision 1.3  1996/01/05 13:27:41  andreas
-** - changed to support new streaming facilities
-** - unique read/write methods for file and block transfer
-** - more cleanups
-**
-*/

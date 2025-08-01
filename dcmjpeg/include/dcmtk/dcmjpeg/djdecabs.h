@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2010, OFFIS e.V.
+ *  Copyright (C) 1997-2011, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: abstract base class for decompression classes
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:17 $
- *  CVS/RCS Revision: $Revision: 1.4 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DJDECABS_H
@@ -39,7 +32,7 @@
  *  in which compressed data for one frame is fed block by block
  *  into the decompression routine, see description below.
  */
-class DJDecoder
+class DCMTK_DCMJPEG_EXPORT DJDecoder
 {
 public:
 
@@ -90,21 +83,3 @@ public:
 };
 
 #endif
-
-/*
- * CVS/RCS Log
- * $Log: djdecabs.h,v $
- * Revision 1.4  2010-10-14 13:17:17  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.3  2005-12-08 16:59:14  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.2  2005/11/30 14:12:27  onken
- * Added decode() parameter denoting whether input is signed or unsigned
- *
- * Revision 1.1  2001/11/13 15:56:18  meichel
- * Initial release of module dcmjpeg
- *
- *
- */

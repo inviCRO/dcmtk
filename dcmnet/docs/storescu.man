@@ -6,13 +6,13 @@
 \page storescu storescu: DICOM storage (C-STORE) SCU
 \endif
 
-\section synopsis SYNOPSIS
+\section storescu_synopsis SYNOPSIS
 
 \verbatim
 storescu [options] peer port dcmfile-in...
 \endverbatim
 
-\section description DESCRIPTION
+\section storescu_description DESCRIPTION
 
 The \b storescu application implements a Service Class User (SCU) for the
 Storage Service Class.  For each DICOM file on the command line it sends
@@ -20,7 +20,7 @@ a C-STORE message to a Storage Service Class Provider (SCP) and waits for a
 response.  The application can be used to transmit DICOM images and other
 DICOM composite objects.
 
-\section parameters PARAMETERS
+\section storescu_parameters PARAMETERS
 
 \verbatim
 peer        hostname of DICOM peer
@@ -30,9 +30,9 @@ port        tcp/ip port number of peer
 dcmfile-in  DICOM file or directory to be transmitted
 \endverbatim
 
-\section options OPTIONS
+\section storescu_options OPTIONS
 
-\subsection general_options general options
+\subsection storescu_general_options general options
 \verbatim
   -h    --help
           print this help text and exit
@@ -63,7 +63,7 @@ dcmfile-in  DICOM file or directory to be transmitted
           show presentation contexts in verbose mode
 \endverbatim
 
-\subsection input_options input options
+\subsection storescu_input_options input options
 \verbatim
 input file format:
 
@@ -91,9 +91,15 @@ input files:
 
   +r    --recurse
           recurse within specified directories
+
+  -rn   --no-rename
+          do not rename processed files (default)
+
+  +rn   --rename
+          append .done/.bad to processed files
 \endverbatim
 
-\subsection network_options network options
+\subsection storescu_network_options network options
 \verbatim
 application entity titles:
 
@@ -157,13 +163,42 @@ proposed transmission transfer syntaxes (not with --config-file):
   -xh   --propose-mpeg2-high
           propose MPEG2 Main Profile @ High Level TS only
 
+  -xn   --propose-mpeg4
+          propose MPEG4 AVC/H.264 High Profile / Level 4.1 TS only
+
+  -xl   --propose-mpeg4-bd
+          propose MPEG4 AVC/H.264 BD-compatible HP / Level 4.1 TS only
+
+  -x2   --propose-mpeg4-2-2d
+          propose MPEG4 AVC/H.264 HP / Level 4.2 TS for 2D Videos only
+
+  -x3   --propose-mpeg4-2-3d
+          propose MPEG4 AVC/H.264 HP / Level 4.2 TS for 3D Videos only
+
+  -xo   --propose-mpeg4-2-st
+          propose MPEG4 AVC/H.264 Stereo HP / Level 4.2 TS only
+
+  -x4   --propose-hevc
+          propose HEVC H.265 Main Profile / Level 5.1 TS only
+
+  -x5   --propose-hevc10
+          propose HEVC H.265 Main 10 Profile / Level 5.1 TS only
+
   -xr   --propose-rle
           propose RLE lossless TS
+          and all uncompressed transfer syntaxes
+
+  -xd   --propose-deflated
+          propose deflated explicit VR little endian TS
           and all uncompressed transfer syntaxes
 
   -R    --required
           propose only required presentation contexts
           (default: propose all supported)
+
+          # This will also work with storage SOP classes that are
+          # supported by DCMTK but are not in the list of SOP classes
+          # proposed by default.
 
   +C    --combine
           combine proposed transfer syntaxes
@@ -199,6 +234,9 @@ user identity negotiation:
         --saml  [f]ilename: string
           read SAML request from file f
 
+        --jwt  [f]ilename: string
+          read JWT data from file f
+
   -rsp  --pos-response
           expect positive response
 
@@ -206,6 +244,9 @@ other network options:
 
   -to   --timeout  [s]econds: integer (default: unlimited)
           timeout for connection requests
+
+  -ts   --socket-timeout  [s]econds: integer (default: 60)
+          timeout for network socket (0 for none)
 
   -ta   --acse-timeout  [s]econds: integer (default: 30)
           timeout for ACSE messages
@@ -248,7 +289,7 @@ other network options:
           (default: 25)
 \endverbatim
 
-\subsection tls_options transport layer security (TLS) options
+\subsection storescu_tls_options transport layer security (TLS) options
 \verbatim
 transport protocol stack:
 
@@ -282,19 +323,50 @@ key and certificate file format:
 
 certification authority:
 
-  +cf   --add-cert-file  [c]ertificate filename: string
+  +cf   --add-cert-file  [f]ilename: string
           add certificate file to list of certificates
 
-  +cd   --add-cert-dir  [c]ertificate directory: string
+  +cd   --add-cert-dir  [d]irectory: string
           add certificates in d to list of certificates
+
+  +crl  --add-crl-file  [f]ilename: string
+          add certificate revocation list file
+          (implies --enable-crl-vfy)
+
+  +crv  --enable-crl-vfy
+          enable leaf CRL verification
+
+  +cra  --enable-crl-all
+          enable full chain CRL verification
+
+security profile:
+
+  +py   --profile-bcp195-nd
+          Non-downgrading BCP 195 TLS Profile (default)
+
+  +px   --profile-bcp195
+          BCP 195 TLS Profile
+
+  +pz   --profile-bcp195-ex
+          Extended BCP 195 TLS Profile
+
+  +pb   --profile-basic
+          Basic TLS Secure Transport Connection Profile (retired)
+
+  +pa   --profile-aes
+          AES TLS Secure Transport Connection Profile (retired)
+
+  +pn   --profile-null
+          Authenticated unencrypted communication
+          (retired, was used in IHE ATNA)
 
 ciphersuite:
 
+  +cc   --list-ciphers
+          show list of supported TLS ciphersuites and exit
+
   +cs   --cipher  [c]iphersuite name: string
           add ciphersuite to list of negotiated suites
-
-  +dp   --dhparam  [f]ilename: string
-          read DH parameters for DH/DSS ciphersuites
 
 pseudo random generator:
 
@@ -312,16 +384,24 @@ peer authentication:
   -rc   --require-peer-cert
           verify peer certificate, fail if absent (default)
 
-  -vc   --verify-peer-cert
-          verify peer certificate if present
-
   -ic   --ignore-peer-cert
           don't verify peer certificate
 \endverbatim
 
-\section notes NOTES
+\section storescu_notes NOTES
 
-\subsection dicom_conformance DICOM Conformance
+\subsection storescu_scanning_directories Scanning Directories
+
+Adding directories as a parameter to the command line only makes sense if
+option \e --scan-directories is also given.  If the files in the provided
+directories should be selected according to a specific name pattern (e.g.
+using wildcard matching), option \e --scan-pattern has to be used.  Please
+note that this file pattern only applies to the files within the scanned
+directories, and, if any other patterns are specified on the command line
+outside the \e --scan-pattern option (e.g. in order to select further
+files), these do not apply to the specified directories.
+
+\subsection storescu_dicom_conformance DICOM Conformance
 
 The \b storescu application supports the following Storage SOP Classes as an
 SCU:
@@ -393,12 +473,12 @@ RTBrachyTreatmentRecordStorage                       1.2.840.10008.5.1.4.1.1.481
 RTTreatmentSummaryRecordStorage                      1.2.840.10008.5.1.4.1.1.481.7
 \endverbatim
 
-The default behaviour of \b storescu is to propose two presentation contexts
+The default behavior of \b storescu is to propose two presentation contexts
 for each supported SOP class (abstract syntax) - one with the preferred
 transfer syntax and one with all other uncompressed transfer syntaxes.  The
 default preferred transfer syntax is explicit VR with byte ordering
 corresponding to the local byte ordering of the machine on which \b storescu
-is running.  This behaviour can be changed with the \e --propose, \e --combine
+is running.  This behavior can be changed with the \e --propose, \e --combine
 and \e --required options, see above.  Depending on these options, the
 following transfer syntaxes are supported:
 
@@ -416,6 +496,13 @@ JPEG2000LosslessOnlyTransferSyntax                   1.2.840.10008.1.2.4.90
 JPEG2000TransferSyntax                               1.2.840.10008.1.2.4.91
 MPEG2MainProfileAtMainLevelTransferSyntax            1.2.840.10008.1.2.4.100
 MPEG2MainProfileAtHighLevelTransferSyntax            1.2.840.10008.1.2.4.101
+MPEG4HighProfileLevel4_1TransferSyntax               1.2.840.10008.1.2.4.102
+MPEG4BDcompatibleHighProfileLevel4_1TransferSyntax   1.2.840.10008.1.2.4.103
+MPEG4HighProfileLevel4_2_For2DVideoTransferSyntax    1.2.840.10008.1.2.4.104
+MPEG4HighProfileLevel4_2_For3DVideoTransferSyntax    1.2.840.10008.1.2.4.105
+MPEG4StereoHighProfileLevel4_2TransferSyntax         1.2.840.10008.1.2.4.106
+HEVCMainProfileLevel5_1TransferSyntax                1.2.840.10008.1.2.4.107
+HEVCMain10ProfileLevel5_1TransferSyntax              1.2.840.10008.1.2.4.108
 RLELosslessTransferSyntax                            1.2.840.10008.1.2.5
 \endverbatim
 
@@ -427,15 +514,15 @@ However, using an appropriate association negotiation profile (see below)
 the optional support for extended negotiation can be added to particular SOP
 classes.
 
-\subsection profiles Association Negotiation Profiles and Configuration Files
+\subsection storescu_profiles Association Negotiation Profiles and Configuration Files
 
 \b storescu supports a flexible mechanism for specifying the DICOM network
-association negotiation behaviour, based on so-called "association
+association negotiation behavior, based on so-called "association
 negotiation profiles" which may be read from a configuration file.
 The format and semantics of this configuration file are documented in
 \e asconfig.txt.
 
-\section logging LOGGING
+\section storescu_logging LOGGING
 
 The level of logging output of the various command line tools and underlying
 libraries can be specified by the user.  By default, only errors and warnings
@@ -452,9 +539,9 @@ rotation), to syslog (Unix) or the event log (Windows) option \e --log-config
 can be used.  This configuration file also allows for directing only certain
 messages to a particular output stream and for filtering certain messages
 based on the module or application where they are generated.  An example
-configuration file is provided in <em>\<etcdir\>/logger.cfg</em>).
+configuration file is provided in <em>\<etcdir\>/logger.cfg</em>.
 
-\section command_line COMMAND LINE
+\section storescu_command_line COMMAND LINE
 
 All command line tools use the following notation for parameters: square
 brackets enclose optional values (0-1), three trailing dots indicate that
@@ -463,7 +550,7 @@ multiple values are allowed (1-n), a combination of both means 0 to n values.
 Command line options are distinguished from parameters by a leading '+' or '-'
 sign, respectively.  Usually, order and position of command line options are
 arbitrary (i.e. they can appear anywhere).  However, if options are mutually
-exclusive the rightmost appearance is used.  This behaviour conforms to the
+exclusive the rightmost appearance is used.  This behavior conforms to the
 standard evaluation rules of common Unix shells.
 
 In addition, one or more command files can be specified using an '@' sign as a
@@ -472,11 +559,11 @@ is replaced by the content of the corresponding text file (multiple
 whitespaces are treated as a single separator unless they appear between two
 quotation marks) prior to any further evaluation.  Please note that a command
 file cannot contain another command file.  This simple but effective approach
-allows to summarize common combinations of options/parameters and avoids
+allows one to summarize common combinations of options/parameters and avoids
 longish and confusing command lines (an example is provided in file
 <em>\<datadir\>/dumppat.txt</em>).
 
-\section environment ENVIRONMENT
+\section storescu_environment ENVIRONMENT
 
 The \b storescu utility will attempt to load DICOM data dictionaries specified
 in the \e DCMDICTPATH environment variable.  By default, i.e. if the
@@ -484,7 +571,7 @@ in the \e DCMDICTPATH environment variable.  By default, i.e. if the
 <em>\<datadir\>/dicom.dic</em> will be loaded unless the dictionary is built
 into the application (default for Windows).
 
-The default behaviour should be preferred and the \e DCMDICTPATH environment
+The default behavior should be preferred and the \e DCMDICTPATH environment
 variable only used when alternative data dictionaries are required.  The
 \e DCMDICTPATH environment variable has the same format as the Unix shell
 \e PATH variable in that a colon (":") separates entries.  On Windows systems,
@@ -492,17 +579,17 @@ a semicolon (";") is used as a separator.  The data dictionary code will
 attempt to load each file specified in the \e DCMDICTPATH environment variable.
 It is an error if no data dictionary can be loaded.
 
-\section files FILES
+\section storescu_files FILES
 
 <em>\<docdir\>/asconfig.txt</em> - configuration file documentation
 \n<em>\<etcdir\>/storescu.cfg</em> - example association negotiation profile
 
-\section see_also SEE ALSO
+\section storescu_see_also SEE ALSO
 
 <b>storescp</b>(1)
 
-\section copyright COPYRIGHT
+\section storescu_copyright COPYRIGHT
 
-Copyright (C) 1996-2010 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany.
+Copyright (C) 1996-2022 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany.
 
 */

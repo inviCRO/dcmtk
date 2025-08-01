@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2007-2010, OFFIS e.V.
+ *  Copyright (C) 2007-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,21 +17,9 @@
  *
  *  Purpose: Exctract PDF file from DICOM encapsulated PDF storage object
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-21 08:32:21 $
- *  CVS/RCS Revision: $Revision: 1.8 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
-
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CSTDIO
-#define INCLUDE_CSTRING
-#include "dcmtk/ofstd/ofstdinc.h"
 
 BEGIN_EXTERN_C
 #ifdef HAVE_FCNTL_H
@@ -152,7 +140,7 @@ int main(int argc, char *argv[])
                                                       "execute command c after PDF extraction");
     /* evaluate command line */
     prepareCmdLineArgs(argc, argv, OFFIS_CONSOLE_APPLICATION);
-    if (app.parseCommandLine(cmd, argc, argv, OFCommandLine::PF_ExpandWildcards))
+    if (app.parseCommandLine(cmd, argc, argv))
     {
       /* check exclusive options first */
       if (cmd.hasExclusiveOption())
@@ -160,14 +148,11 @@ int main(int argc, char *argv[])
           if (cmd.findOption("--version"))
           {
               app.printHeader(OFTrue /*print host identifier*/);
-              ofConsole.lockCout() << OFendl << "External libraries used:";
-              ofConsole.unlockCout();
+              COUT << OFendl << "External libraries used:";
 #ifdef WITH_ZLIB
-              ofConsole.lockCout() << OFendl << "- ZLIB, Version " << zlibVersion() << OFendl;
-              ofConsole.unlockCout();
+              COUT << OFendl << "- ZLIB, Version " << zlibVersion() << OFendl;
 #else
-              ofConsole.lockCout() << " none" << OFendl;
-              ofConsole.unlockCout();
+              COUT << " none" << OFendl;
 #endif
               return 0;
           }
@@ -323,10 +308,12 @@ int main(int argc, char *argv[])
     }
 
     /* strip pad byte at end of file, if there is one. The PDF format expects
-     * files to end with %%EOF followed by CR/LF. If the last character of the
-     * file is not a CR or LF, we assume it is a pad byte and remove it.
+     * files to end with %%EOF followed by CR/LF (although in some cases the
+     * CR/LF may be missing or you might only find CR or LF).
+     * If the last character of the file is not a CR or LF, and not the
+     * letter 'F', we assume it is either trailing garbage or a pad byte, and remove it.
      */
-    if (pdfDocument[len-1] != 10 && pdfDocument[len-1] != 13)
+    if (pdfDocument[len-1] != 10 && pdfDocument[len-1] != 13 && pdfDocument[len-1] != 'F')
     {
         --len;
     }
@@ -360,37 +347,3 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
-
-/*
- * CVS/RCS Log:
- * $Log: dcm2pdf.cc,v $
- * Revision 1.8  2010-10-21 08:32:21  joergr
- * Renamed variable to avoid warning reported by gcc with additional flags.
- *
- * Revision 1.7  2010-10-14 13:13:30  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.6  2009-11-13 13:20:23  joergr
- * Fixed minor issues in log output.
- *
- * Revision 1.5  2009-11-04 09:58:05  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.4  2008-09-25 14:38:48  joergr
- * Moved output of resource identifier in order to avoid printing the same
- * information twice.
- *
- * Revision 1.3  2008-09-25 11:19:48  joergr
- * Added support for printing the expanded command line arguments.
- * Always output the resource identifier of the command line tool in debug mode.
- *
- * Revision 1.2  2007/07/11 10:41:21  joergr
- * Fixed layout and other minor issues of the usage output (--help).
- *
- * Revision 1.1  2007/07/11 09:10:29  meichel
- * Added new tool dcm2pdf that extracts a PDF document from a DICOM
- *   Encapsulated PDF file, i.e. is the counterpart to pdf2dcm.
- *
- *
- */

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2020, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose:
  *    consts, typedefs and enums for dcmsign
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:25 $
- *  CVS/RCS Revision: $Revision: 1.7 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef SITYPES_H
@@ -36,6 +29,23 @@
 
 #include "dcmtk/ofstd/oftypes.h"
 #include "dcmtk/ofstd/ofcond.h"
+#include "dcmtk/oflog/oflog.h"
+#include "dcmtk/dcmsign/sidefine.h"
+#include "dcmtk/dcmsign/sitypes.h"
+
+/*
+** Logging
+*/
+
+extern DCMTK_DCMSIGN_EXPORT OFLogger dcmsignLogger;
+
+#define DCMSIGN_TRACE(msg) OFLOG_TRACE(dcmsignLogger, msg)
+#define DCMSIGN_DEBUG(msg) OFLOG_DEBUG(dcmsignLogger, msg)
+#define DCMSIGN_INFO(msg)  OFLOG_INFO(dcmsignLogger, msg)
+#define DCMSIGN_WARN(msg)  OFLOG_WARN(dcmsignLogger, msg)
+#define DCMSIGN_ERROR(msg) OFLOG_ERROR(dcmsignLogger, msg)
+#define DCMSIGN_FATAL(msg) OFLOG_FATAL(dcmsignLogger, msg)
+
 
 // DICOM defined terms for MAC algorithms, certificate and timestamp types
 #define SI_DEFTERMS_RIPEMD160 "RIPEMD160"
@@ -43,9 +53,20 @@
 #define SI_DEFTERMS_MD5       "MD5"
 #define SI_DEFTERMS_X509CERT  "X509_1993_SIG"
 #define SI_DEFTERMS_CMS_TS    "CMS_TS"
+#define SI_DEFTERMS_SHA256    "SHA256"
+#define SI_DEFTERMS_SHA384    "SHA384"
+#define SI_DEFTERMS_SHA512    "SHA512"
+
+// include this file in doxygen documentation
+
+/** @file sitypes.h
+ *  @brief type definitions and constants for the dcmsign module
+ */
 
 
 /** type of key for public key cryptosystem
+ *  @remark this enum is only available if DCMTK is compiled with
+ *  OpenSSL support enabled.
  */
 enum E_KeyType
 {
@@ -57,106 +78,219 @@ enum E_KeyType
 
   /// DH key
   EKT_DH,
-  
+
+  /// EC key
+  EKT_EC,
+
   /// no key present
   EKT_none
 };
 
 
 /** type of MAC algorithm
+ *  @remark this enum is only available if DCMTK is compiled with
+ *  OpenSSL support enabled.
  */
 enum E_MACType
 {
   /// SHA-1
   EMT_SHA1,
-  
+
   /// RIPEMD160
   EMT_RIPEMD160,
-  
+
   /// MD5
-  EMT_MD5
+  EMT_MD5,
+
+  /// SHA-256
+  EMT_SHA256,
+
+  /// SHA-384
+  EMT_SHA384,
+
+  /// SHA-512
+  EMT_SHA512
+};
+
+/** signature verification policy
+ *  @remark this enum is only available if DCMTK is compiled with
+ *  OpenSSL support enabled.
+ */
+enum E_SignatureVerificationPolicy
+{
+  /// verify signatures if present, pass otherwise
+  ESVP_verifyIfPresent,
+
+  /// fail if no signature is present at all but do not check any signature profile
+  ESVP_requireSignature,
+
+  /// fail if no valid creator RSA signature is present on the main dataset level
+  ESVP_requireCreatorRSASignature,
+
+  /// fail if no valid authorization RSA signature is present on the main dataset level
+  ESVP_requireAuthorizationRSASignature,
+
+  /// fail if no valid SR RSA signature is present on the main dataset level
+  ESVP_requireSRRSASignature
+};
+
+/** verification policy for certified timestamps attached to signatures
+ *  @remark this enum is only available if DCMTK is compiled with
+ *  OpenSSL support enabled.
+ */
+enum E_TimestampVerificationPolicy
+{
+  /// verify timestamp if present, pass otherwise
+  ETVP_verifyTSIfPresent,
+
+  /// ignore certified timestamp even if present
+  ETVP_ignoreTS,
+
+  /// fail if signature does not contain a certified timestamp
+  ETVP_requireTS,
+
 };
 
 
 /*
  * specific error conditions for module dcmsign
  */
- 
+
 /// object initialization failed
-extern const OFCondition SI_EC_InitializationFailed;
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_InitializationFailed;
 
 /// an OpenSSL call has failed
-extern const OFCondition SI_EC_OpenSSLFailure;
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_OpenSSLFailure;
 
 /// file cannot be read
-extern const OFCondition SI_EC_CannotRead;
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_CannotRead;
 
 /// unable to use the selected transfer syntax for MAC computation
-extern const OFCondition SI_EC_WrongTransferSyntax;
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_WrongTransferSyntax;
 
 /// no more MAC ID numbers available
-extern const OFCondition SI_EC_MacIDsExhausted;
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_MacIDsExhausted;
 
 /// certificate and private key do not match
-extern const OFCondition SI_EC_CertificateDoesNotMatchPrivateKey;
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_CertificateDoesNotMatchPrivateKey;
 
 /// MAC algorithm not allowed for the current security profile
-extern const OFCondition SI_EC_MacDoesNotMatchProfile;
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_MacDoesNotMatchProfile;
 
 /// Signature algorithm not allowed for the current security profile
-extern const OFCondition SI_EC_AlgorithmDoesNotMatchProfile;
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_AlgorithmDoesNotMatchProfile;
 
 /// Transfer syntax not allowed for the current security profile
-extern const OFCondition SI_EC_TransferSyntaxDoesNotMatchProfile;
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_TransferSyntaxDoesNotMatchProfile;
 
-/** signature verification failed because the certificate is missing
- *  or cannot be read (e.g. unsupported format)
- */
-extern const OFCondition SI_EC_VerificationFailed_NoCertificate;
+/// Dataset is not suitable for the current security profile (e.g. wrong SOP class)
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_DatasetDoesNotMatchProfile;
+
+/// signature verification failed because the certificate is missing or cannot be read (e.g. unsupported format)
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_VerificationFailed_NoCertificate;
 
 /// signature verification failed because the corresponding MAC parameters item could not be found or is incomplete
-extern const OFCondition SI_EC_VerificationFailed_NoMAC;
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_VerificationFailed_NoMAC;
 
 /// signature verification failed because the corresponding signature item is incomplete
-extern const OFCondition SI_EC_VerificationFailed_NoSignature;
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_VerificationFailed_NoSignature;
 
 /// signature verification failed because the MAC algorithm is not supported
-extern const OFCondition SI_EC_VerificationFailed_UnsupportedMACAlgorithm;
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_VerificationFailed_UnsupportedMACAlgorithm;
 
 /// signature verification failed because the signature is invalid (document corrupted)
-extern const OFCondition SI_EC_VerificationFailed_Corrupted;
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_VerificationFailed_Corrupted;
 
 /// signature verification failed because the certificate was issued by an untrusted (unknown) CA
-extern const OFCondition SI_EC_VerificationFailed_NoTrust;
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_VerificationFailed_NoTrust;
+
+/// unsupported MAC algorithm specified
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_UnsupportedMAC;
+
+/// invalid object identifier (OID) string
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_InvalidOID;
+
+/// unable to write time stamp query file
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_CannotWriteTSQ;
+
+/// verification of timestamp response message failed
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_InvalidTSR;
+
+/// signature verification failed because DataElementsSigned is missing or incorrect
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_VerificationFailed_NoDataElementsSigned;
+
+/// List of data elements signed does not match the profile requirements
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_DataElementsSignedDoesNotMatchProfile;
+
+/// desired signature location item not found
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_ItemLocationNotFound;
+
+/// unknown certified timestamp type
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_UnknownTimestampType;
+
+/// certified timestamp in dataset cannot be read
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_InvalidTimestamp;
+
+/// filetype is unknown (neither PEM nor DER)
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_InvalidFiletype;
+
+/// signature verification of the certified timestamp failed
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_TimestampSignatureVerificationFailed;
+
+/// signature verification failed because the certificate was already expired at the signature create date
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_VerificationFailed_CertExpiredAtSignature;
+
+/// signature verification failed because the certificate was not yet valid at signature creation date
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_VerificationFailed_CertNotYetValidAtSig;
+
+/// list of attributes to be signed contains attribute that is not signable
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_AttributeNotSignable;
+
+/// signature verification failed because the signature contains an attribute that is not signable
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_VerificationFailed_AttributeNotSignable;
+
+/// selected dataset or item is empty, nothing to sign
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_DatasetEmpty;
+
+/// cannot create signature for current signature profile: required attributes missing
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_RequiredAttributeMissing;
+
+/// cannot handle ECDSA signatures because OpenSSL was compiled without elliptic curve support
+/// @remark this constant is only available if DCMTK is compiled with OpenSSL support enabled.
+extern DCMTK_DCMSIGN_EXPORT const OFConditionConst SI_EC_EllipticCurveNotSupported;
 
 #endif
 #endif
-
-/*
- *  $Log: sitypes.h,v $
- *  Revision 1.7  2010-10-14 13:17:25  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.6  2005-12-08 16:04:47  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.5  2001/11/16 15:50:51  meichel
- *  Adapted digital signature code to final text of supplement 41.
- *
- *  Revision 1.4  2001/09/26 14:30:23  meichel
- *  Adapted dcmsign to class OFCondition
- *
- *  Revision 1.3  2001/06/01 15:50:51  meichel
- *  Updated copyright header
- *
- *  Revision 1.2  2001/01/25 15:11:44  meichel
- *  Added class SiCertificateVerifier in dcmsign which allows to check
- *    whether a certificate from a digital signature is trusted, i.e. issued
- *    by a known CA and not contained in a CRL.
- *
- *  Revision 1.1  2000/11/07 16:49:00  meichel
- *  Initial release of dcmsign module for DICOM Digital Signatures
- *
- *
- */
-

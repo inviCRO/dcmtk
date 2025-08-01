@@ -1,8 +1,11 @@
 # declare additional include directories
-INCLUDE_DIRECTORIES(${dcmjpls_SOURCE_DIR}/libcharls ${ofstd_SOURCE_DIR}/include )
+include_directories("${dcmjpls_SOURCE_DIR}/libcharls" "${ofstd_SOURCE_DIR}/include")
 
 # create library from source files
-ADD_LIBRARY(charls header intrface jpegls)
+DCMTK_ADD_LIBRARY(dcmtkcharls
+  header.cc
+  intrface.cc
+  jpegls.cc
+)
 
-# declare installation files
-INSTALL_TARGETS(${INSTALL_LIBDIR} charls)
+DCMTK_TARGET_LINK_MODULES(dcmtkcharls ofstd oflog)

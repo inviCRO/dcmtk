@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,21 +17,14 @@
  *
  *  Purpose: Implementation of class DcmDate
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-20 16:44:17 $
- *  CVS/RCS Revision: $Revision: 1.23 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 
 #include "dcmtk/dcmdata/dcvrda.h"
-
-#define INCLUDE_CSTDIO
-#include "dcmtk/ofstd/ofstdinc.h"
+#include "dcmtk/dcmdata/dcvrtm.h"
+#include "dcmtk/ofstd/ofstd.h"
+#include "dcmtk/dcmdata/dcmatch.h"
 
 
 // ********************************
@@ -150,7 +143,7 @@ OFCondition DcmDate::setCurrentDate()
     /* set the element value to the current system date */
     OFCondition l_error = getCurrentDate(dicomDate);
     if (l_error.good())
-        l_error = putString(dicomDate.c_str());
+        l_error = putOFStringArray(dicomDate);
     return l_error;
 }
 
@@ -161,7 +154,7 @@ OFCondition DcmDate::setOFDate(const OFDate &dateValue)
     /* convert OFDate value to DICOM DA format and set the element value */
     OFCondition l_error = getDicomDateFromOFDate(dateValue, dicomDate);
     if (l_error.good())
-        l_error = putString(dicomDate.c_str());
+        l_error = putOFStringArray(dicomDate);
     return l_error;
 }
 
@@ -191,7 +184,7 @@ OFCondition DcmDate::getCurrentDate(OFString &dicomDate)
 
 
 OFCondition DcmDate::getDicomDateFromOFDate(const OFDate &dateValue,
-	                                        OFString &dicomDate)
+                                            OFString &dicomDate)
 {
     OFCondition l_error = EC_IllegalParameter;
     /* convert OFDate value to DICOM DA format */
@@ -200,37 +193,74 @@ OFCondition DcmDate::getDicomDateFromOFDate(const OFDate &dateValue,
     return l_error;
 }
 
+OFCondition DcmDate::getOFDateFromString(const OFString &dicomDate,
+                                         OFDate &dateValue)
+{
+    return getOFDateFromString(dicomDate.c_str(), dicomDate.size(), dateValue, OFTrue);
+}
 
 OFCondition DcmDate::getOFDateFromString(const OFString &dicomDate,
                                          OFDate &dateValue,
                                          const OFBool supportOldFormat)
 {
-    OFCondition l_error = EC_IllegalParameter;
-    /* clear result variable */
+    return getOFDateFromString(dicomDate.c_str(), dicomDate.size(), dateValue, supportOldFormat);
+}
+
+OFCondition DcmDate::getOFDateFromString(const char* dicomDate,
+                                         const size_t dicomDateSize,
+                                         OFDate &dateValue)
+{
+    return getOFDateFromString(dicomDate, dicomDateSize, dateValue, OFTrue);
+}
+
+OFCondition DcmDate::getOFDateFromString(const char* dicomDate,
+                                         const size_t dicomDateSize,
+                                         OFDate &dateValue,
+                                         const OFBool supportOldFormat)
+{
+    // clear result variable
     dateValue.clear();
-    /* fixed length (8 or 10 bytes) required by DICOM part 5 */
-    if ((dicomDate.length() == 8) && (dicomDate.find('.') == OFString_npos))
+    // fixed length 8 bytes required by DICOM part 5: YYYYMMDD
+    if (dicomDateSize == 8 && OFStandard::checkDigits<8>(dicomDate))
     {
-        unsigned int year, month, day;
-        /* extract components from date string */
-        if (sscanf(dicomDate.c_str(), "%04u%02u%02u", &year, &month, &day) == 3)
+        // extract components from date string
+        if
+        (
+            dateValue.setDate
+            (
+                OFStandard::extractDigits<unsigned int,4>(dicomDate),
+                OFStandard::extractDigits<unsigned int,2>(dicomDate + 4),
+                OFStandard::extractDigits<unsigned int,2>(dicomDate + 6)
+            )
+        )
         {
-            if (dateValue.setDate(year, month, day))
-                l_error = EC_Normal;
+            return EC_Normal;
         }
     }
-    /* old prior V3.0 version of VR=DA: YYYY.MM.DD */
-    else if (supportOldFormat && (dicomDate.length() == 10) && (dicomDate[4] == '.') && (dicomDate[7] == '.'))
+    // old prior V3.0 version of VR=DA with fixed length 10 bytes: YYYY.MM.DD
+    else if
+    (
+        supportOldFormat && dicomDateSize == 10 && dicomDate[4] == '.' && dicomDate[7] == '.' &&
+        OFStandard::checkDigits<4>(dicomDate) &&
+        OFStandard::checkDigits<2>(dicomDate + 5) &&
+        OFStandard::checkDigits<2>(dicomDate + 8)
+    )
     {
-        unsigned int year, month, day;
-        /* extract components from date string */
-        if (sscanf(dicomDate.c_str(), "%04u.%02u.%02u", &year, &month, &day) == 3)
+        // extract components from date string
+        if
+        (
+            dateValue.setDate
+            (
+                OFStandard::extractDigits<unsigned int,4>(dicomDate),
+                OFStandard::extractDigits<unsigned int,2>(dicomDate + 5),
+                OFStandard::extractDigits<unsigned int,2>(dicomDate + 8)
+            )
+        )
         {
-            if (dateValue.setDate(year, month, day))
-                l_error = EC_Normal;
+            return EC_Normal;
         }
     }
-    return l_error;
+    return EC_IllegalParameter;
 }
 
 
@@ -238,24 +268,52 @@ OFCondition DcmDate::getISOFormattedDateFromString(const OFString &dicomDate,
                                                    OFString &formattedDate,
                                                    const OFBool supportOldFormat)
 {
-    OFDate dateValue;
-    /* convert string to OFDate */
-    OFCondition l_error = getOFDateFromString(dicomDate, dateValue, supportOldFormat);
-    if (l_error.good())
+    OFCondition l_error = EC_Normal;
+    if (!dicomDate.empty())
     {
-        /* convert OFDate to ISO formatted date */
-        if (!dateValue.getISOFormattedDate(formattedDate))
-            l_error = EC_CorruptedData;
-    }
-    /* in case of error clear result variable */
-    if (l_error.bad())
+        OFDate dateValue;
+        /* convert string to OFDate */
+        l_error = getOFDateFromString(dicomDate, dateValue, supportOldFormat);
+        if (l_error.good())
+        {
+            /* convert OFDate to ISO formatted date */
+            if (!dateValue.getISOFormattedDate(formattedDate))
+                l_error = EC_CorruptedData;
+        }
+        /* clear the result variable in case of error */
+        if (l_error.bad())
+            formattedDate.clear();
+    } else {
+        /* input string is empty, so is the result string */
         formattedDate.clear();
+    }
     return l_error;
 }
 
 
 // ********************************
 
+OFBool DcmDate::check(const char* dicomDate,
+                      const size_t dicomDateSize)
+{
+    return check(dicomDate, dicomDateSize, OFFalse);
+}
+
+OFBool DcmDate::check(const char* dicomDate,
+                      const size_t dicomDateSize,
+                      const OFBool supportOldFormat)
+{
+    switch (DcmElement::scanValue("da", dicomDate, dicomDateSize))
+    {
+    case  2 /* DA */:
+    case 17 /* dubious DA (pre 1850 or post 2049) */:
+        return OFTrue;
+    case  3 /* old style DA */:
+        return supportOldFormat;
+    default:
+        return OFFalse;
+    }
+}
 
 OFCondition DcmDate::checkStringValue(const OFString &value,
                                       const OFString &vm,
@@ -265,116 +323,62 @@ OFCondition DcmDate::checkStringValue(const OFString &value,
     const size_t valLen = value.length();
     if (valLen > 0)
     {
-      size_t posStart = 0;
-      unsigned long vmNum = 0;
-      /* iterate over all value components */
-      while (posStart != OFString_npos)
-      {
-        ++vmNum;
-        /* search for next component separator */
-        const size_t posEnd = value.find('\\', posStart);
-        const size_t length = (posEnd == OFString_npos) ? valLen - posStart : posEnd - posStart;
-        /* check value representation */
-        const int vrID = DcmElement::scanValue(value, "da", posStart, length);
-        if ((vrID != 2) && (!oldFormat || (vrID != 3)) && (vrID != 17))
+        size_t posStart = 0;
+        unsigned long vmNum = 0;
+        /* iterate over all value components */
+        while (posStart != OFString_npos)
         {
-          result = EC_ValueRepresentationViolated;
-          break;
+            ++vmNum;
+            /* search for next component separator */
+            const size_t posEnd = value.find('\\', posStart);
+            const size_t length = (posEnd == OFString_npos) ? valLen - posStart : posEnd - posStart;
+            if (dcmEnableVRCheckerForStringValues.get())
+            {
+                /* check value representation */
+                if (!check(value.data() + posStart, length, oldFormat))
+                {
+                    result = EC_ValueRepresentationViolated;
+                    break;
+                }
+            }
+            posStart = (posEnd == OFString_npos) ? posEnd : posEnd + 1;
         }
-        posStart = (posEnd == OFString_npos) ? posEnd : posEnd + 1;
-      }
-      if (result.good() && !vm.empty())
-      {
-        /* check value multiplicity */
-        result = DcmElement::checkVM(vmNum, vm);
-      }
+        if (result.good() && !vm.empty())
+        {
+            /* check value multiplicity */
+            result = DcmElement::checkVM(vmNum, vm);
+        }
     }
     return result;
 }
 
+OFBool DcmDate::matches(const OFString& key,
+                        const OFString& candidate,
+                        const OFBool enableWildCardMatching) const
+{
+  OFstatic_cast(void,enableWildCardMatching);
+  return DcmAttributeMatching::rangeMatchingDate(key.c_str(), key.length(), candidate.c_str(), candidate.length());
+}
 
-/*
-** CVS/RCS Log:
-** $Log: dcvrda.cc,v $
-** Revision 1.23  2010-10-20 16:44:17  joergr
-** Use type cast macros (e.g. OFstatic_cast) where appropriate.
-**
-** Revision 1.22  2010-10-14 13:14:10  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.21  2010-04-23 14:30:34  joergr
-** Added new method to all VR classes which checks whether the stored value
-** conforms to the VR definition and to the specified VM.
-**
-** Revision 1.20  2009-08-07 14:35:49  joergr
-** Enhanced isEmpty() method by checking whether the data element value consists
-** of non-significant characters only.
-**
-** Revision 1.19  2009-08-03 09:02:59  joergr
-** Added methods that check whether a given string value conforms to the VR and
-** VM definitions of the DICOM standards.
-**
-** Revision 1.18  2008-07-17 10:31:32  onken
-** Implemented copyFrom() method for complete DcmObject class hierarchy, which
-** permits setting an instance's value from an existing object. Implemented
-** assignment operator where necessary.
-**
-** Revision 1.17  2007-06-29 14:17:49  meichel
-** Code clean-up: Most member variables in module dcmdata are now private,
-**   not protected anymore.
-**
-** Revision 1.16  2005/12/08 15:41:49  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.15  2002/12/06 13:20:49  joergr
-** Enhanced "print()" function by re-working the implementation and replacing
-** the boolean "showFullData" parameter by a more general integer flag.
-** Made source code formatting more consistent with other modules/files.
-**
-** Revision 1.14  2002/11/27 12:06:55  meichel
-** Adapted module dcmdata to use of new header file ofstdinc.h
-**
-** Revision 1.13  2002/08/27 16:55:58  meichel
-** Initial release of new DICOM I/O stream classes that add support for stream
-**   compression (deflated little endian explicit VR transfer syntax)
-**
-** Revision 1.12  2002/04/11 12:31:34  joergr
-** Enhanced DICOM date, time and date/time classes. Added support for new
-** standard date and time functions.
-**
-** Revision 1.11  2001/10/10 15:20:41  joergr
-** Added new flag to date/time routines allowing to choose whether the old
-** prior V3.0 format for the corresponding DICOM VRs is supported or not.
-**
-** Revision 1.10  2001/10/04 10:16:58  joergr
-** Adapted new time/date routines to Windows systems.
-**
-** Revision 1.9  2001/10/01 15:04:43  joergr
-** Introduced new general purpose functions to get/set person names, date, time
-** and date/time.
-**
-** Revision 1.8  2001/06/01 15:49:15  meichel
-** Updated copyright header
-**
-** Revision 1.7  2000/03/08 16:26:46  meichel
-** Updated copyright header.
-**
-** Revision 1.6  1999/03/31 09:25:49  meichel
-** Updated copyright header in module dcmdata
-**
-** Revision 1.5  1998/11/12 16:48:23  meichel
-** Implemented operator= for all classes derived from DcmObject.
-**
-** Revision 1.4  1997/07/03 15:10:10  andreas
-** - removed debugging functions Bdebug() and Edebug() since
-**   they write a static array and are not very useful at all.
-**   Cdebug and Vdebug are merged since they have the same semantics.
-**   The debugging functions in dcmdata changed their interfaces
-**   (see dcmdata/include/dcdebug.h)
-**
-** Revision 1.3  1996/01/05 13:27:47  andreas
-** - changed to support new streaming facilities
-** - unique read/write methods for file and block transfer
-** - more cleanups
-**
-*/
+OFBool DcmDate::combinationMatches(const DcmElement& keySecond,
+                                   const DcmElement& candidateFirst,
+                                   const DcmElement& candidateSecond) const
+{
+  if (keySecond.ident() == EVR_TM && candidateFirst.ident() == EVR_DA && candidateSecond.ident() == EVR_TM)
+  {
+    // do many const casts, but we do not modify the value, I promise...
+    DcmDate& queryDate = OFconst_cast(DcmDate&, *this);
+    DcmDate& candidateDate = OFconst_cast(DcmDate&, OFstatic_cast(const DcmDate&, candidateFirst));
+    DcmTime& queryTime = OFconst_cast(DcmTime&, OFstatic_cast(const DcmTime&, keySecond));
+    DcmTime& candidateTime = OFconst_cast(DcmTime&, OFstatic_cast(const DcmTime&, candidateSecond));
+    OFString a0, a1, b0, b1;
+    // no support for VM>1 so far!
+    return queryDate.getOFString( a0, 0, OFTrue ).good() && queryTime.getOFString( a1, 0, OFTrue ).good() &&
+        candidateDate.getOFString( b0, 0, OFTrue ).good() && candidateTime.getOFString( b1, 0, OFTrue ).good() &&
+        DcmAttributeMatching::rangeMatchingDateTime
+    (
+      a0.c_str(), a0.length(), a1.c_str(), a1.length(), b0.c_str(), b0.length(), b1.c_str(), b1.length()
+    );
+  }
+  return OFFalse;
+}

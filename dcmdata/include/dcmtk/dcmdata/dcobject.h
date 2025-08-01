@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2020, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -19,13 +19,6 @@
  *  This file contains the interface to routines which provide
  *  DICOM object encoding/decoding, search and lookup facilities.
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-29 10:57:17 $
- *  CVS/RCS Revision: $Revision: 1.70 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -42,13 +35,22 @@
 
 
 // forward declarations
+class DcmItem;
+class DcmJsonFormat;
 class DcmOutputStream;
 class DcmInputStream;
 class DcmWriteCache;
+class DcmSpecificCharacterSet;
+
+// include this file in doxygen documentation
+
+/** @file dcobject.h
+ *  @brief interface to DICOM object/dataset handling
+ */
 
 // Undefined Length Identifier now defined in dctypes.h
 
-// Maxinum number of read bytes for a Value Element
+// Maximum number of read bytes for a Value Element
 const Uint32 DCM_MaxReadLength = 4096;
 
 // Maximum length of tag and length in a DICOM element
@@ -64,13 +66,13 @@ const Uint32 DCM_OptPrintValueLength = 40;
 const Uint32 DCM_OptPrintAttributeNameLength = 35;
 
 /** This flags defines whether automatic correction should be applied to input
- *  data (e.g. stripping of padding blanks, removal of blanks in UIDs, etc).
+ *  data (e.g.\ stripping of padding blanks, removal of blanks in UIDs, etc).
  *  Default is enabled.
  */
-extern OFGlobal<OFBool> dcmEnableAutomaticInputDataCorrection; /* default OFTrue */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmEnableAutomaticInputDataCorrection; /* default OFTrue */
 
 /** This flag defines the handling of illegal odd-length attributes: If flag is
- *  true, odd lengths are respected (i.e. an odd number of bytes is read from
+ *  true, odd lengths are respected (i.e.\ an odd number of bytes is read from
  *  the input stream.) After successful reading, padding to even number of bytes
  *  is enforced by adding a zero pad byte if dcmEnableAutomaticInputDataCorrection
  *  is true. Otherwise the odd number of bytes remains as read.
@@ -78,7 +80,7 @@ extern OFGlobal<OFBool> dcmEnableAutomaticInputDataCorrection; /* default OFTrue
  *  If flag is false, old (pre DCMTK 3.5.2) behaviour applies: The length field
  *  implicitly incremented and an even number of bytes is read from the stream.
  */
-extern OFGlobal<OFBool> dcmAcceptOddAttributeLength; /* default OFTrue */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmAcceptOddAttributeLength; /* default OFTrue */
 
 /** This flag defines how UN attributes with undefined length are treated
  *  by the parser when reading. The default is to expect the content of the
@@ -92,31 +94,50 @@ extern OFGlobal<OFBool> dcmAcceptOddAttributeLength; /* default OFTrue */
  *  Note that the flag only affects the read behaviour but not the write
  *  behaviour - DCMTK will never write UN elements with undefined length.
  */
-extern OFGlobal<OFBool> dcmEnableCP246Support; /* default OFTrue */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmEnableCP246Support; /* default OFTrue */
 
 /** DCMTK releases up to 3.5.3 created a non-conforming byte stream
  *  as input to the MAC algorithm when creating or verifying digital signatures
- *  including compressed pixel data (i.e. signatures including attribute
+ *  including compressed pixel data (i.e.\ signatures including attribute
  *  (7FE0,0010) in an encapsulated transfer syntax). This has been fixed
  *  in DCMTK 3.5.4, but this flag allows to revert to the old behavior
  *  in order to create or verify signatures that are compatible with older
  *  releases. Default is "off" (OFFalse).
  */
-extern OFGlobal<OFBool> dcmEnableOldSignatureFormat; /* default OFFalse */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmEnableOldSignatureFormat; /* default OFFalse */
 
 /** This flag defines whether the transfer syntax for uncompressed datasets
  *  is detected automatically.  The automatic detection has been introduced
  *  since there are (incorrectly encoded) DICOM dataset stored with a
  *  different transfer syntax than specified in the meta header.
  */
-extern OFGlobal<OFBool> dcmAutoDetectDatasetXfer; /* default OFFalse */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmAutoDetectDatasetXfer; /* default OFFalse */
 
 /** This flag defines how non-standard VRs are treated by the parser when
  *  reading. The default is to treat data element with non-standard VR as
  *  unknown. If this flag is enabled, the parser will try to read the data
  *  element with Implicit VR Little Endian transfer syntax.
  */
-extern OFGlobal<OFBool> dcmAcceptUnexpectedImplicitEncoding; /* default OFFalse */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmAcceptUnexpectedImplicitEncoding; /* default OFFalse */
+
+/** This flag defines how the element's VR is treated by the parser when
+ *  reading from a dataset with explicit VR encoding. By default, the
+ *  VR from the dataset is used. If this flag is enabled and the VR of the
+ *  tag is defined in the data dictionary, the parser will use the VR from
+ *  the data dictionary (and ignore the one from the dataset). This flag is,
+ *  therefore, useful for reading incorrectly encoded DICOM datasets.
+ */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmPreferVRFromDataDictionary; /* default OFFalse */
+
+/** This flag defines how the element's length field is interpreted when reading
+ *  from a dataset with explicit VR encoding and the data dictionary doesn't
+ *  agree with the VR from the dataset. By default, the length field is assumed
+ *  to match the size of the VR in the dataset. If this flag is enabled and the
+ *  tag is defined in the data dictionary, the parser will use the size for the
+ *  VR from the data dictionary (and ignore the one from the dataset). This flag
+ *  is, therefore, useful for reading incorrectly encoded DICOM datasets.
+ */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmPreferLengthFieldSizeFromDataDictionary; /* default OFFalse */
 
 /** This flag indicates, whether private attributes with implicit transfer
  *  syntax having a maximum length should be handled as sequences (ignoring
@@ -127,15 +148,15 @@ extern OFGlobal<OFBool> dcmAcceptUnexpectedImplicitEncoding; /* default OFFalse 
  *  length, which would lead to an error. The default behaviour is to
  *  rely on the dictionary.
  */
-extern OFGlobal<OFBool> dcmReadImplPrivAttribMaxLengthAsSQ; /* default OFFalse */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmReadImplPrivAttribMaxLengthAsSQ; /* default OFFalse */
 
 /** This flag indicates, whether parsing errors during reading
- *  should be ignored, ie whether the parser should try to recover and
+ *  should be ignored, i.e.\ whether the parser should try to recover and
  *  parse the rest of the stream.
  *  This flag does not work for all parsing errors (at this time)
  *  making sense but was introduced afterwards.
  */
-extern OFGlobal<OFBool> dcmIgnoreParsingErrors; /* default OFFalse */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmIgnoreParsingErrors; /* default OFFalse */
 
 /** This flag indicates, whether parsing should stop after a certain
  *  element in the stream was parsed. This is especially useful for
@@ -143,14 +164,14 @@ extern OFGlobal<OFBool> dcmIgnoreParsingErrors; /* default OFFalse */
  *  Data attribute. To prevent the parser for "stumbling" over that
  *  garbage, it is possible to tell the parser to stop after a
  *  specific element. The flag is only sensitive to elements on
- *  dataset level, ie. inside sequence any occurence of the specified
+ *  dataset level, i.e. inside sequence any occurrence of the specified
  *  tag is ignored. Caution: Note that if Pixel Data is chosen
  *  as stop element, any attributes behind will not be parsed, e. g.
  *  any digital signature attributes coming after.
  *  Default is (0xffff,0xffff), which means that the feature is
  *  disabled.
  */
-extern OFGlobal<DcmTagKey> dcmStopParsingAfterElement; /* default OFTrue */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<DcmTagKey> dcmStopParsingAfterElement; /* default OFTrue */
 
 /** This flag influences behaviour when writing a dataset with items
  *  and sequences set to be encoded with explicit length. It is possible
@@ -162,23 +183,57 @@ extern OFGlobal<DcmTagKey> dcmStopParsingAfterElement; /* default OFTrue */
  *  Default is OFTrue, i.e. encoding is switched to implicit if maximum
  *  size of length field is exceeded.
  */
-extern OFGlobal<OFBool> dcmWriteOversizedSeqsAndItemsUndefined; /* default OFTrue */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmWriteOversizedSeqsAndItemsUndefined; /* default OFTrue */
 
 /** This flag allows for ignoring the value of (0002,0000) File Meta Information
  *  Group Length which is useful in cases where this value is incorrect.  If the
  *  header length is ignored, the behavior is identical to the case when no value
  *  is available (i.e. all elements are read as long as the group number is 0x0002).
  */
-extern OFGlobal<OFBool> dcmIgnoreFileMetaInformationGroupLength; /* default OFFalse */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmIgnoreFileMetaInformationGroupLength; /* default OFFalse */
 
+/** This flag enables the replacement of a wrong delimitation item at the end of
+ *  a sequence or item.  This is because there are incorrect systems that write
+ *  a Sequence Delimitation Item (fffe,e0dd) at the end of an item or an Item
+ *  Delimitation Item (fffe,e00d) at the end of a sequence.  By default, no
+ *  delimitation items are replaced.
+ */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmReplaceWrongDelimitationItem; /* default OFFalse */
+
+/** This flag enables the "silent" conversion of illegal OB/OW elements
+ *  with undefined length (other than PixelData) to SQ elements while reading.
+ *  The default behaviour is to reject such elements with an error message.
+ */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmConvertUndefinedLengthOBOWtoSQ; /* default OFFalse */
+
+/** This flag enables the "silent" conversion of incorrectly encoded
+ *  VOI LUT Sequence elements with VR=OW and explicit length into a sequence.
+ *  This incorrect encoding was detected "in the wild" in 2016.
+ */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmConvertVOILUTSequenceOWtoSQ; /* default OFFalse */
+
+/** This flag influences the behaviour when reading Pixel Data elements.
+ *  Pixel Data in those top level datasets that are using a compression-enabled
+ *  Transfer Syntax (with few exceptions such as Deflated TS),
+ *  is being stored in an encapsulated way. That means DICOM requires that the
+ *  Pixel Data then element uses an undefined length and internally uses a
+ *  pseudo sequence structure called Pixel Sequence with Pixel items inside.
+ *  If this flag is set to OFFalse (default), an error is reported when reading
+ *  datasets with encapsulated Transfer Syntaxes but with Pixel Data being
+ *  stored using explicit length encoding.
+ *  If this flag is set to OFTrue, such an invalid Pixel Data encoding is
+ *  accepted and the element is read with the given length as if it would be the
+ *  case for datasets in uncompressed transfer syntaxes.
+ */
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmUseExplLengthPixDataForEncTS; /* default OFFalse */
 
 /** Abstract base class for most classes in module dcmdata. As a rule of thumb,
  *  everything that is either a dataset or that can be identified with a DICOM
  *  attribute tag is derived from class DcmObject.
  */
-class DcmObject
+class DCMTK_DCMDATA_EXPORT DcmObject
 {
-  public:
+ public:
 
     /** constructor.
      *  Create new object from given tag and length.
@@ -249,9 +304,15 @@ class DcmObject
      *  All subclasses of DcmElement except for DcmSequenceOfItems
      *  are leaf nodes, while DcmSequenceOfItems, DcmItem, DcmDataset etc.
      *  are not.
-     *  @return true if leaf node, false otherwise.
+     *  @return true if leaf node, false otherwise
      */
     virtual OFBool isLeaf() const = 0;
+
+    /** check if this element is nested in a sequence of items, i.e.\ not a
+     *  top-level or stand-alone element
+     *  @return true if this element is nested, false otherwise
+     */
+    virtual OFBool isNested() const;
 
     /** print object to a stream
      *  @param out output stream
@@ -281,6 +342,45 @@ class DcmObject
      */
     virtual void transferEnd(void);
 
+    /** get root dataset/item (top-level) that contains this object. Internally,
+     *  the list of parent pointers is followed in order to find the root. If
+     *  this object has no parent item, a pointer to this object is returned
+     *  instead.
+     *  @return pointer to the root dataset/item (might be NULL)
+     */
+    DcmItem *getRootItem();
+
+    /** get parent item of this object. In case of a top-level element, this is
+     *  either the main dataset or the file meta-information. In case of a nested
+     *  element, this is the surrounding item.
+     *  @return pointer to the parent item of this object (might be NULL)
+     */
+    virtual DcmItem *getParentItem();
+
+    /** get parent of this object. If this object is an element that has been
+     *  inserted into a dataset/item, the parent is this particular dataset/item.
+     *  If this object is an item that has been inserted into a sequence, the
+     *  parent is this particular sequence. If this object has not been inserted
+     *  into a dataset/item or sequence, NULL is returned.
+     *  @return pointer to the parent of this object (might be NULL)
+     */
+    inline DcmObject *getParent() { return Parent; }
+
+    /** get parent of this object. If this object is an element that has been
+     *  inserted into a dataset/item, the parent is this particular dataset/item.
+     *  If this object is an item that has been inserted into a sequence, the
+     *  parent is this particular sequence. If this object has not been inserted
+     *  into a dataset/item or sequence, NULL is returned.
+     *  @return pointer to the parent of this object (might be NULL)
+     */
+    inline const DcmObject *getParent() const { return Parent; }
+
+    /** set parent of this object. NULL means no parent.
+     *  NB: This method is used by derived classes for internal purposes only.
+     *  @param parent pointer to the parent of this object
+     */
+    inline void setParent(DcmObject *parent) { Parent = parent; }
+
     /** return the group number of the attribute tag for this object
      *  @return group number of the attribute tag for this object
      */
@@ -309,19 +409,52 @@ class DcmObject
      *  @param vr value representation
      *  @return EC_Normal if successful, an error code otherwise
      */
-    virtual OFCondition setVR(DcmEVR /*vr*/) { return EC_IllegalCall; }
+#ifdef DOXYGEN
+    virtual OFCondition setVR(DcmEVR vr)
+#else
+    virtual OFCondition setVR(DcmEVR /* vr */)
+#endif
+    {
+      return EC_IllegalCall;
+    }
 
-    /** return value multiplicity of the current object
-     *  @return value multiplicity of the current object
+    /** get value multiplicity of this object.
+     *  Please note that depending on the Value Representation (VR), subclasses
+     *  derived from this class either return the number of currently stored
+     *  values or the constant value 1 (as defined in the DICOM standard).
+     *  See getNumberOfValues(), which always returns the number of stored values.
+     *  @return value multiplicity of this object
      */
     virtual unsigned long getVM() = 0;
+
+    /** get number of values stored in this object
+     *  @return number of values in this object
+     */
+    virtual unsigned long getNumberOfValues() = 0;
 
     /** calculate the length of this DICOM element when encoded with the
      *  given transfer syntax and the given encoding type for sequences.
      *  For elements, the length includes the length of the tag, length field,
      *  VR field and the value itself, for items and sequences it returns
      *  the length of the complete item or sequence including delimitation tags
-     *  if applicable. Never returns undefined length.
+     *  if applicable.
+     *  @warning Since calcElementLength() returns a 32 bit integer, an
+     *    overflow during calculation is possible for some derived classes that
+     *    actually represent a compound value (e.g. items like DcmPixelItem).
+     *    Such overflows will be detected, in which case the maximum possible
+     *    value will be returned instead, coinciding with DCM_UndefinedLength.
+     *  @warning The implementation in DcmPixelData may return zero if no
+     *    conforming representation exists and set the
+     *    EC_RepresentationNotFound error flag to indicated it.
+     *  @warning When calculation the length of a sequence or an item
+     *    containing multiple attributes, the implementation may return
+     *    DCM_UndefinedLength to indicate a value that can not be encoded as
+     *    a 32 bit length field. It will even do so if
+     *    "dcmWriteOversizedSeqsAndItemsUndefined" is disabled, but then also
+     *    set the EC_SeqOrItemContentOverflow error flag (inside getLength())
+     *    to indicated it.
+     *  @note Just check for zero or DCM_UndefinedLength return value and then
+     *    have a look at the error flag in either case.
      *  @param xfer transfer syntax for length calculation
      *  @param enctype sequence encoding type for length calculation
      *  @return length of DICOM element
@@ -378,8 +511,16 @@ class DcmObject
      *  @param flags optional flag used to customize the output (see DCMTypes::XF_xxx)
      *  @return status, always returns EC_Illegal Call
      */
-    virtual OFCondition writeXML(STD_NAMESPACE ostream&out,
+    virtual OFCondition writeXML(STD_NAMESPACE ostream &out,
                                  const size_t flags = 0);
+
+    /** write object in JSON format to a stream
+     *  @param out output stream to which the JSON document is written
+     *  @param format used to format and customize the output
+     *  @return status, always returns EC_Illegal Call
+     */
+    virtual OFCondition writeJson(STD_NAMESPACE ostream &out,
+                                  DcmJsonFormat &format);
 
     /** special write method for creation of digital signatures (abstract)
      *  @param outStream DICOM output stream
@@ -413,6 +554,13 @@ class DcmObject
      *  @return always returns false, i.e. not affected by SpecificCharacterSet
      */
     virtual OFBool isAffectedBySpecificCharacterSet() const;
+
+    /** convert this object from the currently selected source character set to the
+     *  currently selected destination character set (if affected by SpecificCharacterSet)
+     *  @param converter character set converter to be used to convert the element values
+     *  @return always returns EC_Normal, since there is nothing to do in this base class
+     */
+    virtual OFCondition convertCharacterSet(DcmSpecificCharacterSet &converter);
 
     /** check if this object is empty
      *  @param normalize normalize value before checking (ignore non-significant characters)
@@ -497,7 +645,7 @@ class DcmObject
     virtual OFCondition loadAllDataIntoMemory() = 0;
 
     /** return the current value of the Length field (which is different from the functionality
-     *  of the public getLength method). Only needed for internal purposes and for checker tools
+     *  of the public getLength() method). Only needed for internal purposes and for checker tools
      *  that verify values against the length field.
      *  @return current value of length field
      */
@@ -505,7 +653,7 @@ class DcmObject
 
  protected:
 
-    /** print line indentation, e.g. a couple of spaces for each nesting level.
+    /** print line indentation, e.g.\ a couple of spaces for each nesting level.
      *  Depending on the value of 'flags' other visualizations are also possible.
      *  @param out output stream
      *  @param flags used to customize the output (see DCMTypes::PF_xxx)
@@ -543,8 +691,7 @@ class DcmObject
                           DcmTag *tag = NULL);
 
     /** print given text with element information.
-     *  Calls printInfoLineStart() and printInfoLineEnd() to frame the
-     *  'info' text.
+     *  Calls printInfoLineStart() and printInfoLineEnd() to frame the 'info' text.
      *  @param out output stream
      *  @param flags used to customize the output (see DCMTypes::PF_xxx)
      *  @param level current level of nested items. Used for indentation.
@@ -589,11 +736,11 @@ class DcmObject
      */
     virtual Uint32 getTagAndLengthSize(const E_TransferSyntax oxfer) const;
 
-	/** return the DICOM attribute tag name for this object. If not known yet, will
-	 *  be looked up in the dictionary and cached. Therefore, method is not const.
-	 *  @return tag name for this attribute
-	 */
-	const char *getTagName() { return Tag.getTagName(); }
+    /** return the DICOM attribute tag name for this object. If not known yet, will
+     *  be looked up in the dictionary and cached. Therefore, method is not const.
+     *  @return tag name for this attribute
+     */
+    const char *getTagName() { return Tag.getTagName(); }
 
     /** set the VR for this attribute
      *  @param vr new VR for this attribute.
@@ -630,10 +777,11 @@ class DcmObject
      */
     void setLengthField(Uint32 val) { Length = val; }
 
-public:
+ public:
+
     /** helper class to print a DcmObject to an ostream using operator<<
      */
-    class PrintHelper
+    class DCMTK_DCMDATA_EXPORT PrintHelper
     {
       private:
         /** Undefined assignment operator. This is needed to work around a
@@ -658,12 +806,12 @@ public:
 
     /* member variables */
 
-protected:
+ protected:
 
     /// error flag for this object.
     OFCondition errorFlag;
 
-private:
+ private:
 
     /// the DICOM attribute tag and VR for this object
     DcmTag Tag;
@@ -677,6 +825,8 @@ private:
     /// number of bytes already read/written during transfer
     Uint32 fTransferredBytes;
 
+    /// pointer to parent object if contained in a dataset/item (might be NULL)
+    DcmObject *Parent;
  }; // class DcmObject
 
 /** Print a DcmObject::PrintHelper to an ostream.
@@ -691,219 +841,3 @@ static inline STD_NAMESPACE ostream& operator<<(STD_NAMESPACE ostream &stream, D
 }
 
 #endif // DCOBJECT_H
-
-
-/*
- * CVS/RCS Log:
- * $Log: dcobject.h,v $
- * Revision 1.70  2010-10-29 10:57:17  joergr
- * Added support for colored output to the print() method.
- *
- * Revision 1.69  2010-10-14 13:15:41  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.68  2010-06-18 08:17:57  uli
- * Added undefined assignment operator to PrintHelper to work around
- * a warning with VC2008.
- *
- * Revision 1.67  2010-03-01 09:08:44  uli
- * Removed some unnecessary include directives in the headers.
- *
- * Revision 1.66  2010-02-22 11:39:54  uli
- * Remove some unneeded includes.
- *
- * Revision 1.65  2009-11-04 09:58:07  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.64  2009-10-13 14:26:09  uli
- * Added the DcmObject::PrintHelper helper class. This class can be used to
- * print DcmObject instances with oflog's logging macros.
- *
- * Revision 1.63  2009-08-07 14:40:38  joergr
- * Enhanced isEmpty() method by checking whether the data element value consists
- * of non-significant characters only.
- *
- * Revision 1.62  2009-06-04 16:52:14  joergr
- * Added new parsing flag that allows for ignoring the value of File Meta
- * Information Group Length (0002,0000).
- *
- * Revision 1.61  2009-03-25 10:22:09  joergr
- * Added new method isEmpty() to DICOM object, item and sequence class.
- *
- * Revision 1.60  2009-03-05 14:07:56  onken
- * Fixed typo.
- *
- * Revision 1.59  2009-03-05 13:35:47  onken
- * Added checks for sequence and item lengths which prevents overflow in length
- * field, if total length of contained items (or sequences) exceeds
- * 32-bit length field. Also introduced new flag (default: enabled)
- * for writing in explicit length mode, which allows for automatically
- * switching encoding of only that very sequence/item to undefined
- * length coding (thus permitting to actually write the file).
- *
- * Revision 1.58  2009-02-11 13:16:32  onken
- * Added global parser flag permitting to stop parsing after a specific
- * element was parsed on dataset level (useful for removing garbage at
- * end of file).
- *
- * Revision 1.57  2009-02-04 17:54:30  joergr
- * Fixed various layout and formatting issues.
- *
- * Revision 1.56  2009-02-04 14:05:01  onken
- * Introduced global flag that, if enabled, tells the parser to continue
- * parsing if possible.
- *
- * Revision 1.55  2009-01-29 15:36:16  onken
- * Added global parsing option that allows for reading private attributes in
- * implicit encoding having a maximum length to be read as sequences instead
- * of relying on the dictionary.
- *
- * Revision 1.54  2009-01-06 16:28:11  joergr
- * Reworked print() output format for option PF_showTreeStructure.
- *
- * Revision 1.53  2009-01-05 15:32:23  joergr
- * Added global flag that allows for reading incorrectly encoded DICOM datasets
- * where particular data elements are encoded with a differing transfer syntax
- * (Implicit VR Little endian instead of Explicit VR encoding as declared).
- *
- * Revision 1.52  2008-09-24 13:33:53  joergr
- * Fixed typo in comment.
- *
- * Revision 1.51  2008-07-17 11:19:49  onken
- * Updated copyFrom() documentation.
- *
- * Revision 1.50  2008-07-17 10:30:23  onken
- * Implemented copyFrom() method for complete DcmObject class hierarchy, which
- * permits setting an instance's value from an existing object. Implemented
- * assignment operator where necessary.
- *
- * Revision 1.49  2008-04-17 14:48:39  meichel
- * Method DcmObject::getLengthField now public, needed by dcmcheck
- *
- * Revision 1.48  2007/11/29 14:30:19  meichel
- * Write methods now handle large raw data elements (such as pixel data)
- *   without loading everything into memory. This allows very large images to
- *   be sent over a network connection, or to be copied without ever being
- *   fully in memory.
- *
- * Revision 1.47  2007/06/29 14:17:49  meichel
- * Code clean-up: Most member variables in module dcmdata are now private,
- *   not protected anymore.
- *
- * Revision 1.46  2007/02/19 15:04:34  meichel
- * Removed searchErrors() methods that are not used anywhere and added
- *   error() methods only in the DcmObject subclasses where really used.
- *
- * Revision 1.45  2006/12/15 14:18:07  joergr
- * Added new method that checks whether a DICOM object or element is affected
- * by SpecificCharacterSet (0008,0005).
- *
- * Revision 1.44  2006/12/13 13:58:15  joergr
- * Added new optional parameter "checkAllStrings" to method containsExtended
- * Characters().
- *
- * Revision 1.43  2006/08/15 15:49:56  meichel
- * Updated all code in module dcmdata to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.42  2006/05/11 08:54:23  joergr
- * Moved checkForNonASCIICharacters() from application to library.
- *
- * Revision 1.41  2005/12/08 16:28:22  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.40  2005/12/02 08:49:17  joergr
- * Changed macro NO_XFER_DETECTION_FOR_DATASETS into a global option that can
- * be enabled and disabled at runtime.
- *
- * Revision 1.39  2005/11/24 12:50:57  meichel
- * Fixed bug in code that prepares a byte stream that is fed into the MAC
- *   algorithm when creating or verifying a digital signature. The previous
- *   implementation was non-conformant when signatures included compressed
- *   (encapsulated) pixel data because the item length was included in the byte
- *   stream, while it should not. The global variable dcmEnableOldSignatureFormat
- *   and a corresponding command line option in dcmsign allow to re-enable the old
- *   implementation.
- *
- * Revision 1.38  2005/05/10 15:27:14  meichel
- * Added support for reading UN elements with undefined length according
- *   to CP 246. The global flag dcmEnableCP246Support allows to revert to the
- *   prior behaviour in which UN elements with undefined length were parsed
- *   like a normal explicit VR SQ element.
- *
- * Revision 1.37  2004/07/01 12:28:25  meichel
- * Introduced virtual clone method for DcmObject and derived classes.
- *
- * Revision 1.36  2004/04/27 09:21:01  wilkens
- * Fixed a bug in dcelem.cc which occurs when one is serializing a dataset
- * (that contains an attribute whose length value is coded with 2 bytes) into
- * a given buffer. Although the number of available bytes in the buffer was
- * sufficient, the dataset->write(...) method would always return
- * EC_StreamNotifyClient to indicate that there are not sufficient bytes
- * available in the buffer. This code modification fixes the problem.
- *
- * Revision 1.35  2003/06/12 13:33:21  joergr
- * Fixed inconsistent API documentation reported by Doxygen.
- *
- * Revision 1.34  2002/12/06 12:49:11  joergr
- * Enhanced "print()" function by re-working the implementation and replacing
- * the boolean "showFullData" parameter by a more general integer flag.
- * Added doc++ documentation.
- * Made source code formatting more consistent with other modules/files.
- *
- * Revision 1.33  2002/08/27 16:55:35  meichel
- * Initial release of new DICOM I/O stream classes that add support for stream
- *   compression (deflated little endian explicit VR transfer syntax)
- *
- * Revision 1.32  2002/08/20 12:18:35  meichel
- * Changed parameter list of loadFile and saveFile methods in class
- *   DcmFileFormat. Removed loadFile and saveFile from class DcmObject.
- *
- * Revision 1.31  2002/07/08 14:45:20  meichel
- * Improved dcmdata behaviour when reading odd tag length. Depending on the
- *   global boolean flag dcmAcceptOddAttributeLength, the parser now either accepts
- *   odd length attributes or implements the old behaviour, i.e. assumes a real
- *   length larger by one.
- *
- * Revision 1.30  2002/04/25 09:38:47  joergr
- * Added support for XML output of DICOM objects.
- *
- * Revision 1.29  2002/04/11 12:23:46  joergr
- * Added new methods for loading and saving DICOM files.
- *
- * Revision 1.28  2001/11/16 15:54:39  meichel
- * Adapted digital signature code to final text of supplement 41.
- *
- * Revision 1.27  2001/09/25 17:19:27  meichel
- * Adapted dcmdata to class OFCondition
- *
- * Revision 1.26  2001/06/01 15:48:41  meichel
- * Updated copyright header
- *
- * Revision 1.25  2000/11/07 16:56:07  meichel
- * Initial release of dcmsign module for DICOM Digital Signatures
- *
- * Revision 1.24  2000/04/14 16:02:39  meichel
- * Global flag dcmEnableAutomaticInputDataCorrection now derived from OFGlobal
- *   and, thus, safe for use in multi-thread applications.
- *
- * Revision 1.23  2000/03/08 16:26:16  meichel
- * Updated copyright header.
- *
- * Revision 1.22  2000/03/03 14:05:24  meichel
- * Implemented library support for redirecting error messages into memory
- *   instead of printing them to stdout/stderr for GUI applications.
- *
- * Revision 1.21  2000/02/10 10:50:52  joergr
- * Added new feature to dcmdump (enhanced print method of dcmdata): write
- * pixel data/item value fields to raw files.
- *
- * Revision 1.20  2000/02/01 10:12:02  meichel
- * Avoiding to include <stdlib.h> as extern "C" on Borland C++ Builder 4,
- *   workaround for bug in compiler header files.
- *
- * Revision 1.19  1999/03/31 09:24:42  meichel
- * Updated copyright header in module dcmdata
- *
- *
- */

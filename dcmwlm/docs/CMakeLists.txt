@@ -1,2 +1,2 @@
 # declare installation files
-INSTALL_FILES(${INSTALL_DOCDIR} FILES wwwapp.txt)
+install(FILES wlmsetup.txt DESTINATION "${CMAKE_INSTALL_DOCDIR}" COMPONENT doc)

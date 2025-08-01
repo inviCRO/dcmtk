@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1996-2010, OFFIS e.V.
+ *  Copyright (C) 1996-2019, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: (Partially) abstract class for connecting to an arbitrary data source.
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:48 $
- *  CVS/RCS Revision: $Revision: 1.30 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 // ----------------------------------------------------------------------------
@@ -34,6 +27,7 @@
 #include "dcmtk/dcmwlm/wltypdef.h"   // for type definitions
 #include "dcmtk/ofstd/oftypes.h"     // for OFBool
 #include "dcmtk/dcmdata/dcdatset.h"  // for DcmDataset
+#include "dcmtk/dcmdata/dcmatch.h"   // for DcmAttributeMatching
 #include "dcmtk/dcmdata/dcvrat.h"    // for DcmAttributTag
 #include "dcmtk/dcmdata/dcvrlo.h"    // for DcmLongString
 #include "dcmtk/dcmdata/dcvrae.h"
@@ -49,11 +43,7 @@
 #include "dcmtk/dcmdata/dcdicent.h"  // needed by MSVC5 with STL
 #include "dcmtk/dcmwlm/wlds.h"
 
-OFLogger DCM_dcmwlmGetLogger()
-{
-  static OFLogger DCM_dcmwlmLogger = OFLog::getLogger("dcmtk.dcmwlm");
-  return DCM_dcmwlmLogger;
-}
+OFLogger DCM_dcmwlmLogger = OFLog::getLogger("dcmtk.dcmwlm");
 
 // ----------------------------------------------------------------------------
 
@@ -63,7 +53,7 @@ WlmDataSource::WlmDataSource()
 // Task         : Constructor.
 // Parameters   : none.
 // Return Value : none.
-  : failOnInvalidQuery( OFTrue ), calledApplicationEntityTitle(""),
+  : failOnInvalidQuery( OFTrue ), callingApplicationEntityTitle(""), calledApplicationEntityTitle(""),
     identifiers( NULL ), errorElements( NULL ), offendingElements( NULL ), errorComment( NULL ),
     foundUnsupportedOptionalKey( OFFalse ), readLockSetOnDataSource( OFFalse ),
     noSequenceExpansion( OFFalse ), returnedCharacterSet( RETURN_NO_CHARACTER_SET ), matchingDatasets(),
@@ -78,9 +68,9 @@ WlmDataSource::WlmDataSource()
 
   // Initialize member variables.
   identifiers = new DcmDataset();
-  offendingElements = new DcmAttributeTag( DCM_OffendingElement, 0 );
-  errorElements = new DcmAttributeTag( DCM_OffendingElement, 0 );
-  errorComment = new DcmLongString( DCM_ErrorComment, 0 );
+  offendingElements = new DcmAttributeTag( DCM_OffendingElement);
+  errorElements = new DcmAttributeTag( DCM_OffendingElement);
+  errorComment = new DcmLongString( DCM_ErrorComment);
 }
 
 // ----------------------------------------------------------------------------
@@ -321,7 +311,7 @@ void WlmDataSource::CheckSequenceElementInSearchMask( DcmDataset *searchMask, in
   DcmTag tag( element->getTag() );
 
   // remember that the current element is a sequence of items
-  DcmSequenceOfItems *sequenceElement = (DcmSequenceOfItems*)element;
+  DcmSequenceOfItems *sequenceElement = OFstatic_cast(DcmSequenceOfItems *, element);
 
   // determine if the current sequence element is a supported matching or return key attribute
   if( IsSupportedMatchingKeyAttribute( element, supSequenceElement ) || IsSupportedReturnKeyAttribute( element, supSequenceElement ) )
@@ -340,7 +330,7 @@ void WlmDataSource::CheckSequenceElementInSearchMask( DcmDataset *searchMask, in
       // which pertains to a certain command line option
       if( noSequenceExpansion == OFFalse )
       {
-        // if the user did not explicitely disable the expansion of empty sequences in C-FIND request
+        // if the user did not explicitly disable the expansion of empty sequences in C-FIND request
         // messages go ahead and expand this sequence according to the remark above
         ExpandEmptySequenceInSearchMask( element );
       }
@@ -442,7 +432,7 @@ void WlmDataSource::ExpandEmptySequenceInSearchMask( DcmElement *&element )
 //                contains a sequence attribute which contains no item or a single empty item, all
 //                attributes from that particular sequence are in fact queried and shall be returned
 //                by the SCP. This implementation accounts for this specification by inserting a
-//                corresponding single item with all required attributes into such emtpy sequences.
+//                corresponding single item with all required attributes into such empty sequences.
 //                This function performs the insertion of the required item and attributes.
 // Parameters   : element - [inout] Pointer to the currently processed element.
 // Return Value : none.
@@ -451,7 +441,7 @@ void WlmDataSource::ExpandEmptySequenceInSearchMask( DcmElement *&element )
   DcmElement *newElement = NULL;
 
   // remember that the current element is a sequence of items
-  DcmSequenceOfItems *sequenceElement = (DcmSequenceOfItems*)element;
+  DcmSequenceOfItems *sequenceElement = OFstatic_cast(DcmSequenceOfItems *, element);
 
   // determine if the length of the sequence equals 0
   if( element->getLength() == 0 )
@@ -504,7 +494,7 @@ void WlmDataSource::ExpandEmptySequenceInSearchMask( DcmElement *&element )
       else
       {
         DcmItem *item2 = new DcmItem();
-        if( ((DcmSequenceOfItems*)newElement)->insert( item2 ) != EC_Normal )
+        if( OFstatic_cast(DcmSequenceOfItems*, newElement)->insert( item2 ) != EC_Normal )
         {
           delete item2;
           item2 = NULL;
@@ -630,6 +620,8 @@ OFBool WlmDataSource::CheckMatchingKey( const DcmElement *elem )
 //                    > DCM_Modality                                       (0008,0060)  CS  R  1
 //                    > DCM_ScheduledPerformingPhysicianName               (0040,0006)  PN  R  2
 //                   DCM_PatientName                                       (0010,0010)  PN  R  1
+//                   DCM_ResponsiblePerson                                 (0010,2297)  PN  O  3
+//                   DCM_ResponsiblePersonRole                             (0010,2298)  CS  O  3
 //                   DCM_PatientID                                         (0010,0020)  LO  R  1
 //                   DCM_AccessionNumber                                   (0008,0050)  SH  O  2
 //                   DCM_RequestedProcedureID                              (0040,1001)  SH  O  1
@@ -639,6 +631,9 @@ OFBool WlmDataSource::CheckMatchingKey( const DcmElement *elem )
 //                   DCM_AdmissionID                                       (0038,0010)  LO  O  2
 //                   DCM_RequestedProcedurePriority                        (0040,1003)  SH  O  2
 //                   DCM_PatientBirthDate                                  (0010,0030)  DA  O  2
+//                   DCM_IssuerOfPatientID                                 (0010,0021)  LO  O  3
+//                   DCM_StudyDate                                         (0008,0020)  DA  O  3
+//                   DCM_StudyTime                                         (0008,0030)  TM  O  3
 //                As a result, the following data types have to be supported in this function:
 //                AE, DA, TM, CS, PN, LO and SH. For the correct specification of these datatypes
 //                2003 DICOM standard, part 5, section 6.2, table 6.2-1.
@@ -654,32 +649,51 @@ OFBool WlmDataSource::CheckMatchingKey( const DcmElement *elem )
   switch( elem->ident() )
   {
     case EVR_DA:
-      // get string value
-      ok = GetStringValue( elem, val );
-      // if there is a value and if the value is not a date or a date range, return invalid value
-      if( ok && !IsValidDateOrDateRange( val ) )
-      {
-        DcmTag tag( elem->getTag() );
-        PutOffendingElements( tag );
-        errorComment->putString("Invalid value for an attribute of datatype DA");
-        ok = OFFalse;
-      }
-      else
-        return OFTrue;
-
+    case EVR_DT:
     case EVR_TM:
-      // get string value
-      ok = GetStringValue( elem, val );
-      // if there is a value and if the value is not a time or a time range, return invalid value
-      if( ok && !IsValidTimeOrTimeRange( val ) )
+    {
+      const char* data;
+      size_t size;
+
+      {
+        char* c;
+        Uint32 s;
+        if( OFconst_cast( DcmElement*, elem )->getString( c, s ).bad() )
+            break;
+        data = c;
+        size = s;
+      }
+
+      OFStandard::trimString( data, size );
+      if( !size )
+        break;
+
+      switch( elem->ident() )
+      {
+      case EVR_DA:
+        ok = DcmAttributeMatching::isDateQuery( data, size );
+        break;
+      case EVR_DT:
+        ok = DcmAttributeMatching::isDateTimeQuery( data, size );
+        break;
+      case EVR_TM:
+        ok = DcmAttributeMatching::isTimeQuery( data, size );
+        break;
+      default:
+        ok = false;
+        break;
+      }
+
+      if( !ok )
       {
         DcmTag tag( elem->getTag() );
         PutOffendingElements( tag );
-        errorComment->putString("Invalid value for an attribute of datatype TM");
-        ok = OFFalse;
+        OFString message( "Invalid value for an attribute with VR=" );
+        message += DcmVR( elem->ident() ).getVRName();
+        errorComment->putOFStringArray( message );
       }
-      else
-        return OFTrue;
+    }
+      break;
 
     case EVR_CS:
       // get string value
@@ -693,7 +707,8 @@ OFBool WlmDataSource::CheckMatchingKey( const DcmElement *elem )
         ok = OFFalse;
       }
       else
-        return OFTrue;
+        ok = OFTrue;
+      break;
 
     case EVR_AE:
       // get string value
@@ -707,13 +722,14 @@ OFBool WlmDataSource::CheckMatchingKey( const DcmElement *elem )
         ok = OFFalse;
       }
       else
-        return OFTrue;
+        ok = OFTrue;
+      break;
 
     case EVR_PN:
       // get string value
       ok = GetStringValue( elem, val );
-      // check if value contains only valid characters
-      if( ok && !ContainsOnlyValidCharacters( val.c_str(), "*? !\"#$%%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\033" ) && specificCharacterSet == "" )  // ESC=\033
+      // check if value contains only valid characters (no ESC since only allowed for ISO 2022 encoding)
+      if( ok && !ContainsOnlyValidCharacters( val.c_str(), "*? !\"#$%%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}" ) && specificCharacterSet == "" )
       {
         DcmTag tag( elem->getTag() );
         PutOffendingElements( tag );
@@ -721,13 +737,14 @@ OFBool WlmDataSource::CheckMatchingKey( const DcmElement *elem )
         ok = OFFalse;
       }
       else
-        return OFTrue;
+        ok = OFTrue;
+      break;
 
     case EVR_LO:
       // get string value
       ok = GetStringValue( elem, val );
-      // check if value contains only valid characters
-      if( ok && !ContainsOnlyValidCharacters( val.c_str(), "*? !\"#$%%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\033\012\014\015" ) && specificCharacterSet == "" )  // ESC=\033, LF=\012, FF=\014, CR=\015
+      // check if value contains only valid characters (no ESC since only allowed for ISO 2022 encoding)
+      if( ok && !ContainsOnlyValidCharacters( val.c_str(), "*? !\"#$%%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}" ) && specificCharacterSet == "" )
       {
         DcmTag tag( elem->getTag() );
         PutOffendingElements( tag );
@@ -735,13 +752,14 @@ OFBool WlmDataSource::CheckMatchingKey( const DcmElement *elem )
         ok = OFFalse;
       }
       else
-        return OFTrue;
+        ok = OFTrue;
+      break;
 
     case EVR_SH:
       // get string value
       ok = GetStringValue( elem, val );
-      // check if value contains only valid characters
-      if( ok && !ContainsOnlyValidCharacters( val.c_str(), "*? !\"#$%%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\033\012\014\015" ) && specificCharacterSet == "" )  // ESC=\033, LF=\012, FF=\014, CR=\015
+      // check if value contains only valid characters (no ESC since only allowed for ISO 2022 encoding)
+      if( ok && !ContainsOnlyValidCharacters( val.c_str(), "*? !\"#$%%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}" ) && specificCharacterSet == "" )
       {
         DcmTag tag( elem->getTag() );
         PutOffendingElements( tag );
@@ -749,268 +767,14 @@ OFBool WlmDataSource::CheckMatchingKey( const DcmElement *elem )
         ok = OFFalse;
       }
       else
-        return OFTrue;
+        ok = OFTrue;
+      break;
 
     default:
       break;
   }
 
   return( ok );
-}
-
-// ----------------------------------------------------------------------------
-
-OFBool WlmDataSource::IsValidDateOrDateRange( const OFString& value )
-// Date         : March 19, 2002
-// Author       : Thomas Wilkens
-// Task         : This function checks if the given value is a valid date or date range.
-// Parameters   : value - [in] The value which shall be checked.
-// Return Value : OFTrue  - The given value is a valid date or date range.
-//                OFFalse - The given value is not a valid date or date range.
-{
-  // create new string without leading or trailing blanks
-  OFString dateRange = DeleteLeadingAndTrailingBlanks( value );
-
-  if (dateRange.length() == 0)
-    return OFFalse;
-
-  // check if only allowed characters occur in the string
-  if( !ContainsOnlyValidCharacters( dateRange.c_str(), "0123456789.-" ) )
-    return( OFFalse );
-
-  // initialize return value
-  OFBool isValidDateRange = OFFalse;
-
-  // Determine if a hyphen occurs in the date range
-  size_t hyphen = dateRange.find('-');
-  if( hyphen != OFString_npos )
-  {
-    // determine if two date values are given or not
-    if( dateRange[0] == '-' )
-    {
-      // if the hyphen occurs at the beginning, there is just one date value which has to be checked for validity
-      isValidDateRange = IsValidDate( dateRange.substr(1) );
-    }
-    else if( dateRange[ dateRange.length() - 1 ] == '-' )
-    {
-      // if the hyphen occurs at the end, there is just one date value which has to be checked for validity
-      isValidDateRange = IsValidDate( dateRange.substr(0, dateRange.length() -1 ));
-    }
-    else
-    {
-      // in this case the hyphen occurs somewhere in between beginning and end; hence there are two date values
-      // which have to be checked for validity. Determine where the hyphen occurs exactly
-      // check both dates for validity
-      if( IsValidDate( dateRange.substr(0, dateRange.length()-hyphen-1 )) &&
-          IsValidDate( dateRange.substr(        hyphen + 1             )) )
-      {
-        isValidDateRange = OFTrue;
-      }
-    }
-  }
-  else
-  {
-    // if there is no hyphen, there is just one date value which has to be checked for validity
-    isValidDateRange = IsValidDate( dateRange );
-  }
-
-  // return result
-  return( isValidDateRange );
-}
-
-// ----------------------------------------------------------------------------
-
-OFBool WlmDataSource::IsValidDate( const OFString& value )
-// Date         : March 19, 2002
-// Author       : Thomas Wilkens
-// Task         : This function checks if the given date value is valid.
-//                According to the 2001 DICOM standard, part 5, Table 6.2-1, a date
-//                value is either in format "yyyymmdd" or in format "yyyy.mm.dd",
-//                so that e.g. "19840822" represents August 22, 1984.
-// Parameters   : value - [in] The value which shall be checked.
-// Return Value : OFTrue  - Date is valid.
-//                OFFalse - Date is not valid.
-{
-  int year=0, month=0, day=0;
-
-  // create new string without leading or trailing blanks
-  OFString date = DeleteLeadingAndTrailingBlanks( value );
-  // check parameter
-
-  if( value.length() == 0 )
-    return( OFFalse );
-
-  // check if only allowed characters occur in the string
-  if( !ContainsOnlyValidCharacters( date.c_str(), "0123456789." ) )
-    return( OFFalse );
-
-  // initialize return value
-  OFBool isValidDate = OFFalse;
-
-  // check which of the two formats applies to the given string
-  if( date.length() == 8 )
-  {
-    // scan given date string
-    sscanf( date.c_str(), "%4d%2d%2d", &year, &month, &day );
-    if( year > 0 && month >= 1 && month <= 12 && day >= 1 && day <= 31 )
-      isValidDate = OFTrue;
-  }
-  else if( date.length() == 10 )
-  {
-    // scan given date string
-    sscanf( date.c_str(), "%4d.%2d.%2d", &year, &month, &day );
-    if( year > 0 && month >= 1 && month <= 12 && day >= 1 && day <= 31 )
-      isValidDate = OFTrue;
-  }
-
-  // return result
-  return( isValidDate );
-}
-
-// ----------------------------------------------------------------------------
-
-OFBool WlmDataSource::IsValidTimeOrTimeRange( const OFString& value )
-// Date         : March 19, 2002
-// Author       : Thomas Wilkens
-// Task         : This function checks if the given value is a valid time or time range.
-// Parameters   : timeRange - [in] The value which shall be checked.
-// Return Value : OFTrue  - The given value is a valid time or time range.
-//                OFFalse - The given value is not a valid time or time range.
-{
-  // create new string without leading or trailing blanks
-  OFString timeRange = DeleteLeadingAndTrailingBlanks( value );
-
-  // check if string is empty now
-  if( timeRange.length() == 0 )
-    return( OFFalse );
-
-  // check if only allowed characters occur in the string
-  if( !ContainsOnlyValidCharacters( timeRange.c_str(), "0123456789.:-" ) )
-    return( OFFalse );
-
-  // Determine if a hyphen occurs in the time range
-  size_t hyphen = timeRange.find('-');
-  if( hyphen != OFString_npos )
-  {
-    // determine if two time values are given or not
-    if( timeRange[0] == '-' )
-    {
-      // if the hyphen occurs at the beginning, there is just one time value which has to be checked for validity
-      return IsValidTime( timeRange.substr(1) );
-    }
-    else if( timeRange[ timeRange.length() - 1 ] == '-' )
-    {
-      // if the hyphen occurs at the end, there is just one time value which has to be checked for validity
-      return IsValidTime( timeRange.substr(0, timeRange.length()-1) );
-    }
-    else
-    {
-      // in this case the hyphen occurs somewhere in between beginning and end; hence there are two time values
-      // which have to be checked for validity.
-
-      // check both times for validity
-      if( IsValidTime( timeRange.substr(0, timeRange.length() - hyphen -1 )) &&
-          IsValidTime( timeRange.substr( hyphen + 1 )                     ))
-        return OFTrue;
-    }
-  }
-  else
-  {
-    // if there is no hyphen, there is just one date value which has to be checked for validity
-    return IsValidTime( timeRange );
-  }
-  return OFFalse;
-}
-
-// ----------------------------------------------------------------------------
-
-OFBool WlmDataSource::IsValidTime( const OFString& value )
-// Date         : March 19, 2002
-// Author       : Thomas Wilkens
-// Task         : This function checks if the given time value is valid.
-//                According to the 2001 DICOM standard, part 5, Table 6.2-1, a time
-//                value is either in format "hhmmss.fracxx" or "hh:mm:ss.fracxx" where
-//                 - hh represents the hour (0-23)
-//                 - mm represents the minutes (0-59)
-//                 - ss represents the seconds (0-59)
-//                 - fracxx represents the fraction of a second in millionths of seconds (000000-999999)
-//                Note that one or more of the components mm, ss, or fracxx may be missing as
-//                long as every component to the right of a missing component is also missing.
-//                If fracxx is missing, the "." character in front of fracxx is also missing.
-// Parameters   : value - [in] The value which shall be checked.
-// Return Value : OFTrue  - Time is valid.
-//                OFFalse - Time is not valid.
-{
-  int hour=0, min=0, sec=0, frac=0, fieldsRead=0;
-  // create new string without leading or trailing blanks
-  OFString timevalue = DeleteLeadingAndTrailingBlanks( value );
-
-  // check if string is empty now
-  if( timevalue.length() == 0)
-    return( OFFalse );
-
-  // check if only allowed characters occur in the string
-  if( !ContainsOnlyValidCharacters( timevalue.c_str(), "0123456789.:" ) )
-    return( OFFalse );
-
-  // check which of the two formats applies to the given string
-  size_t colon = timevalue.find(':');
-  if( colon != OFString_npos )
-  {
-    // time format is "hh:mm:ss.fracxx"
-
-    // check which components are missing
-    if( timevalue.length() == 5 )
-    {
-      // scan given time string "hh:mm"
-      fieldsRead = sscanf( timevalue.c_str(), "%2d:%2d", &hour, &min );
-      if( fieldsRead == 2 && hour >= 0 && hour <= 23 && min >= 0 && min <= 59 )
-        return OFTrue;
-    }
-    else if( timevalue.length() == 8 )
-    {
-      // scan given time string "hh:mm:ss"
-      fieldsRead = sscanf( timevalue.c_str(), "%2d:%2d:%2d", &hour, &min, &sec );
-      if( fieldsRead == 3 && hour >= 0 && hour <= 23 && min >= 0 && min <= 59 && sec >= 0 && sec <= 59 )
-        return OFTrue;
-    }
-    else if( timevalue.length() > 8 && timevalue.length() < 16 )
-    {
-      // scan given time string "hh:mm:ss.fracxx"
-      fieldsRead = sscanf( timevalue.c_str(), "%2d:%2d:%2d.%6d", &hour, &min, &sec, &frac );
-      if( fieldsRead == 4 && hour >= 0 && hour <= 23 && min >= 0 && min <= 59 && sec >= 0 && sec <= 59 && frac >= 0 && frac <= 999999 )
-        return OFTrue;
-    }
-  }
-  else
-  {
-    // time format is "hhmmss.fracxx"
-
-    // check which components are missing
-    if( timevalue.length() == 4 )
-    {
-      // scan given time string "hhmm"
-      fieldsRead = sscanf( timevalue.c_str(), "%2d%2d", &hour, &min );
-      if( fieldsRead == 2 && hour >= 0 && hour <= 23 && min >= 0 && min <= 59 )
-        return OFTrue;
-    }
-    else if( timevalue.length() == 6 )
-    {
-      // scan given time string "hhmmss"
-      fieldsRead = sscanf( timevalue.c_str(), "%2d%2d%2d", &hour, &min, &sec );
-      if( fieldsRead == 3 && hour >= 0 && hour <= 23 && min >= 0 && min <= 59 && sec >= 0 && sec <= 59 )
-        return OFTrue;
-    }
-    else if( timevalue.length() > 6 && timevalue.length() < 14 )
-    {
-      // scan given time string "hhmmss.fracxx"
-      fieldsRead = sscanf( timevalue.c_str(), "%2d%2d%2d.%6d", &hour, &min, &sec, &frac );
-      if( fieldsRead == 4 && hour >= 0 && hour <= 23 && min >= 0 && min <= 59 && sec >= 0 && sec <= 59 && frac >= 0 && frac <= 999999 )
-        return OFTrue;
-    }
-  }
-
- return OFFalse;
 }
 
 // ----------------------------------------------------------------------------
@@ -1034,12 +798,12 @@ OFBool WlmDataSource::ContainsOnlyValidCharacters( const char *s, const char *ch
   }
 
   // return OFTrue if all the characters of s can be found in the string charset.
-  int s_len = strlen( s );
-  int charset_len = strlen( charset );
-  for( int i=0 ; i<s_len && result ; i++ )
+  size_t s_len = strlen( s );
+  size_t charset_len = strlen( charset );
+  for( size_t i=0 ; i<s_len && result ; i++ )
   {
     OFBool isSetMember = OFFalse;
-    for( int j=0 ; !isSetMember && j<charset_len ; j++ )
+    for( size_t j=0 ; !isSetMember && j<charset_len ; j++ )
     {
       if( s[i] == charset[j] )
         isSetMember = OFTrue;
@@ -1065,14 +829,14 @@ OFString WlmDataSource::DeleteLeadingAndTrailingBlanks( const OFString& value )
   size_t pos = 0;
 
   // delete leading blanks
-  while ( (returnValue.length() > 0) && (returnValue[pos] == ' ') )
+  while ( !returnValue.empty() && (returnValue[pos] == ' ') )
     pos++; // count blanks
   if (pos > 0)
     returnValue.erase(0, pos);
 
   // delete trailing blanks, start from end of string
   pos = returnValue.length() - 1;
-  while ( (returnValue.length() > 0) && (returnValue[pos] == ' ') )
+  while ( !returnValue.empty() && (returnValue[pos] == ' ') )
     pos--;
   if (pos < returnValue.length() -1)
     returnValue.erase(pos);
@@ -1096,7 +860,7 @@ OFBool WlmDataSource::GetStringValue( const DcmElement *elem,
 {
   DcmElement *elemNonConst = OFconst_cast(DcmElement*, elem);
   OFCondition result = elemNonConst->getOFStringArray( resultVal );
-  if (result.bad() || resultVal.length() == 0)
+  if( result.bad() || resultVal.empty() )
     return OFFalse;
   return OFTrue;
 }
@@ -1172,6 +936,8 @@ OFBool WlmDataSource::IsSupportedMatchingKeyAttribute( DcmElement *element, DcmS
 //                    > DCM_Modality                                       (0008,0060)  CS  R  1
 //                    > DCM_ScheduledPerformingPhysicianName               (0040,0006)  PN  R  2
 //                   DCM_PatientName                                       (0010,0010)  PN  R  1
+//                   DCM_ResponsiblePerson                                 (0010,2297)  PN  O  3
+//                   DCM_ResponsiblePersonRole                             (0010,2298)  CS  O  3
 //                   DCM_PatientID                                         (0010,0020)  LO  R  1
 //                   DCM_AccessionNumber                                   (0008,0050)  SH  O  2
 //                   DCM_RequestedProcedureID                              (0040,1001)  SH  O  1
@@ -1181,6 +947,9 @@ OFBool WlmDataSource::IsSupportedMatchingKeyAttribute( DcmElement *element, DcmS
 //                   DCM_AdmissionID                                       (0038,0010)  LO  O  2
 //                   DCM_RequestedProcedurePriority                        (0040,1003)  SH  O  2
 //                   DCM_PatientBirthDate                                  (0010,0030)  DA  O  2
+//                   DCM_IssuerOfPatientID                                 (0010,0021)  LO  O  3
+//                   DCM_StudyDate                                         (0008,0020)  DA  O  3
+//                   DCM_StudyTime                                         (0008,0030)  TM  O  3
 // Parameters   : element            - [in] Pointer to the element which shall be checked.
 //                supSequenceElement - [in] Pointer to the superordinate sequence element of which
 //                                     the currently processed element is an attribute, or NULL if
@@ -1215,7 +984,12 @@ OFBool WlmDataSource::IsSupportedMatchingKeyAttribute( DcmElement *element, DcmS
   {
     if( elementKey == DCM_ScheduledProcedureStepSequence ||
         elementKey == DCM_PatientName                    ||
+        elementKey == DCM_ResponsiblePerson              ||
+        elementKey == DCM_ResponsiblePersonRole          ||
         elementKey == DCM_PatientID                      ||
+        elementKey == DCM_IssuerOfPatientID              ||
+        elementKey == DCM_StudyDate                      ||
+        elementKey == DCM_StudyTime                      ||
         elementKey == DCM_AccessionNumber                ||
         elementKey == DCM_RequestedProcedureID           ||
         elementKey == DCM_ReferringPhysicianName         ||
@@ -1256,13 +1030,15 @@ OFBool WlmDataSource::IsSupportedReturnKeyAttribute( DcmElement *element, DcmSeq
 //                    > DCM_ScheduledProcedureStepEndDate                  (0040,0004)  DA  O  3  (from the Scheduled Procedure Step Module)
 //                    > DCM_ScheduledProcedureStepEndTime                  (0040,0005)  TM  O  3  (from the Scheduled Procedure Step Module)
 //                    > DCM_ScheduledProtocolCodeSequence                  (0040,0008)  SQ  O  1C
-//                    >  > DCM_CodeValue                                   (0008,0100)  SH  O  1C
-//                    >  > DCM_CodingSchemeVersion                         (0008,0103)  SH  O  3
-//                    >  > DCM_CodingSchemeDesignator                      (0080,0102)  SH  O  1C
-//                    >  > DCM_CodeMeaning                                 (0080,0104)  LO  O  3
+//                    > > DCM_CodeValue                                    (0008,0100)  SH  O  1C
+//                    > > DCM_CodingSchemeVersion                          (0008,0103)  SH  O  3
+//                    > > DCM_CodingSchemeDesignator                       (0080,0102)  SH  O  1C
+//                    > > DCM_CodeMeaning                                  (0080,0104)  LO  O  3
 //                   DCM_RequestedProcedureID                              (0040,1001)  SH  O  1
 //                   DCM_RequestedProcedureDescription                     (0032,1060)  LO  O  1
 //                   DCM_StudyInstanceUID                                  (0020,000d)  UI  O  1
+//                   DCM_StudyDate                                         (0008,0020)  DA  O  3
+//                   DCM_StudyTime                                         (0008,0030)  TM  O  3
 //                   DCM_ReferencedStudySequence                           (0008,1110)  SQ  O  2
 //                    > DCM_ReferencedSOPClassUID                          (0008,1150)  UI  O  1
 //                    > DCM_ReferencedSOPInstanceUID                       (0008,1155)  UI  O  1
@@ -1277,7 +1053,10 @@ OFBool WlmDataSource::IsSupportedReturnKeyAttribute( DcmElement *element, DcmSeq
 //                    > DCM_ReferencedSOPClassUID                          (0008,1150)  UI  O  2
 //                    > DCM_ReferencedSOPInstanceUID                       (0008,1155)  UI  O  2
 //                   DCM_PatientName                                       (0010,0010)  PN  R  1
+//                   DCM_ResponsiblePerson                                 (0010,2297)  PN  O  3
+//                   DCM_ResponsiblePersonRole                             (0010,2298)  CS  O  3
 //                   DCM_PatientID                                         (0010,0020)  LO  R  1
+//                   DCM_IssuerOfPatientID                                 (0010,0021)  LO  O  3  (from the Patient Identification Module)
 //                   DCM_PatientBirthDate                                  (0010,0030)  DA  O  2
 //                   DCM_PatientSex                                        (0010,0040)  CS  O  2
 //                   DCM_PatientWeight                                     (0010,1030)  DS  O  2
@@ -1290,7 +1069,7 @@ OFBool WlmDataSource::IsSupportedReturnKeyAttribute( DcmElement *element, DcmSeq
 //                   DCM_NamesOfIntendedRecipientsOfResults                (0040,1010)  PN  O  3  (from the Requested Procedure Module)
 //                   DCM_InstitutionName                                   (0008,0080)  LO  O  3  (from the Visit Identification Module)
 //                   DCM_AdmittingDiagnosesDescription                     (0008,1080)  LO  O  3  (from the Visit Admission Module)
-//                   DCM_OtherPatientIDs                                   (0010,1000)  LO  O  3  (from the Patient Identification Module)
+//                   DCM_RETIRED_OtherPatientIDs                           (0010,1000)  LO  O  3  (from the Patient Identification Module)
 //                   DCM_PatientSize                                       (0010,1020)  DS  O  3  (from the Patient Demographic Module)
 //                   DCM_EthnicGroup                                       (0010,2160)  SH  O  3  (from the Patient Demographic Module)
 //                   DCM_PatientComments                                   (0010,4000)  LT  O  3  (from the Patient Demographic Module)
@@ -1360,18 +1139,18 @@ OFBool WlmDataSource::IsSupportedReturnKeyAttribute( DcmElement *element, DcmSeq
             elementKey == DCM_ScheduledProcedureStepStatus               ||
             elementKey == DCM_ScheduledProcedureStepEndDate              ||
             elementKey == DCM_ScheduledProcedureStepEndTime              ||
-            elementKey == DCM_ScheduledProtocolCodeSequence ) )             ||
+            elementKey == DCM_ScheduledProtocolCodeSequence ) )          ||
         ( supSequenceElementKey == DCM_ReferencedStudySequence        &&
           ( elementKey == DCM_ReferencedSOPClassUID                      ||
-            elementKey == DCM_ReferencedSOPInstanceUID ) )                  ||
+            elementKey == DCM_ReferencedSOPInstanceUID ) )               ||
         ( supSequenceElementKey == DCM_ReferencedPatientSequence      &&
           ( elementKey == DCM_ReferencedSOPClassUID                      ||
-            elementKey == DCM_ReferencedSOPInstanceUID ) )                  ||
+            elementKey == DCM_ReferencedSOPInstanceUID ) )               ||
         ( supSequenceElementKey == DCM_ScheduledProtocolCodeSequence  &&
           ( elementKey == DCM_CodeValue                                  ||
             elementKey == DCM_CodingSchemeVersion                        ||
             elementKey == DCM_CodingSchemeDesignator                     ||
-            elementKey == DCM_CodeMeaning ) )                               ||
+            elementKey == DCM_CodeMeaning ) )                            ||
         ( supSequenceElementKey == DCM_RequestedProcedureCodeSequence &&
           ( elementKey == DCM_CodeValue                                  ||
             elementKey == DCM_CodingSchemeVersion                        ||
@@ -1385,6 +1164,8 @@ OFBool WlmDataSource::IsSupportedReturnKeyAttribute( DcmElement *element, DcmSeq
         elementKey == DCM_RequestedProcedureID                              ||
         elementKey == DCM_RequestedProcedureDescription                     ||
         elementKey == DCM_StudyInstanceUID                                  ||
+        elementKey == DCM_StudyDate                                         ||
+        elementKey == DCM_StudyTime                                         ||
         elementKey == DCM_ReferencedStudySequence                           ||
         elementKey == DCM_RequestedProcedurePriority                        ||
         elementKey == DCM_PatientTransportArrangements                      ||
@@ -1395,7 +1176,10 @@ OFBool WlmDataSource::IsSupportedReturnKeyAttribute( DcmElement *element, DcmSeq
         elementKey == DCM_CurrentPatientLocation                            ||
         elementKey == DCM_ReferencedPatientSequence                         ||
         elementKey == DCM_PatientName                                       ||
+        elementKey == DCM_ResponsiblePerson                                 ||
+        elementKey == DCM_ResponsiblePersonRole                             ||
         elementKey == DCM_PatientID                                         ||
+        elementKey == DCM_IssuerOfPatientID                                 ||
         elementKey == DCM_PatientBirthDate                                  ||
         elementKey == DCM_PatientSex                                        ||
         elementKey == DCM_PatientWeight                                     ||
@@ -1408,7 +1192,7 @@ OFBool WlmDataSource::IsSupportedReturnKeyAttribute( DcmElement *element, DcmSeq
         elementKey == DCM_NamesOfIntendedRecipientsOfResults                ||
         elementKey == DCM_InstitutionName                                   ||
         elementKey == DCM_AdmittingDiagnosesDescription                     ||
-        elementKey == DCM_OtherPatientIDs                                   ||
+        elementKey == DCM_RETIRED_OtherPatientIDs                           ||
         elementKey == DCM_PatientSize                                       ||
         elementKey == DCM_EthnicGroup                                       ||
         elementKey == DCM_PatientComments                                   ||
@@ -1442,132 +1226,3 @@ OFBool WlmDataSource::IsSupportedReturnKeyAttribute( DcmElement *element, DcmSeq
   // return result
   return( isSupportedReturnKeyAttribute );
 }
-
-// ----------------------------------------------------------------------------
-
-/*
-** CVS Log
-** $Log: wlds.cc,v $
-** Revision 1.30  2010-10-14 13:14:48  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.29  2010-08-09 13:30:34  joergr
-** Updated data dictionary to 2009 edition of the DICOM standard. From now on,
-** the official "keyword" is used for the attribute name which results in a
-** number of minor changes (e.g. "PatientsName" is now called "PatientName").
-**
-** Revision 1.28  2010-05-31 09:22:59  joergr
-** Fixed incorrect handling of SpecificCharacterSet attribute in C-FIND request
-** and response messages.
-** Added a warning message if the C-FIND request contains the SpecificCharacter
-** Set attribute because its value is not used for matching.
-** Slightly modified some log messages, e.g. replaced '\n' by OFendl.
-**
-** Revision 1.27  2010-05-18 16:37:04  joergr
-** Slightly modified log messages and log levels in order to be more consistent.
-**
-** Revision 1.26  2010-03-01 09:08:50  uli
-** Removed some unnecessary include directives in the headers.
-**
-** Revision 1.25  2009-11-24 10:40:01  uli
-** Switched to logging mechanism provided by the "new" oflog module.
-**
-** Revision 1.24  2009-03-02 17:20:44  joergr
-** Added attribute name to debug output / error messages where appropriate.
-**
-** Revision 1.23  2008-04-30 12:38:43  meichel
-** Fixed compile errors due to changes in attribute tag names
-**
-** Revision 1.22  2007/11/06 15:24:07  joergr
-** Report warning message if a query contains an empty sequence (without item).
-**
-** Revision 1.21  2006/12/15 14:49:28  onken
-** Removed excessive use char* and C-array in favour of OFString and
-** OFList. Simplified some implementation details.
-**
-** Revision 1.20  2006/08/15 16:15:48  meichel
-** Updated the code in module dcmwlm to correctly compile when
-**   all standard C++ classes remain in namespace std.
-**
-** Revision 1.19  2005/12/08 15:48:32  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.18  2005/09/23 12:57:02  wilkens
-** Added attribute PatientsBirthDate as a matching key attribute to wlmscpfs.
-** Thanks to Andre M. Descombes <andre@descombes.info> for the code template.
-**
-** Revision 1.17  2005/07/01 10:01:31  wilkens
-** Modified a couple of "delete" statements to "delete[]" in order to get rid of
-** valgrind's "Mismatched free() / delete / delete []" error messages.
-**
-** Revision 1.16  2004/04/06 18:19:31  joergr
-** Updated data dictionary, UIDs and transfer syntaxes for the latest Final Text
-** Supplements (42 and 47) and Correction Proposals (CP 25).
-**
-** Revision 1.15  2004/01/07 08:32:34  wilkens
-** Added new sequence type return key attributes to wlmscpfs. Fixed bug that for
-** equally named attributes in sequences always the same value will be returned.
-** Added functionality that also more than one item will be returned in sequence
-** type return key attributes.
-**
-** Revision 1.14  2004/01/02 13:56:17  wilkens
-** Integrated new return key attributes into wlmscpfs and updated function that
-** checks integrity of matching key attribute values (added support for new VR).
-**
-** Revision 1.13  2003/12/23 13:04:39  wilkens
-** Integrated new matching key attributes into wlmscpfs.
-**
-** Revision 1.12  2003/08/21 13:39:39  wilkens
-** Moved declaration and initialization of member variables matchingDatasets and
-** numOfMatchingDatasets to base class.
-** Got rid of superfluous member variable objlist and of superfluous function
-** ClearObjList().
-**
-** Revision 1.11  2003/06/04 14:28:37  meichel
-** Added various includes needed by MSVC5 with STL
-**
-** Revision 1.10  2003/02/17 12:02:09  wilkens
-** Made some minor modifications to be able to modify a special variant of the
-** worklist SCP implementation (wlmscpki).
-**
-** Revision 1.9  2002/12/03 12:15:56  wilkens
-** Added files und functionality from the dcmtk/wlisctn folder to dcmtk/dcmwlm
-** so that dcmwlm can now completely replace wlistctn in the public domain part
-** of dcmtk. Pertaining to this replacement requirement, another optional return
-** key attribute was integrated into the wlm utilities.
-**
-** Revision 1.8  2002/08/12 10:56:14  wilkens
-** Made some modifications in in order to be able to create a new application
-** which contains both wlmscpdb and ppsscpdb and another application which
-** contains both wlmscpfs and ppsscpfs.
-**
-** Revision 1.7  2002/07/17 13:10:42  wilkens
-** Corrected some minor logical errors in the wlmscpdb sources and completely
-** updated the wlmscpfs so that it does not use the original wlistctn sources
-** any more but standard wlm sources which are now used by all three variants
-** of wlmscps.
-**
-** Revision 1.6  2002/06/10 11:58:26  wilkens
-** Some more corrections to keep gcc 2.95.3 quiet.
-**
-** Revision 1.5  2002/06/10 11:25:10  wilkens
-** Made some corrections to keep gcc 2.95.3 quiet.
-**
-** Revision 1.4  2002/04/18 14:20:23  wilkens
-** Modified Makefiles. Updated latest changes again. These are the latest
-** sources. Added configure file.
-**
-** Revision 1.3  2002/01/08 17:46:03  joergr
-** Reformatted source files (replaced Windows newlines by Unix ones, replaced
-** tabulator characters by spaces, etc.)
-**
-** Revision 1.2  2002/01/08 17:02:55  joergr
-** Added preliminary database support using OTL interface library (modified by
-** MC/JR on 2001-12-21).
-**
-** Revision 1.1  2002/01/08 16:32:46  joergr
-** Added new module "dcmwlm" developed by Thomas Wilkens (initial release for
-** Windows, dated 2001-12-20).
-**
-**
-*/

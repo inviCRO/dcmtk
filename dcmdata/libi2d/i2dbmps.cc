@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2009-2010, OFFIS e.V.
+ *  Copyright (C) 2009-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -15,17 +15,10 @@
  *
  *  Author:  Uli Schlachter
  *
- *
  *  Purpose: Class to extract pixel data and meta information from BMP file
  *
- *  Last Update:      $Author: uli $
- *  Update Date:      $Date: 2010-12-06 10:24:18 $
- *  CVS/RCS Revision: $Revision: 1.14 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
+
 
 #include "dcmtk/config/osconfig.h"
 #include "dcmtk/dcmdata/libi2d/i2dbmps.h"
@@ -53,7 +46,7 @@ OFCondition I2DBmpSource::openFile(const OFString &filename)
 {
   DCMDATA_LIBI2D_DEBUG("I2DBmpSource: Opening BMP file: " << filename);
   OFCondition cond;
-  if (filename.length() == 0)
+  if (filename.empty())
     return makeOFCondition(OFM_dcmdata, 18, OF_error, "No BMP filename specified");
 
   // Try to open BMP file
@@ -107,8 +100,9 @@ OFCondition I2DBmpSource::readPixelData(Uint16& rows,
     return cond;
   }
 
+  OFBool isMonochrome = OFFalse;
   Uint32 *palette = NULL;
-  cond = readColorPalette(colors, palette);
+  cond = readColorPalette(colors, isMonochrome, palette);
   if (cond.bad())
   {
     closeFile();
@@ -122,7 +116,7 @@ OFCondition I2DBmpSource::readPixelData(Uint16& rows,
   /* ...and read the "real" image data */
   char *data;
   Uint32 data_length;
-  cond = readBitmapData(width, height, bpp, isTopDown, colors, palette, data, data_length);
+  cond = readBitmapData(width, height, bpp, isTopDown, isMonochrome, colors, palette, data, data_length);
 
   if (palette)
     delete[] palette;
@@ -137,12 +131,19 @@ OFCondition I2DBmpSource::readPixelData(Uint16& rows,
 
   rows = height;
   cols = width;
-  samplesPerPixel = 3;    /* 24 bpp */
-
+  if (isMonochrome)
+  {
+    samplesPerPixel = 1;
+    photoMetrInt = "MONOCHROME2";
+  }
+  else
+  {
+    samplesPerPixel = 3;    /* 24 bpp */
+    photoMetrInt = "RGB";
+  }
   bitsAlloc = 8;
   bitsStored = 8;
   highBit = 7;
-  photoMetrInt = "RGB";
   planConf = 0;           /* For each pixel we save rgb in that order */
   pixData = data;
   length = data_length;
@@ -208,7 +209,7 @@ OFCondition I2DBmpSource::readBitmapHeader(Uint16 &width,
 
   // Check if we got a valid value here which fits into a Uint16
   // (height < 0 can happen because -(INT_MIN) == INT_MIN).
-  if (tmp_height <= 0 || tmp_height > UINT16_MAX)
+  if (tmp_height <= 0 || tmp_height > OFstatic_cast(Sint32, UINT16_MAX))
     return makeOFCondition(OFM_dcmdata, 18, OF_error, "Unsupported BMP file - height too large or zero");
 
   if (tmp_width < 0) /* Width also can be signed, but no semantic */
@@ -216,7 +217,7 @@ OFCondition I2DBmpSource::readBitmapHeader(Uint16 &width,
     tmp_width = -tmp_width;
   }
   width = OFstatic_cast(Uint16, tmp_width);
-  if (tmp_width <= 0 || tmp_width > UINT16_MAX)
+  if (tmp_width <= 0 || tmp_width > OFstatic_cast(Sint32, UINT16_MAX))
     return makeOFCondition(OFM_dcmdata, 18, OF_error, "Unsupported BMP file - width too large or zero");
 
   /* Some older standards used this, always 1 for BMP (number of planes) */
@@ -285,8 +286,10 @@ OFCondition I2DBmpSource::readBitmapHeader(Uint16 &width,
 }
 
 
-OFCondition I2DBmpSource::readColorPalette(Uint16 colors,
-                                           Uint32*& palette)
+OFCondition I2DBmpSource::readColorPalette(
+  Uint16 colors,
+  OFBool& isMonochrome,
+  Uint32*& palette)
 {
   if (colors == 0)
     // Nothing to do;
@@ -296,11 +299,13 @@ OFCondition I2DBmpSource::readColorPalette(Uint16 colors,
     // BMPs can not have more than 256 color table entries
     return EC_IllegalCall;
 
+  isMonochrome = OFTrue;
+  Uint8 r, g, b;
+
   // Read the color palette
   palette = new Uint32[colors];
+  Uint32 tmp;
   for (int i = 0; i < colors; i++) {
-    Uint32 tmp;
-
     // Each item is 32-bit BGRx entry, this function reads that data
     if (readDWord(tmp) != 0) {
       delete[] palette;
@@ -310,20 +315,28 @@ OFCondition I2DBmpSource::readColorPalette(Uint16 colors,
 
     // Converting this BGRx into RGB is done elsewhere
     palette[i] = tmp;
+
+    // check if the value is grayscale, set monochrome flag to false otherwise
+    r = OFstatic_cast(Uint8, tmp >> 16);
+    g = OFstatic_cast(Uint8, tmp >>  8);
+    b = OFstatic_cast(Uint8, tmp >>  0);
+    if ((r != g) || (r != b)) isMonochrome = OFFalse;
   }
 
   return EC_Normal;
 }
 
 
-OFCondition I2DBmpSource::readBitmapData(const Uint16 width,
-                                         const Uint16 height,
-                                         const Uint16 bpp,
-                                         const OFBool isTopDown,
-                                         const Uint16 colors,
-                                         const Uint32* palette,
-                                         char*& pixData,
-                                         Uint32& length)
+OFCondition I2DBmpSource::readBitmapData(
+  const Uint16 width,
+  const Uint16 height,
+  const Uint16 bpp,
+  const OFBool isTopDown,
+  const OFBool isMonochrome,
+  const Uint16 colors,
+  const Uint32* palette,
+  char*& pixData,
+  Uint32& length)
 {
   /* row_length = width * bits_per_pixel / 8 bits_per_byte.
      row_length must be rounded *up* to a 4-byte boundary:
@@ -333,8 +346,9 @@ OFCondition I2DBmpSource::readBitmapData(const Uint16 width,
   const Uint32 row_length = ((width * bpp + 31) / 32) * 4;
   Uint8 *row_data;
   Uint32 y;
-  Sint32 direction;
+  OFBool positive_direction;
   Uint32 max;
+  Uint16 samplesPerPixel = isMonochrome ? 1 : 3;
 
   // "palette" may only be NULL if colors is 0 and vice versa
   if ((palette == NULL) != (colors == 0))
@@ -348,18 +362,18 @@ OFCondition I2DBmpSource::readBitmapData(const Uint16 width,
   {
     /* This is a top-down BMP, we start at the first row and work our way down */
     y = 1;
-    direction = 1;
+    positive_direction = OFTrue;
     max = height + 1;
   }
   else
   {
     /* Bottom-up BMP, we start with the last row and work our way up */
     y = height;
-    direction = -1;
+    positive_direction = OFFalse;
     max = 0;
   }
 
-  length = width * height * 3;
+  length = width * height * samplesPerPixel;
 
   DCMDATA_LIBI2D_DEBUG("I2DBmpSource: Starting to read bitmap data");
 
@@ -374,12 +388,12 @@ OFCondition I2DBmpSource::readBitmapData(const Uint16 width,
   }
 
   /* Go through each row of the image */
-  for (; y != max; y += direction)
+  for (; y != max; (positive_direction ? ++y : --y))
   {
     /* Calculate posData for this line, it is the index of the first byte for
      * this line. ( -1 because we start at index 1, but C at index 0)
      */
-    Uint32 posData = (y - 1) * width * 3;
+    Uint32 posData = (y - 1) * width * samplesPerPixel;
 
     if (bmpFile.fread(row_data, 1, row_length) < row_length)
     {
@@ -394,7 +408,7 @@ OFCondition I2DBmpSource::readBitmapData(const Uint16 width,
       case 1:
       case 4:
       case 8:
-        cond = parseIndexedColorRow(row_data, width, bpp, colors, palette, &pixData[posData]);
+        cond = parseIndexedColorRow(row_data, width, bpp, colors, palette, isMonochrome, &pixData[posData]);
         break;
       case 16:
         cond = parse16BppRow(row_data, width, &pixData[posData]);
@@ -475,13 +489,13 @@ OFCondition I2DBmpSource::parse16BppRow(const Uint8 *row,
   {
     // Assemble one pixel value from the input data
     Uint16 pixel = 0;
-    pixel |= OFstatic_cast(Uint16, row[2*x + 1]) << 8;
-    pixel |= OFstatic_cast(Uint16, row[2*x + 0]);
+    pixel = OFstatic_cast(Uint16, pixel | (row[2*x + 1] << 8));
+    pixel = OFstatic_cast(Uint16, pixel | row[2*x + 0]);
 
     // Each colors has 5 bit, we convert that into 8 bit
-    Uint8 r = (pixel >> 10) << 3;
-    Uint8 g = (pixel >>  5) << 3;
-    Uint8 b = (pixel >>  0) << 3;
+    Uint8 r = OFstatic_cast(Uint8, (pixel >> 10) << 3);
+    Uint8 g = OFstatic_cast(Uint8, (pixel >>  5) << 3);
+    Uint8 b = OFstatic_cast(Uint8, (pixel >>  0) << 3);
 
     pixData[pos]     = r;
     pixData[pos + 1] = g;
@@ -493,12 +507,14 @@ OFCondition I2DBmpSource::parse16BppRow(const Uint8 *row,
 }
 
 
-OFCondition I2DBmpSource::parseIndexedColorRow(const Uint8 *row,
-                                               const Uint16 width,
-                                               const int bpp,
-                                               const Uint16 colors,
-                                               const Uint32* palette,
-                                               char *pixData /*out*/) const
+OFCondition I2DBmpSource::parseIndexedColorRow(
+  const Uint8 *row,
+  const Uint16 width,
+  const int bpp,
+  const Uint16 colors,
+  const Uint32* palette,
+  const OFBool isMonochrome,
+  char *pixData /*out*/) const
 {
   // data that is still left from reading the last pixel
   Uint8 data = 0;
@@ -517,13 +533,13 @@ OFCondition I2DBmpSource::parseIndexedColorRow(const Uint8 *row,
     }
 
     // Get the left-most bpp bits from data
-    Uint8 index = (data >> (bitsLeft - bpp));
+    Uint8 index = OFstatic_cast(Uint8, data >> (bitsLeft - bpp));
     // The right-most bpp bits in "index" now contain the data we want,
     // clear all the higher bits.
     // (1 << bpp) gives us in binary: 00001000 (with bpp zero bits) if we
     // substract 1, only the right-most bpp bits will be 1.
-    index &= (1 << bpp) - 1;
-    bitsLeft -= bpp;
+    index = OFstatic_cast(Uint8, index & ((1 << bpp) - 1));
+    bitsLeft = OFstatic_cast(Uint8, bitsLeft - bpp);
 
     // Check if we are still in the color palette
     if (index >= colors)
@@ -535,10 +551,16 @@ OFCondition I2DBmpSource::parseIndexedColorRow(const Uint8 *row,
     // And save it in the resulting image, this implicitly converts the BGR we
     // got from the color table into RGB.
     pixData[pos]     = OFstatic_cast(Uint8, pixel >> 16);
-    pixData[pos + 1] = OFstatic_cast(Uint8, pixel >>  8);
-    pixData[pos + 2] = OFstatic_cast(Uint8, pixel >>  0);
-
-    pos += 3;
+    if (isMonochrome)
+    {
+      pos++;
+    }
+    else
+    {
+      pixData[pos + 1] = OFstatic_cast(Uint8, pixel >>  8);
+      pixData[pos + 2] = OFstatic_cast(Uint8, pixel >>  0);
+      pos += 3;
+    }
   }
   return EC_Normal;
 }
@@ -555,7 +577,7 @@ int I2DBmpSource::readWord(Uint16& result)
   c2 = bmpFile.fgetc();
   if (c2 == EOF)
     return EOF;
-  result = (OFstatic_cast(Uint16, c2) << 8) + OFstatic_cast(Uint16, c1);
+  result = OFstatic_cast(Uint16, (OFstatic_cast(Uint16, c2) << 8) + OFstatic_cast(Uint16, c1));
   return 0;
 }
 
@@ -594,8 +616,7 @@ int I2DBmpSource::readLong(Sint32& result)
     return EOF;
 
   /* tmp is a two's complement (signed integer) and we have to convert it into that */
-
-  if (tmp & (1 << 31))
+  if (tmp & (1UL << 31))
   {
     /* If the highest bit is set, it is a negative number, convert it */
     result = -(OFstatic_cast(Sint32, ~(tmp - 1)));
@@ -623,52 +644,3 @@ I2DBmpSource::~I2DBmpSource()
   DCMDATA_LIBI2D_DEBUG("I2DBmpSource: Closing BMP file and cleaning up memory");
   closeFile();
 }
-
-/*
- * CVS/RCS Log:
- * $Log: i2dbmps.cc,v $
- * Revision 1.14  2010-12-06 10:24:18  uli
- * Fixed a correct warning from Intel Compiler 11.1 for shifting a Uint8 by 8.
- *
- * Revision 1.13  2010-10-14 13:18:23  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.12  2010-08-05 08:38:10  uli
- * Fixed some warnings from -Wold-style-cast.
- *
- * Revision 1.11  2010-06-08 14:39:12  uli
- * Check for premature file ending while reading the pixel data.
- *
- * Revision 1.10  2010-06-08 14:34:45  uli
- * Correctly calculate the row length for images with bpp below 8.
- *
- * Revision 1.9  2010-06-04 12:06:25  uli
- * Fixed a warning with VisualStudio 2008 about an implicit cast.
- *
- * Revision 1.8  2010-06-01 12:59:48  uli
- * Generate a better error message if an image exceeds 65535 rows or columns.
- *
- * Revision 1.7  2010-06-01 10:33:53  uli
- * Added support for indexed-color BMP images (bit depths 1, 4 and 8).
- *
- * Revision 1.6  2010-05-25 12:40:06  uli
- * Added support for 16bpp BMP images to libi2d
- *
- * Revision 1.5  2010-05-21 14:43:07  uli
- * Added support for 32bpp BMP images to libi2d.
- *
- * Revision 1.4  2009-11-04 09:58:08  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.3  2009-09-30 08:05:25  uli
- * Stop including dctk.h in libi2d's header files.
- *
- * Revision 1.2  2009-08-13 09:00:20  onken
- * Fixed minor formatting issues and bug that caused some images being
- * converted upside down.
- *
- * Revision 1.1  2009-07-16 14:25:38  onken
- * Added img2dcm input plugin for the BMP graphics format (at the moment only
- * support for 24 Bit RGB).
- *
- */

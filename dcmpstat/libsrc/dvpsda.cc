@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,26 +18,17 @@
  *  Purpose:
  *    classes: DVPSDisplayedArea
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:32 $
- *  CVS/RCS Revision: $Revision: 1.16 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 #include "dcmtk/ofstd/ofstring.h"
+#include "dcmtk/ofstd/ofstd.h"
 #include "dcmtk/dcmpstat/dvpsda.h"
 #include "dcmtk/dcmpstat/dvpsri.h"      /* for DVPSReferencedImage */
 #include "dcmtk/dcmpstat/dvpsrsl.h"     /* DVPSReferencedSeries_PList */
 #include "dcmtk/dcmpstat/dvpsdef.h"     /* for constants and macros */
 #include "dcmtk/ofstd/ofstd.h"
 #include "dcmtk/dcmpstat/dvpsrs.h"      /* for DVPSReferencedSeries, needed by MSVC5 with STL */
-
-#define INCLUDE_CSTRING
-#include "dcmtk/ofstd/ofstdinc.h"
 
 /* --------------- class DVPSDisplayedArea --------------- */
 
@@ -73,12 +64,12 @@ OFCondition DVPSDisplayedArea::read(DcmItem &dset)
   DcmStack stack;
   OFString aString;
   
-  READ_FROM_DATASET(DcmSignedLong, displayedAreaTopLeftHandCorner)
-  READ_FROM_DATASET(DcmSignedLong, displayedAreaBottomRightHandCorner)
-  READ_FROM_DATASET(DcmCodeString, presentationSizeMode)
-  READ_FROM_DATASET(DcmDecimalString, presentationPixelSpacing)
-  READ_FROM_DATASET(DcmIntegerString, presentationPixelAspectRatio)
-  READ_FROM_DATASET(DcmFloatingPointSingle, presentationPixelMagnificationRatio)
+  READ_FROM_DATASET(DcmSignedLong, EVR_SL, displayedAreaTopLeftHandCorner)
+  READ_FROM_DATASET(DcmSignedLong, EVR_SL, displayedAreaBottomRightHandCorner)
+  READ_FROM_DATASET(DcmCodeString, EVR_CS, presentationSizeMode)
+  READ_FROM_DATASET(DcmDecimalString, EVR_DS, presentationPixelSpacing)
+  READ_FROM_DATASET(DcmIntegerString, EVR_IS, presentationPixelAspectRatio)
+  READ_FROM_DATASET(DcmFloatingPointSingle, EVR_FL, presentationPixelMagnificationRatio)
 
   if (result==EC_Normal) result = referencedImageList.read(dset);
 
@@ -87,34 +78,34 @@ OFCondition DVPSDisplayedArea::read(DcmItem &dset)
   if (displayedAreaTopLeftHandCorner.getLength() == 0)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a display area selection SQ item with displayedAreaTopLeftHandCorner absent or empty");
+    DCMPSTAT_WARN("presentation state contains a display area selection SQ item with displayedAreaTopLeftHandCorner absent or empty");
   }
   else if (displayedAreaTopLeftHandCorner.getVM() != 2)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a display area selection SQ item with displayedAreaTopLeftHandCorner VM != 2");
+    DCMPSTAT_WARN("presentation state contains a display area selection SQ item with displayedAreaTopLeftHandCorner VM != 2");
   }
 
   if (displayedAreaBottomRightHandCorner.getLength() == 0)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a display area selection SQ item with displayedAreaBottomRightHandCorner absent or empty");
+    DCMPSTAT_WARN("presentation state contains a display area selection SQ item with displayedAreaBottomRightHandCorner absent or empty");
   }
   else if (displayedAreaBottomRightHandCorner.getVM() != 2)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a display area selection SQ item with displayedAreaBottomRightHandCorner VM != 2");
+    DCMPSTAT_WARN("presentation state contains a display area selection SQ item with displayedAreaBottomRightHandCorner VM != 2");
   }
 
   if (presentationSizeMode.getLength() == 0)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a display area selection SQ item with presentationSizeMode absent or empty");
+    DCMPSTAT_WARN("presentation state contains a display area selection SQ item with presentationSizeMode absent or empty");
   }
   else if (presentationSizeMode.getVM() != 1)
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a display area selection SQ item with presentationSizeMode VM != 1");
+    DCMPSTAT_WARN("presentation state contains a display area selection SQ item with presentationSizeMode VM != 1");
   } else {
     aString.clear();
     presentationSizeMode.getOFString(aString,0);
@@ -123,44 +114,44 @@ OFCondition DVPSDisplayedArea::read(DcmItem &dset)
       if (presentationPixelSpacing.getVM() != 2)
       {
         result=EC_IllegalCall;
-        DCMPSTAT_INFO("presentation state contains a display area selection SQ item with mode 'TRUE SIZE' but presentationPixelSpacing VM != 2");
+        DCMPSTAT_WARN("presentation state contains a display area selection SQ item with mode 'TRUE SIZE' but presentationPixelSpacing VM != 2");
       }
     } else if (aString == "MAGNIFY")
     {
       if (presentationPixelMagnificationRatio.getVM() != 1)
       {
         result=EC_IllegalCall;
-        DCMPSTAT_INFO("presentation state contains a display area selection SQ item with mode 'MAGNIFY' but presentationPixelSpacing VM != 1");
+        DCMPSTAT_WARN("presentation state contains a display area selection SQ item with mode 'MAGNIFY' but presentationPixelSpacing VM != 1");
       }
     } else if (aString != "SCALE TO FIT")
     {
       result=EC_IllegalCall;
-      DCMPSTAT_INFO("presentation state contains a display area selection SQ item with unknown presentation size mode: " << aString);
+      DCMPSTAT_WARN("presentation state contains a display area selection SQ item with unknown presentation size mode: " << aString);
     }
   }
 
   if ((presentationPixelSpacing.getLength() > 0)&&(presentationPixelSpacing.getVM() != 2))
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a display area selection SQ item with presentationPixelSpacing VM != 2");
+    DCMPSTAT_WARN("presentation state contains a display area selection SQ item with presentationPixelSpacing VM != 2");
 }
 
   if ((presentationPixelAspectRatio.getLength() > 0)&&(presentationPixelAspectRatio.getVM() != 2))
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a display area selection SQ item with presentationPixelAspectRatio VM != 2");
+    DCMPSTAT_WARN("presentation state contains a display area selection SQ item with presentationPixelAspectRatio VM != 2");
   }
 
   if ((presentationPixelMagnificationRatio.getLength() > 0)&&(presentationPixelMagnificationRatio.getVM() != 1))
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a display area selection SQ item with presentationPixelMagnificationRatio VM != 1");
+    DCMPSTAT_WARN("presentation state contains a display area selection SQ item with presentationPixelMagnificationRatio VM != 1");
   }
 
   if ((presentationPixelSpacing.getLength() == 0)&&(presentationPixelAspectRatio.getVM() != 2))
   {
     result=EC_IllegalCall;
-    DCMPSTAT_INFO("presentation state contains a display area selection SQ item with both presentationPixelSpacing and presentationPixelAspectRatio missing/incorrect");
+    DCMPSTAT_WARN("presentation state contains a display area selection SQ item with both presentationPixelSpacing and presentationPixelAspectRatio missing/incorrect");
   }
 
   return result;
@@ -292,7 +283,7 @@ OFCondition DVPSDisplayedArea::setDisplayedAreaPixelSpacing(double spacingX, dou
 {
   char str[66];
   OFStandard::ftoa(str, 32, spacingY, OFStandard::ftoa_format_f);
-  strcat(str, "\\");
+  OFStandard::strlcat(str, "\\", 66);
   OFStandard::ftoa(strchr(str, 0), 32, spacingX, OFStandard::ftoa_format_f);
 
   return setDisplayedAreaPixelSpacing(str);
@@ -446,67 +437,3 @@ void DVPSDisplayedArea::rotateAndFlip(
   // create new coordinates
   rotateAndFlipFromOrTo(rotationTo, isFlippedTo);
 }
-
-
-
-/*
- *  $Log: dvpsda.cc,v $
- *  Revision 1.16  2010-10-14 13:14:32  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.15  2009-11-24 14:12:58  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.14  2006-08-15 16:57:02  meichel
- *  Updated the code in module dcmpstat to correctly compile when
- *    all standard C++ classes remain in namespace std.
- *
- *  Revision 1.13  2005/12/08 15:46:23  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.12  2003/09/05 14:30:08  meichel
- *  Introduced new API methods that allow Displayed Areas to be queried
- *    and set either relative to the image (ignoring rotation and flip) or
- *    in absolute values as defined in the standard.  Rotate and flip methods
- *    now adjust displayed areas in the presentation state.
- *
- *  Revision 1.11  2003/06/04 12:30:28  meichel
- *  Added various includes needed by MSVC5 with STL
- *
- *  Revision 1.10  2002/12/04 10:41:37  meichel
- *  Changed toolkit to use OFStandard::ftoa instead of sprintf for all
- *    double to string conversions that are supposed to be locale independent
- *
- *  Revision 1.9  2001/09/26 15:36:24  meichel
- *  Adapted dcmpstat to class OFCondition
- *
- *  Revision 1.8  2001/06/01 15:50:29  meichel
- *  Updated copyright header
- *
- *  Revision 1.7  2000/11/23 09:47:24  meichel
- *  Silently correct negative pixel aspect ratio or pixel spacing values
- *
- *  Revision 1.6  2000/06/02 16:00:59  meichel
- *  Adapted all dcmpstat classes to use OFConsole for log and error output
- *
- *  Revision 1.5  2000/05/31 13:02:36  meichel
- *  Moved dcmpstat macros and constants into a common header file
- *
- *  Revision 1.4  2000/03/08 16:29:03  meichel
- *  Updated copyright header.
- *
- *  Revision 1.3  2000/03/03 14:13:58  meichel
- *  Implemented library support for redirecting error messages into memory
- *    instead of printing them to stdout/stderr for GUI applications.
- *
- *  Revision 1.2  1999/10/22 09:08:22  joergr
- *  Added validity check to methods setting pixel aspect ratio and pixel
- *  spacing (>0). Fixed problems with incorrect pixel spacing (0\0) stored in
- *  sample images.
- *
- *  Revision 1.1  1999/07/22 16:39:55  meichel
- *  Adapted dcmpstat data structures and API to supplement 33 letter ballot text.
- *
- *
- */
-

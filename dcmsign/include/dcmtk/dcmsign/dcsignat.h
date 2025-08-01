@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,46 +18,41 @@
  *  Purpose:
  *    classes: DcmSignature
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:24 $
- *  CVS/RCS Revision: $Revision: 1.4 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCMSIGN_H
 #define DCMSIGN_H
 
 #include "dcmtk/config/osconfig.h"
-#include "dcmtk/dcmsign/sitypes.h"
 
 #ifdef WITH_OPENSSL
 
-#include "dcmtk/dcmdata/dcxfer.h"  /* for E_TransferSyntax */
+#include "dcmtk/dcmsign/sitypes.h"
+#include "dcmtk/dcmdata/dcxfer.h"    /* for E_TransferSyntax */
+#include "dcmtk/dcmsign/sipurpos.h"  /* for E_SignaturePurposeType */
 
-#define INCLUDE_CSTDIO
-#include "dcmtk/ofstd/ofstdinc.h"
-
-class DcmItem;
-class DcmStack;
-class DcmSequenceOfItems;
 class DcmAttributeTag;
+class DcmDateTime;
+class DcmItem;
+class DcmSequenceOfItems;
+class DcmStack;
+class DcmTagKey;
 class SiPrivateKey;
 class SiCertificate;
 class SiSecurityProfile;
 class SiMAC;
 class SiTimeStamp;
 
-/** this class provides the main interface to the dcmsign module - it allows 
- *  to create, examine and verify digital signatures in DICOM datasets or 
- *  items. The methods in this class do not handle digital signatures 
- *  embedded in sequence items within the dataset, other than providing 
- *  helper functions that allow to locate and attach the sub-items 
+/** this class provides the main interface to the dcmsign module - it allows
+ *  to create, examine and verify digital signatures in DICOM datasets or
+ *  items. The methods in this class do not handle digital signatures
+ *  embedded in sequence items within the dataset, other than providing
+ *  helper functions that allow to locate and attach the sub-items
  *  separately.
+ *  @remark this class is only available if DCMTK is compiled with
+ *  OpenSSL support enabled.
  */
-class DcmSignature
+class DCMTK_DCMSIGN_EXPORT DcmSignature
 {
 public:
   /** initializes the dcmsign library including the underlying OpenSSL library.
@@ -66,20 +61,25 @@ public:
    */
   static void initializeLibrary();
 
+  /** cleans up the dcmsign library including the underlying OpenSSL library.
+   *  this method should be called by main() before program end to avoid memory leaks.
+   */
+  static void cleanupLibrary();
+
   /// default constructor
   DcmSignature();
- 
+
   /// destructor
   virtual ~DcmSignature();
 
   /** attaches a DICOM dataset or item to the signature object.
    *  The dataset is detached by a call to detach() or by destruction
-   *  of the signature object.  This object may modify but never deletes 
+   *  of the signature object.  This object may modify but never deletes
    *  an attached dataset.
    *  @param dataset dataset or item to be attached
    */
-  void attach(DcmItem *dataset);  
-  
+  void attach(DcmItem *dataset);
+
   /** detaches an attached DICOM dataset from the signature object.
    */
   void detach();
@@ -99,18 +99,20 @@ public:
    *    i.e. all signable attributes in the data set are signed.
    *  @param timeStamp pointer to time stamp client used to create timestamps
    *    for the digital signature.
+   *  @param sigPurpose digital signature purpose
    *  @return status code
    */
   OFCondition createSignature(
-    SiPrivateKey& key, 
-    SiCertificate& cert, 
+    SiPrivateKey& key,
+    SiCertificate& cert,
     SiMAC& mac,
-    SiSecurityProfile& profile, 
+    SiSecurityProfile& profile,
     E_TransferSyntax xfer=EXS_LittleEndianExplicit,
     const DcmAttributeTag *tagList=NULL,
-    SiTimeStamp *timeStamp=NULL);
+    SiTimeStamp *timeStamp=NULL,
+    SiSignaturePurpose::E_SignaturePurposeType sigPurpose=SiSignaturePurpose::ESP_none);
 
-  /** returns the number of signatures in the dataset. Does not count 
+  /** returns the number of signatures in the dataset. Does not count
    *  signatures embedded in sequence items within the dataset.
    */
   unsigned long numberOfSignatures();
@@ -126,7 +128,7 @@ public:
    *  @return status code
    */
   OFCondition selectSignature(unsigned long i);
-  
+
   /** verifies the current signature.
    *  Current signature must be selected with selectSignature().
    *  @return SI_EC_Normal if signature is complete and valid, an error code
@@ -171,6 +173,13 @@ public:
    */
   OFCondition getCurrentSignatureDateTime(OFString& str);
 
+  /** returns a pointer to the object representing Signature Date/Time
+   *  of the current signature.
+   *  Current signature must be selected with selectSignature().
+   *  @return pointer to signature datetime if present, NULL otherwise
+   */
+  DcmDateTime *getCurrentSignatureDateTime();
+
   /** returns the Data Elements Signed attribute of the current signature if present.
    *  Current signature must be selected with selectSignature().
    *  If a valid signature is selected but the signature does not contain
@@ -181,13 +190,45 @@ public:
    */
   OFCondition getCurrentDataElementsSigned(DcmAttributeTag& desig);
 
+  /** returns the signature purpose code of the current signature if present.
+   *  Current signature must be selected with selectSignature().
+   *  If a valid signature is selected but the signature does not contain
+   *  a valid SignaturePurposeCodeSequence, this method returns an error code.
+   *  @param codeValue signature purpose code value returned in this parameter upon success
+   *  @param codeMeaning signature purpose code meaning returned in this parameter upon success
+   *  @param codingSchemeDesignator signature purpose coding scheme designator returned in this parameter upon success
+   *  @return status code
+   */
+  OFCondition getCurrentSignaturePurpose(OFString& codeValue, OFString& codeMeaning, OFString& codingSchemeDesignator);
+
+  /** verifies whether the currently selected signature within the
+   *  currently attached dataset matches the requirements of the
+   *  given signature profile.
+   *  @param sprof security profile
+   *  @return EC_Normal if signature matches, an error code otherwise
+   */
+  OFCondition verifySignatureProfile(SiSecurityProfile &sprof);
+
   /** returns the certificate of the current signature if present.
    *  Current signature must be selected with selectSignature().
    *  May return NULL if certificate is unavailable.
    *  @return pointer to current certificate, NULL if unavailable.
    */
   SiCertificate *getCurrentCertificate();
-  
+
+  /** returns the certified timestamp of the current signature if present.
+   *  Current signature must be selected with selectSignature().
+   *  May return NULL if timestamp is unavailable.
+   *  @return pointer to current timestamp, NULL if unavailable.
+   */
+  SiTimeStamp *getCurrentTimestamp();
+
+  /** returns the item of the DigitalSignaturesSequence selected by the last call
+   *  to selectSignature(), or NULL if no signature has been selected.
+   *  @return pointer to current signature item, may be NULL
+   */
+  DcmItem *getSelectedSignatureItem();
+
   /** dump all data that is fed into the MAC algorithm into the given file,
    *  which must be opened and closed by caller.
    *  @param f pointer to file already opened for writing; may be NULL.
@@ -195,7 +236,7 @@ public:
   void setDumpFile(FILE *f);
 
   /** recursively browses through the given dataset and searches the first
-   *  occurence of the DigitalSignaturesSequence. If found, returns
+   *  occurrence of the DigitalSignaturesSequence. If found, returns
    *  a pointer to the Item in which the sequence is contained.
    *  @param item dataset to be browsed
    *  @param stack search stack, must be passed to findNextSignatureItem() later on.
@@ -204,13 +245,23 @@ public:
   static DcmItem *findFirstSignatureItem(DcmItem& item, DcmStack& stack);
 
   /** recursively browses through the given dataset and searches the next
-   *  occurence of the DigitalSignaturesSequence. If found, returns
+   *  occurrence of the DigitalSignaturesSequence. If found, returns
    *  a pointer to the Item in which the sequence is contained.
    *  @param item dataset to be browsed
    *  @param stack search stack as returned by findFirstSignatureItem() or the last call to this method.
    *  @return pointer to Item containing a DigitalSignatureSequence if found, NULL otherwise.
    */
   static DcmItem *findNextSignatureItem(DcmItem& item, DcmStack& stack);
+
+  /** check a DER encoded ASN.1 SEQUENCE structure for a possible pad byte
+   *  and, if a pad byte is detected, remove it by decreasing buflen.
+   *  This will work for SEQUENCEs with one byte and two byte encoding
+   *  (i.e. max 64 kBytes).
+   *  @param buf pointer to DER encoded ASN.1 data
+   *  @param buflen length of buffer pointed to, in bytes. The variable is
+   *    decreased by one if a pad byte is detected.
+   */
+  static void adjustASN1SequenceLength(const unsigned char *buf, unsigned long& buflen);
 
 private:
 
@@ -230,13 +281,31 @@ private:
    *  @return status code
    */
   OFCondition allocateMACID(Uint16& newID);
-  
+
   /** searches a given item for the DCM_MACIDnumber element and returns
-   *  its value if present, otherwise returns 0.
+   *  its value if present
    *  @param item item to be searched
-   *  @return MAC ID number in item or zero if absent.
+   *  @param macid MAC ID returned in this parameter upon success
+   *  @return EC_Normal if successful, an error code otherwise
    */
-  static Uint16 getMACIDnumber(DcmItem &item);
+  static OFCondition getMACIDnumber(DcmItem &item, Uint16& macid);
+
+  /** checks if all tags from tagList are present in tagListOut,
+   *  which is the list of attribute tags actually included in a signature,
+   *  including tags added due to a signature profile, and without tags
+   *  that were absent in the dataset.
+   *  @param tagList list of attribute tags that should be present in the signature, may be NULL
+   *  @param tagListOut list of attribute tags actually present in the signature, must not be NULL
+   *  @return EC_Normal if check succeeds, an error code otherwise
+   */
+  static OFCondition checkListOfSignedTags(const DcmAttributeTag *tagList, const DcmAttributeTag *tagListOut);
+
+  /** checks if the given tag key is present in tagList
+   *  @param tag tag key
+   *  @param tagList list of tag keys
+   *  @return OFTrue of tag is present in tagList, OFFalse otherwise
+   */
+  static OFBool inTagList(const DcmTagKey &tag, const DcmAttributeTag& tagList);
 
   /** returns the current date and time as a DICOM DT string.
    *  @param str date/time returned in this string.
@@ -262,44 +331,12 @@ private:
   DcmItem *selectedMacParametersItem;
 
   /// pointer to certificate for currently selected signature item
-  SiCertificate *selectedCertificate;  
-  
+  SiCertificate *selectedCertificate;
+
+  /// pointer to certified timestamp for currently selected signature item
+  SiTimeStamp *selectedTimestamp;
+
 };
 
 #endif
 #endif
-
-/*
- *  $Log: dcsignat.h,v $
- *  Revision 1.4  2010-10-14 13:17:24  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.3  2005-12-08 16:04:29  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.2  2003/06/04 14:21:03  meichel
- *  Simplified include structure to avoid preprocessor limitation
- *    (max 32 #if levels) on MSVC5 with STL.
- *
- *  Revision 1.1  2002/12/20 14:53:08  wilkens
- *  Modified name clash resulting in a compiler error on Solaris 2.5.1 using
- *  compiler SC 2.0.1.
- *
- *  Revision 1.5  2002/11/27 14:53:40  meichel
- *  Adapted module dcmsign to use of new header file ofstdinc.h
- *
- *  Revision 1.4  2001/11/16 15:50:49  meichel
- *  Adapted digital signature code to final text of supplement 41.
- *
- *  Revision 1.3  2001/09/26 14:30:18  meichel
- *  Adapted dcmsign to class OFCondition
- *
- *  Revision 1.2  2001/06/01 15:50:46  meichel
- *  Updated copyright header
- *
- *  Revision 1.1  2000/11/07 16:48:51  meichel
- *  Initial release of dcmsign module for DICOM Digital Signatures
- *
- *
- */
-

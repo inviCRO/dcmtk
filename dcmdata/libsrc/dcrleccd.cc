@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2010, OFFIS e.V.
+ *  Copyright (C) 2002-2020, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Marco Eichelberg
  *
  *  Purpose: decoder codec class for RLE
- *
- *  Last Update:      $Author: uli $
- *  Update Date:      $Date: 2010-11-01 10:42:44 $
- *  CVS/RCS Revision: $Revision: 1.18 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -70,7 +63,8 @@ OFCondition DcmRLECodecDecoder::decode(
     DcmPixelSequence * pixSeq,
     DcmPolymorphOBOW& uncompressedPixelData,
     const DcmCodecParameter * cp,
-    const DcmStack& objStack) const
+    const DcmStack& objStack,
+    OFBool& /* removeOldRep */) const
 {
   OFCondition result = EC_Normal;
 
@@ -103,7 +97,11 @@ OFCondition DcmRLECodecDecoder::decode(
     if (result.good())
     {
       imageBytesAllocated = OFstatic_cast(Uint16, imageBitsAllocated / 8);
-      if ((imageBitsAllocated < 8)||(imageBitsAllocated % 8 != 0)) result = EC_CannotChangeRepresentation;
+      if ((imageBitsAllocated < 8)||(imageBitsAllocated % 8 != 0))
+      {
+        DCMDATA_ERROR("The RLE decoder only supports images where BitsAllocated is a multiple of 8.");
+        result = EC_CannotChangeRepresentation;
+      }
     }
     if (result.good() && (imageSamplesPerPixel > 1))
     {
@@ -117,7 +115,7 @@ OFCondition DcmRLECodecDecoder::decode(
     }
 
     if (imageFrames >= OFstatic_cast(Sint32, pixSeq->card()))
-      imageFrames = pixSeq->card() - 1; // limit number of frames to number of pixel items - 1
+      imageFrames = OFstatic_cast(Sint32, pixSeq->card()) - 1; // limit number of frames to number of pixel items - 1
     if (imageFrames < 1)
       imageFrames = 1; // default in case the number of frames attribute is absent or contains garbage
 
@@ -125,23 +123,23 @@ OFCondition DcmRLECodecDecoder::decode(
     {
       DcmPixelItem *pixItem = NULL;
       Uint8 * rleData = NULL;
-      const size_t bytesPerStripe = imageColumns * imageRows;
+      const size_t bytesPerStripe = OFstatic_cast(size_t, imageColumns) * OFstatic_cast(size_t, imageRows);
 
       DcmRLEDecoder rledecoder(bytesPerStripe);
       if (rledecoder.fail()) result = EC_MemoryExhausted;  // RLE decoder failed to initialize
       else
       {
-        Uint32 frameSize = imageBytesAllocated * imageRows * imageColumns * imageSamplesPerPixel;
-        Uint32 totalSize = frameSize * imageFrames;
+        const size_t frameSize = OFstatic_cast(size_t, imageBytesAllocated) * OFstatic_cast(size_t, imageRows)
+            * OFstatic_cast(size_t, imageColumns) * OFstatic_cast(size_t, imageSamplesPerPixel);
+        size_t totalSize = frameSize * imageFrames;
         if (totalSize & 1) totalSize++; // align on 16-bit word boundary
         Uint16 *imageData16 = NULL;
         Sint32 currentFrame = 0;
         Uint32 currentItem = 1; // ignore offset table
         Uint32 numberOfStripes = 0;
         Uint32 fragmentLength = 0;
-        Uint32 i;
 
-        result = uncompressedPixelData.createUint16Array(totalSize/sizeof(Uint16), imageData16);
+        result = uncompressedPixelData.createUint16Array(OFstatic_cast(Uint32, totalSize/sizeof(Uint16)), imageData16);
         if (result.good())
         {
           Uint8 *imageData8 = OFreinterpret_cast(Uint8 *, imageData16);
@@ -160,7 +158,11 @@ OFCondition DcmRLECodecDecoder::decode(
               {
                 // we require that the RLE header must be completely
                 // contained in the first fragment; otherwise bail out
-                if (fragmentLength < 64) result = EC_CannotChangeRepresentation;
+                if (fragmentLength < 64)
+                {
+                  DCMDATA_ERROR("Pixel item shorter than 64 bytes, RLE header incomplete.");
+                  result = EC_CannotChangeRepresentation;
+                }
               }
             }
 
@@ -168,7 +170,7 @@ OFCondition DcmRLECodecDecoder::decode(
             {
               // copy RLE header to buffer and adjust byte order
               memcpy(rleHeader, rleData, 64);
-              swapIfNecessary(gLocalByteOrder, EBO_LittleEndian, rleHeader, 16*sizeof(Uint32), sizeof(Uint32));
+              swapIfNecessary(gLocalByteOrder, EBO_LittleEndian, rleHeader, 16*OFstatic_cast(Uint32, sizeof(Uint32)), sizeof(Uint32));
 
               // determine number of stripes.
               numberOfStripes = rleHeader[0];
@@ -176,7 +178,10 @@ OFCondition DcmRLECodecDecoder::decode(
               // check that number of stripes in RLE header matches our expectation
               if ((numberOfStripes < 1) || (numberOfStripes > 15) ||
                   (numberOfStripes != OFstatic_cast(Uint32, imageBytesAllocated) * imageSamplesPerPixel))
+              {
+                  DCMDATA_ERROR("Number of stripes in RLE header incorrect: found " << numberOfStripes << ", expected " << (OFstatic_cast(Uint32, imageBytesAllocated) * imageSamplesPerPixel));
                   result = EC_CannotChangeRepresentation;
+              }
             }
 
             if (result.good())
@@ -189,6 +194,7 @@ OFCondition DcmRLECodecDecoder::decode(
               Uint32 byteOffset = 0;
 
               OFBool lastStripe = OFFalse;
+              OFBool lastStripeOfColor = OFFalse;
               Uint32 inputBytes = 0;
 
               // pointers for buffer copy operations
@@ -204,17 +210,21 @@ OFCondition DcmRLECodecDecoder::decode(
               // temporary variables
               Uint32 sample = 0;
               Uint32 byte = 0;
-              register Uint32 pixel = 0;
+              Uint32 pixel = 0;
 
               // for each stripe in stripe set
-              for (i=0; (i<numberOfStripes) && result.good(); ++i)
+              for (Uint32 stripeIndex = 0; (stripeIndex < numberOfStripes) && result.good(); ++stripeIndex)
               {
                 // reset RLE codec
                 rledecoder.clear();
 
                 // adjust start point for RLE stripe, ignoring trailing garbage from the last run
-                byteOffset = rleHeader[i+1];
-                if (byteOffset < fragmentOffset) result = EC_CannotChangeRepresentation;
+                byteOffset = rleHeader[stripeIndex + 1];
+                if (byteOffset < fragmentOffset)
+                {
+                    DCMDATA_ERROR("Byte offset in RLE header is wrong.");
+                    result = EC_CannotChangeRepresentation;
+                }
                 else
                 {
                   byteOffset -= fragmentOffset; // now byteOffset is correct but may point to next fragment
@@ -228,13 +238,24 @@ OFCondition DcmRLECodecDecoder::decode(
                       fragmentOffset += fragmentLength;
                       fragmentLength = pixItem->getLength();
                       result = pixItem->getUint8Array(rleData);
+                      if (result.bad())
+                      {
+                        DCMDATA_ERROR("Cannot access pixel fragment.");
+                      }
+                    }
+                    else
+                    {
+                      DCMDATA_ERROR("Cannot access pixel fragment.");
                     }
                   }
                 }
 
+                // something went wrong; most likely the byte offset in the RLE header is incorrect.
+                if (result.bad()) return EC_CannotChangeRepresentation;
+
                 // byteOffset now points to the first byte of the new RLE stripe
                 // check if the current stripe is the last one for this frame
-                if (i+1 == numberOfStripes) lastStripe = OFTrue; else lastStripe = OFFalse;
+                if (stripeIndex + 1 == numberOfStripes) lastStripe = OFTrue; else lastStripe = OFFalse;
 
                 if (lastStripe)
                 {
@@ -278,11 +299,15 @@ OFCondition DcmRLECodecDecoder::decode(
                 {
                   // not the last stripe. We can use the offset table to determine
                   // the number of bytes to feed to the RLE codec.
-                  inputBytes = rleHeader[i+2];
-                  if (inputBytes < rleHeader[i+1]) result = EC_CannotChangeRepresentation;
+                  inputBytes = rleHeader[stripeIndex+2];
+                  if (inputBytes < rleHeader[stripeIndex + 1])
+                  {
+                      DCMDATA_ERROR("Byte offset in RLE header is wrong.");
+                      result = EC_CannotChangeRepresentation;
+                  }
                   else
                   {
-                    inputBytes -= rleHeader[i+1]; // number of bytes to feed to codec
+                    inputBytes -= rleHeader[stripeIndex + 1]; // number of bytes to feed to codec
                     while ((inputBytes > (fragmentLength - byteOffset)) && result.good())
                     {
                       // feed complete remaining content of fragment to RLE codec and
@@ -316,8 +341,17 @@ OFCondition DcmRLECodecDecoder::decode(
                   }
                 }
 
+                // copy the decoded stuff over to the buffer here...
                 // make sure the RLE decoder has produced the right amount of data
-                if (result.good() && (rledecoder.size() != bytesPerStripe))
+                lastStripeOfColor = lastStripe || ((imagePlanarConfiguration == 1) && ((stripeIndex + 1) % imageBytesAllocated == 0));
+
+                if (lastStripeOfColor && (rledecoder.size() < bytesPerStripe))
+                {
+                    // stripe ended prematurely? report a warning and continue
+                    DCMDATA_WARN("RLE decoder is finished but has produced insufficient data for this stripe, filling remaining pixels");
+                    result = EC_Normal;
+                }
+                else if (rledecoder.size() != bytesPerStripe)
                 {
                     DCMDATA_ERROR("RLE decoder is finished but has produced insufficient data for this stripe");
                     result = EC_CannotChangeRepresentation;
@@ -327,8 +361,8 @@ OFCondition DcmRLECodecDecoder::decode(
                 if (result.good())
                 {
                   // which sample and byte are we currently compressing?
-                  sample = i / imageBytesAllocated;
-                  byte = i % imageBytesAllocated;
+                  sample = stripeIndex / imageBytesAllocated;
+                  byte = stripeIndex % imageBytesAllocated;
 
                   // raw buffer containing bytesPerStripe bytes of uncompressed data
                   outputBuffer = OFstatic_cast(Uint8 *, rledecoder.getOutputBuffer());
@@ -376,7 +410,7 @@ OFCondition DcmRLECodecDecoder::decode(
           } /* while still frames to process */
 
           // adjust byte order for uncompressed image to little endian
-          swapIfNecessary(EBO_LittleEndian, gLocalByteOrder, imageData16, totalSize, sizeof(Uint16));
+          swapIfNecessary(EBO_LittleEndian, gLocalByteOrder, imageData16, OFstatic_cast(Uint32, totalSize), sizeof(Uint16));
 
           // Number of Frames might have changed in case the previous value was wrong
           if (result.good() && (numberOfFramesPresent || (imageFrames > 1)))
@@ -443,7 +477,11 @@ OFCondition DcmRLECodecDecoder::decodeFrame(
     if (result.good())
     {
         imageBytesAllocated = OFstatic_cast(Uint16, imageBitsAllocated / 8);
-        if ((imageBitsAllocated < 8)||(imageBitsAllocated % 8 != 0)) return EC_CannotChangeRepresentation;
+        if ((imageBitsAllocated < 8)||(imageBitsAllocated % 8 != 0))
+        {
+          DCMDATA_ERROR("The RLE decoder only supports images where BitsAllocated is a multiple of 8.");
+          return EC_CannotChangeRepresentation;
+        }
     }
     if (result.good() && (imageSamplesPerPixel > 1))
     {
@@ -459,11 +497,11 @@ OFCondition DcmRLECodecDecoder::decodeFrame(
 
     DcmPixelItem *pixItem = NULL;
     Uint8 * rleData = NULL;
-    const size_t bytesPerStripe = imageColumns * imageRows;
+    const size_t bytesPerStripe = OFstatic_cast(size_t, imageColumns) * OFstatic_cast(size_t, imageRows);
     Uint32 numberOfStripes = 0;
     Uint32 fragmentLength = 0;
-    Uint32 i;
-    Uint32 frameSize = imageBytesAllocated * imageRows * imageColumns * imageSamplesPerPixel;
+    Uint32 frameSize = OFstatic_cast(Uint32, imageBytesAllocated) * OFstatic_cast(Uint32, imageRows)
+                       * OFstatic_cast(Uint32, imageColumns) * OFstatic_cast(Uint32, imageSamplesPerPixel);
 
     if (frameSize > bufSize) return EC_IllegalCall;
 
@@ -497,19 +535,23 @@ OFCondition DcmRLECodecDecoder::decodeFrame(
 
     // copy RLE header to buffer and adjust byte order
     memcpy(rleHeader, rleData, 64);
-    swapIfNecessary(gLocalByteOrder, EBO_LittleEndian, rleHeader, 16*sizeof(Uint32), sizeof(Uint32));
+    swapIfNecessary(gLocalByteOrder, EBO_LittleEndian, rleHeader, OFstatic_cast(Uint32, 16*sizeof(Uint32)), sizeof(Uint32));
 
     // determine number of stripes.
     numberOfStripes = rleHeader[0];
 
     // check that number of stripes in RLE header matches our expectation
     if ((numberOfStripes < 1) || (numberOfStripes > 15) || (numberOfStripes != OFstatic_cast(Uint32, imageBytesAllocated) * imageSamplesPerPixel))
+    {
+        DCMDATA_ERROR("Number of stripes in RLE header incorrect: found " << numberOfStripes << ", expected " << (OFstatic_cast(Uint32, imageBytesAllocated) * imageSamplesPerPixel));
         return EC_CannotChangeRepresentation;
+    }
 
     // this variable keeps the current position within the current fragment
     Uint32 byteOffset = 0;
 
     OFBool lastStripe = OFFalse;
+    OFBool lastStripeOfColor = OFFalse;
     Uint32 inputBytes = 0;
 
     // pointers for buffer copy operations
@@ -527,21 +569,21 @@ OFCondition DcmRLECodecDecoder::decodeFrame(
     // temporary variables
     Uint32 sample = 0;
     Uint32 byte = 0;
-    register Uint32 pixel = 0;
+    Uint32 pixel = 0;
     size_t bytesToDecode;
 
     // for each stripe in stripe set
-    for (i = 0; i < numberOfStripes; ++i)
+    for (Uint32 stripeIndex = 0; stripeIndex < numberOfStripes; ++stripeIndex)
     {
         // reset RLE codec
         rledecoder.clear();
 
         // adjust start point for RLE stripe
-        byteOffset = rleHeader[i+1];
+        byteOffset = rleHeader[stripeIndex + 1];
 
         // byteOffset now points to the first byte of the new RLE stripe
         // check if the current stripe is the last one for this frame
-        if (i+1 == numberOfStripes) lastStripe = OFTrue; else lastStripe = OFFalse;
+        if (stripeIndex + 1 == numberOfStripes) lastStripe = OFTrue; else lastStripe = OFFalse;
 
         if (lastStripe)
         {
@@ -556,10 +598,14 @@ OFCondition DcmRLECodecDecoder::decodeFrame(
         {
             // not the last stripe. We can use the offset table to determine
             // the number of bytes to feed to the RLE codec.
-            inputBytes = rleHeader[i+2];
-            if (inputBytes < rleHeader[i+1]) return EC_CannotChangeRepresentation;
+            inputBytes = rleHeader[stripeIndex+2];
+            if (inputBytes < rleHeader[stripeIndex + 1])
+            {
+              DCMDATA_ERROR("Byte offset in RLE header is wrong.");
+              return EC_CannotChangeRepresentation;
+            }
 
-            inputBytes -= rleHeader[i+1]; // number of bytes to feed to codec
+            inputBytes -= rleHeader[stripeIndex + 1]; // number of bytes to feed to codec
 
             bytesToDecode = OFstatic_cast(size_t, inputBytes);
         }
@@ -576,14 +622,12 @@ OFCondition DcmRLECodecDecoder::decodeFrame(
 
         // copy the decoded stuff over to the buffer here...
         // make sure the RLE decoder has produced the right amount of data
-        if (lastStripe && (rledecoder.size() < bytesPerStripe))
+        lastStripeOfColor = lastStripe || ((imagePlanarConfiguration == 1) && ((stripeIndex + 1) % imageBytesAllocated == 0));
+        if (lastStripeOfColor && (rledecoder.size() < bytesPerStripe))
         {
-            // stream ended premature? report a warning and continue
-            if (result == EC_StreamNotifyClient)
-            {
-                DCMDATA_WARN("RLE decoder is finished but has produced insufficient data for this stripe, filling remaining pixels");
-                result = EC_Normal;
-            }
+            // stripe ended prematurely? report a warning and continue
+            DCMDATA_WARN("RLE decoder is finished but has produced insufficient data for this stripe, filling remaining pixels");
+            result = EC_Normal;
         }
         else if (rledecoder.size() != bytesPerStripe)
         {
@@ -593,8 +637,8 @@ OFCondition DcmRLECodecDecoder::decodeFrame(
 
         // distribute decompressed bytes into output image array
         // which sample and byte are we currently decompressing?
-        sample = i / imageBytesAllocated;
-        byte = i % imageBytesAllocated;
+        sample = stripeIndex / imageBytesAllocated;
+        byte = stripeIndex % imageBytesAllocated;
 
         // raw buffer containing bytesPerStripe bytes of uncompressed data
         outputBuffer = OFstatic_cast(Uint8 *, rledecoder.getOutputBuffer());
@@ -631,7 +675,7 @@ OFCondition DcmRLECodecDecoder::decodeFrame(
         }
         // and fill the remainder of the image with copies of the last decoded pixel
         const Uint8 lastPixelValue = *(outputBuffer - 1);
-        for (pixel = decoderSize; pixel < bytesPerStripe; ++pixel)
+        for (pixel = OFstatic_cast(Uint32, decoderSize); pixel < bytesPerStripe; ++pixel)
         {
             *pixelPointer = lastPixelValue;
             pixelPointer += offsetBetweenSamples;
@@ -661,7 +705,8 @@ OFCondition DcmRLECodecDecoder::encode(
     const DcmRepresentationParameter * /* toRepParam */,
     DcmPixelSequence * & /* pixSeq */,
     const DcmCodecParameter * /* cp */,
-    DcmStack & /* objStack */) const
+    DcmStack & /* objStack */,
+    OFBool& /* removeOldRep */) const
 {
   // we are a decoder only
   return EC_IllegalCall;
@@ -675,7 +720,8 @@ OFCondition DcmRLECodecDecoder::encode(
     const DcmRepresentationParameter * /* toRepParam */,
     DcmPixelSequence * & /* toPixSeq */,
     const DcmCodecParameter * /* cp */,
-    DcmStack & /* objStack */) const
+    DcmStack & /* objStack */,
+    OFBool& /* removeOldRep */) const
 {
   // we don't support re-coding for now.
   return EC_IllegalCall;
@@ -689,87 +735,29 @@ OFCondition DcmRLECodecDecoder::determineDecompressedColorModel(
     DcmItem *dataset,
     OFString &decompressedColorModel) const
 {
-    OFCondition result = EC_InvalidTag;
-    if ((dataset != NULL ) && ((dataset->ident() == EVR_dataset) || (dataset->ident() == EVR_item)))
+    OFCondition result = EC_IllegalParameter;
+    if (dataset != NULL )
     {
-        // retrieve color model from given dataset
-        result = dataset->findAndGetOFString(DCM_PhotometricInterpretation, decompressedColorModel);
+        if ((dataset->ident() == EVR_dataset) || (dataset->ident() == EVR_item))
+        {
+            // retrieve color model from given dataset
+            result = dataset->findAndGetOFString(DCM_PhotometricInterpretation, decompressedColorModel);
+            if (result == EC_TagNotFound)
+            {
+                DCMDATA_WARN("DcmRLECodecDecoder: Mandatory element PhotometricInterpretation " << DCM_PhotometricInterpretation << " is missing");
+                result = EC_MissingAttribute;
+            }
+            else if (result.bad())
+            {
+                DCMDATA_WARN("DcmRLECodecDecoder: Cannot retrieve value of element PhotometricInterpretation " << DCM_PhotometricInterpretation << ": " << result.text());
+            }
+            else if (decompressedColorModel.empty())
+            {
+                DCMDATA_WARN("DcmRLECodecDecoder: No value for mandatory element PhotometricInterpretation " << DCM_PhotometricInterpretation);
+                result = EC_MissingValue;
+            }
+        } else
+            result = EC_CorruptedData;
     }
     return result;
 }
-
-
-/*
- * CVS/RCS Log
- * $Log: dcrleccd.cc,v $
- * Revision 1.18  2010-11-01 10:42:44  uli
- * Fixed some compiler warnings reported by gcc with additional flags.
- *
- * Revision 1.17  2010-10-14 13:14:09  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.16  2010-10-01 10:21:05  uli
- * Fixed most compiler warnings from -Wall -Wextra -pedantic in dcmdata.
- *
- * Revision 1.15  2010-05-27 16:52:32  joergr
- * Re-added comment that was accidentally removed by the last commit.
- *
- * Revision 1.14  2010-05-21 14:02:48  joergr
- * Fixed issue with incorrectly encoded RLE images: Now, if the RLE decoder is
- * finished but has produced insufficient data, the remaining pixels of the
- * image are filled with the value of the last pixel. Applies to decodeFrame().
- * Added useful log messages on various levels to decode() and decodeFrame().
- *
- * Revision 1.13  2009-11-17 16:41:26  joergr
- * Added new method that allows for determining the color model of the
- * decompressed image.
- *
- * Revision 1.12  2009-11-04 09:58:10  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.11  2009-08-10 11:27:00  meichel
- * Added working implementation of DcmRLECodecDecoder::decodeFrame().
- *
- * Revision 1.10  2009-08-10 09:38:06  meichel
- * All decompression codecs now replace NumberOfFrames if larger than one
- *   or present in the original image.
- *
- * Revision 1.9  2008-08-15 09:18:13  meichel
- * Decoder now gracefully handles the case of faulty images where value of
- *   NumberOfFrames is larger than the number of compressed fragments, if and only
- *   if there is just a single fragment per frame.
- *
- * Revision 1.8  2008-05-29 10:46:16  meichel
- * Implemented new method DcmPixelData::getUncompressedFrame
- *   that permits frame-wise access to compressed and uncompressed
- *   objects without ever loading the complete object into main memory.
- *   For this new method to work with compressed images, all classes derived from
- *   DcmCodec need to implement a new method decodeFrame(). For now, only
- *   dummy implementations returning an error code have been defined.
- *
- * Revision 1.7  2005/12/08 15:41:29  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.6  2005/07/26 17:08:35  meichel
- * Added option to RLE decoder that allows to correctly decode images with
- *   incorrect byte order of byte segments (LSB instead of MSB).
- *
- * Revision 1.5  2004/08/24 14:54:20  meichel
- *  Updated compression helper methods. Image type is not set to SECONDARY
- *   any more, support for the purpose of reference code sequence added.
- *
- * Revision 1.4  2003/08/14 09:01:06  meichel
- * Adapted type casts to new-style typecast operators defined in ofcast.h
- *
- * Revision 1.3  2003/03/21 13:08:04  meichel
- * Minor code purifications for warnings reported by MSVC in Level 4
- *
- * Revision 1.2  2002/07/18 12:15:39  joergr
- * Added explicit type casts to keep Sun CC 2.0.1 quiet.
- *
- * Revision 1.1  2002/06/06 14:52:40  meichel
- * Initial release of the new RLE codec classes
- *   and the dcmcrle/dcmdrle tools in module dcmdata
- *
- *
- */

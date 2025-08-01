@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2010, OFFIS e.V.
+ *  Copyright (C) 2010-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,20 +17,19 @@
  *
  *  Purpose: Base class for TLS-enabled Service Class Users (SCUs)
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-12-16 08:34:06 $
- *  CVS/RCS Revision: $Revision: 1.4 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"  /* make sure OS specific configuration is included first */
+#include "dcmtk/dcmtls/tlsdefin.h"  /* for DCMTK_DCMTLS_EXPORT */
 
 #ifdef WITH_OPENSSL
 #include "dcmtk/dcmtls/tlsscu.h"
 #include "dcmtk/dcmnet/diutil.h"    /* for dcmnet logger */
+#include "dcmtk/dcmtls/tlscond.h"   /* for error constants */
+
+BEGIN_EXTERN_C
+#include <openssl/ssl.h>
+END_EXTERN_C
 
 
 DcmTLSSCU::DcmTLSSCU() :
@@ -39,49 +38,33 @@ DcmTLSSCU::DcmTLSSCU() :
   m_trustedCertDirs(),
   m_trustedCertFiles(),
   m_privateKeyFile(""),
-  m_privateKeyFileFormat(SSL_FILETYPE_PEM),
+  m_privateKeyFileFormat(DCF_Filetype_PEM),
   m_certificateFile(""),
-  m_certKeyFileFormat(SSL_FILETYPE_PEM),
+  m_certKeyFileFormat(DCF_Filetype_PEM),
   m_passwd(NULL),
   m_readSeedFile(""),
   m_writeSeedFile(""),
-  m_certVerification(DCV_requireCertificate),
-  m_dhparam("")
+  m_certVerification(DCV_requireCertificate)
 {
-#if OPENSSL_VERSION_NUMBER >= 0x0090700fL
-  m_ciphersuites = TLS1_TXT_RSA_WITH_AES_128_SHA;
-  m_ciphersuites += ":";
-  m_ciphersuites += SSL3_TXT_RSA_DES_192_CBC3_SHA;
-#else
-  m_ciphersuites = SSL3_TXT_RSA_DES_192_CBC3_SHA;
-#endif
 }
 
 
 DcmTLSSCU::DcmTLSSCU(const OFString& peerHost,
                      const OFString& peerAETitle,
-                     const Uint16& portNum) :
+                     const Uint16 portNum) :
   m_tLayer(NULL),
   m_doAuthenticate(OFFalse),
   m_trustedCertDirs(),
   m_trustedCertFiles(),
   m_privateKeyFile(""),
-  m_privateKeyFileFormat(SSL_FILETYPE_PEM),
+  m_privateKeyFileFormat(DCF_Filetype_PEM),
   m_certificateFile(""),
-  m_certKeyFileFormat(SSL_FILETYPE_PEM),
+  m_certKeyFileFormat(DCF_Filetype_PEM),
   m_passwd(NULL),
   m_readSeedFile(""),
   m_writeSeedFile(""),
-  m_certVerification(DCV_requireCertificate),
-  m_dhparam("")
+  m_certVerification(DCV_requireCertificate)
 {
-#if OPENSSL_VERSION_NUMBER >= 0x0090700fL
-  m_ciphersuites = TLS1_TXT_RSA_WITH_AES_128_SHA;
-  m_ciphersuites += ":";
-  m_ciphersuites += SSL3_TXT_RSA_DES_192_CBC3_SHA;
-#else
-  m_ciphersuites = SSL3_TXT_RSA_DES_192_CBC3_SHA;
-#endif
   setPeerHostName(peerHost);
   setPeerAETitle(peerAETitle);
   setPeerPort(portNum);
@@ -103,11 +86,27 @@ OFCondition DcmTLSSCU::initNetwork()
   OFCondition cond;
 
   /* First, create TLS layer */
-  m_tLayer = new DcmTLSTransportLayer(DICOM_APPLICATION_REQUESTOR, m_readSeedFile.c_str());
+  m_tLayer = new DcmTLSTransportLayer(NET_REQUESTOR, m_readSeedFile.c_str(), OFTrue /* initialize OpenSSL */);
   if (m_tLayer == NULL)
   {
     DCMTLS_ERROR("Unable to create TLS transport layer for SCP, maybe problem with seed file?");
     return EC_IllegalCall; // TODO: need to find better error code
+  }
+
+  /* Add trusted certificates from files and directories
+   */
+  OFListIterator(OFString) certFile = m_trustedCertFiles.begin();
+  while (certFile != m_trustedCertFiles.end())
+  {
+    if (m_tLayer->addTrustedCertificateFile( (*certFile).c_str(), m_certKeyFileFormat).bad())
+      DCMNET_WARN("Unable to load certificate file '" << *certFile << "', ignoring");
+    certFile++;
+  }
+  OFListIterator(OFString) certDir = m_trustedCertDirs.begin();
+  while (certDir != m_trustedCertDirs.end())
+  {
+    if (m_tLayer->addTrustedCertificateDir( (*certDir).c_str(), m_certKeyFileFormat).bad())
+      DCMNET_WARN("Unable to load certificates from directory '" << *certDir<< "', ignoring");
   }
 
   /* If authentication of both sides (and not only encryption) is desired,
@@ -115,48 +114,34 @@ OFCondition DcmTLSSCU::initNetwork()
    */
   if (m_doAuthenticate)
   {
-    // Set password. NULL password will ask user on commandline
+    // Set password. NULL password will ask user on command line
     if (m_passwd) m_tLayer->setPrivateKeyPasswd(m_passwd);
 
-    // Set file that contains the privatey key
-    if ( cond.good() && (TCS_ok != m_tLayer->setPrivateKeyFile(m_privateKeyFile.c_str(), m_privateKeyFileFormat)) )
+    // Set file that contains the private key
+    if (cond.good()) cond = m_tLayer->setPrivateKeyFile(m_privateKeyFile.c_str(), m_privateKeyFileFormat);
+    if (cond.bad())
     {
       DCMTLS_ERROR("Unable to create TLS transport layer for SCP: Unable to load private TLS key from file " << m_privateKeyFile);
-      cond = EC_IllegalCall; // TODO: need to find better error code
     }
     // Set file that contains host certificate
-    if ( cond.good() && (TCS_ok != m_tLayer->setCertificateFile(m_certificateFile.c_str(), m_certKeyFileFormat)) )
+    if (cond.good()) cond = m_tLayer->setCertificateFile(m_certificateFile.c_str(), m_certKeyFileFormat);
+    if (cond.bad())
     {
       DCMTLS_ERROR("Unable to load SCP certificate from file " << m_certificateFile);
-      cond = EC_IllegalCall; // TODO: need to find better error code
     }
     // Set whether private key fits with certificate
     if (! m_tLayer->checkPrivateKeyMatchesCertificate() && cond.good())
     {
       DCMTLS_ERROR("Private key from file " << m_privateKeyFile << " and certificate from file " << m_certificateFile << " do not match");
-      cond = EC_IllegalCall; // TODO: need to find better error code
+      cond = DCMTLS_EC_MismatchedPrivateKeyAndCertificate( m_privateKeyFile.c_str(), m_certificateFile.c_str() );
     }
-  }
-
-  /* Set cipher suites to be supported */
-  if ( cond.good() && (TCS_ok != m_tLayer->setCipherSuites(m_ciphersuites.c_str())) )
-  {
-    DCMTLS_ERROR("Unable to set selected cipher suites for SCP");
-    cond = EC_IllegalCall; // TODO: need to find better error code
-  }
-
-  /* Initiliaze Diffie-Hellman parameters from file if given */
-  if (!m_dhparam.empty() && cond.good())
-  {
-    if (!m_tLayer->setTempDHParameters(m_dhparam.c_str()))
-      cond = EC_IllegalCall; // TODO: need to find better error code
   }
 
   /* Set whether SCU should check the SCP's certificate for validity */
   if (cond.good())
     m_tLayer->setCertificateVerification(m_certVerification);
 
-  /*  Now we are ready to initialize scu's network structures */
+  /*  Now we are ready to initialize SCU's network structures */
   if (cond.good())
     cond = DcmSCU::initNetwork();
 
@@ -167,7 +152,7 @@ OFCondition DcmTLSSCU::initNetwork()
   if (cond.good())
     cond = useSecureConnection(m_tLayer);
 
-  /* Finally, look whether everyhting was successful. If not,
+  /* Finally, look whether everything was successful. If not,
    * delete secure layer created above
    */
   if (cond.bad())
@@ -185,7 +170,7 @@ OFCondition DcmTLSSCU::initNetwork()
 
 OFCondition DcmTLSSCU::negotiateAssociation()
 {
- // Negotiate association
+  // Negotiate association
   OFCondition cond = DcmSCU::negotiateAssociation();
   if (cond.bad())
   {
@@ -222,8 +207,8 @@ void DcmTLSSCU::closeAssociation(const DcmCloseAssociationType closeType)
 void DcmTLSSCU::enableAuthentication(const OFString& privateKey,
                                      const OFString& certFile,
                                      const char* passphrase,
-                                     const int& privKeyFormat,
-                                     const int& certFormat)
+                                     const DcmKeyFileFormat privKeyFormat,
+                                     const DcmKeyFileFormat certFormat)
 {
   m_doAuthenticate = OFTrue;
   m_privateKeyFile = privateKey;
@@ -241,7 +226,7 @@ void DcmTLSSCU::enableAuthentication(const OFString& privateKey,
     return;
   }
 
-  int passLength = strlen(passphrase) + 1;
+  size_t passLength = strlen(passphrase) + 1;
   m_passwd = new char[passLength];
   strncpy(m_passwd, passphrase, passLength);
   return;
@@ -265,18 +250,21 @@ void DcmTLSSCU::disableAuthentication()
   m_doAuthenticate = OFFalse;
 }
 
-
-void DcmTLSSCU::addCiphersuite(const OFString& cs)
+OFCondition DcmTLSSCU::addCipherSuite(const OFString& suite)
 {
-  if (m_ciphersuites.empty())
-    m_ciphersuites = cs;
-  else
-  {
-    m_ciphersuites+= ":";
-    m_ciphersuites+= cs;
-  }
+  if (m_tLayer)
+     return m_tLayer->addCipherSuite(suite.c_str());
+     else return EC_IllegalCall;
 }
 
+OFCondition DcmTLSSCU::setTLSProfile(DcmTLSSecurityProfile profile)
+{
+  if (m_tLayer)
+  {
+    m_tLayer->setTLSProfile(profile);
+    return EC_Normal;
+  } else return EC_IllegalCall;
+}
 
 void DcmTLSSCU::setReadSeedFile(const OFString& seedFile)
 {
@@ -290,15 +278,9 @@ void DcmTLSSCU::setWriteSeedFile(const OFString& seedFile)
 }
 
 
-void DcmTLSSCU::setPeerCertVerification(const DcmCertificateVerification& cert)
+void DcmTLSSCU::setPeerCertVerification(const DcmCertificateVerification cert)
 {
   m_certVerification = cert;
-}
-
-
-void DcmTLSSCU::setDHParam(const OFString& dhParam)
-{
-  m_dhparam = dhParam;
 }
 
 
@@ -342,12 +324,6 @@ void DcmTLSSCU::getTrustedCertDirs(OFList<OFString>& trustedDirs /*out*/) const
 }
 
 
-OFString DcmTLSSCU::getCiphersuites() const
-{
-  return m_ciphersuites;
-}
-
-
 OFString DcmTLSSCU::getReadSeedFile() const
 {
   return m_readSeedFile;
@@ -360,28 +336,20 @@ OFString DcmTLSSCU::getWriteSeedFile() const
 }
 
 
-OFString DcmTLSSCU::getDHParam() const
+void DcmTLSSCU::setDHParam(const OFString& dhParam)
 {
-  return m_dhparam;
+  if (!m_tLayer->setTempDHParameters(dhParam.c_str()))
+     DCMTLS_WARN("unable to load temporary DH parameter file '" << dhParam << "', ignoring");
 }
 
+#else
+
+/* make sure that the object file is not completely empty if compiled
+ * without OpenSSL because some linkers might fail otherwise.
+ */
+DCMTK_DCMTLS_EXPORT void tlsscu_dummy_function()
+{
+  return;
+}
 
 #endif // WITH_OPENSSL
-
-
-/*
-** CVS Log
-** $Log: tlsscu.cc,v $
-** Revision 1.4  2010-12-16 08:34:06  joergr
-** Fixed initialization of OFString variable (reported by gcc 2.95.3).
-**
-** Revision 1.3  2010-10-14 13:14:46  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.2  2010-06-22 15:50:09  joergr
-** Introduced new enumeration type to be used for closeAssociation().
-**
-** Revision 1.1  2010-04-29 16:17:56  onken
-** Added new class DcmTLSSCU as base class for developing TLS-enabled SCUs.
-**
-*/

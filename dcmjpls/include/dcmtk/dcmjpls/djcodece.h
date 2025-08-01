@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2007-2010, OFFIS e.V.
+ *  Copyright (C) 2007-2020, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: codec classes for JPEG-LS encoders.
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:19 $
- *  CVS/RCS Revision: $Revision: 1.8 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCMJPLS_DJCODEC_H
@@ -33,10 +26,12 @@
 #include "dcmtk/dcmdata/dccodec.h"  /* for class DcmCodec */
 #include "dcmtk/dcmdata/dcofsetl.h" /* for struct DcmOffsetList */
 #include "dcmtk/ofstd/ofstring.h"   /* for class OFString */
+#include "dcmtk/dcmjpls/dldefine.h"
 
 class DJLSRepresentationParameter;
 class DJLSCodecParameter;
 class DicomImage;
+struct JlsCustomParameters;
 
 /** abstract codec class for JPEG-LS encoders.
  *  This abstract class contains most of the application logic
@@ -44,7 +39,7 @@ class DicomImage;
  *  This class only supports compression, it neither implements
  *  decoding nor transcoding.
  */
-class DJLSEncoderBase : public DcmCodec
+class DCMTK_DCMJPLS_EXPORT DJLSEncoderBase : public DcmCodec
 {
 public:
 
@@ -62,6 +57,10 @@ public:
    *  @param cp codec parameters for this codec
    *  @param objStack stack pointing to the location of the pixel data
    *    element in the current dataset.
+   *  @param removeOldRep boolean flag that should be set to false before this method call
+   *    and will be set to true if the codec modifies the DICOM dataset such
+   *    that the pixel data of the original representation may not be usable
+   *    anymore.
    *  @return EC_Normal if successful, an error code otherwise.
    */
   virtual OFCondition decode(
@@ -69,7 +68,8 @@ public:
     DcmPixelSequence * pixSeq,
     DcmPolymorphOBOW& uncompressedPixelData,
     const DcmCodecParameter * cp,
-    const DcmStack& objStack) const;
+    const DcmStack & objStack,
+    OFBool& removeOldRep) const;
 
   /** decompresses a single frame from the given pixel sequence and
    *  stores the result in the given buffer.
@@ -119,6 +119,10 @@ public:
    *  @param cp codec parameters for this codec
    *  @param objStack stack pointing to the location of the pixel data
    *    element in the current dataset.
+   *  @param removeOldRep boolean flag that should be set to false before this method call
+   *    and will be set to true if the codec modifies the DICOM dataset such
+   *    that the pixel data of the original representation may not be usable
+   *    anymore.
    *  @return EC_Normal if successful, an error code otherwise.
    */
   virtual OFCondition encode(
@@ -127,7 +131,8 @@ public:
     const DcmRepresentationParameter * toRepParam,
     DcmPixelSequence * & pixSeq,
     const DcmCodecParameter *cp,
-    DcmStack & objStack) const;
+    DcmStack & objStack,
+    OFBool& removeOldRep) const;
 
   /** transcodes (re-compresses) the given compressed DICOM image and stores
    *  the result in the given toPixSeq element.
@@ -141,6 +146,10 @@ public:
    *  @param cp codec parameters for this codec
    *  @param objStack stack pointing to the location of the pixel data
    *    element in the current dataset.
+   *  @param removeOldRep boolean flag that should be set to false before this method call
+   *    and will be set to true if the codec modifies the DICOM dataset such
+   *    that the pixel data of the original representation may not be usable
+   *    anymore.
    *  @return EC_Normal if successful, an error code otherwise.
    */
   virtual OFCondition encode(
@@ -150,7 +159,8 @@ public:
     const DcmRepresentationParameter * toRepParam,
     DcmPixelSequence * & toPixSeq,
     const DcmCodecParameter * cp,
-    DcmStack & objStack) const;
+    DcmStack & objStack,
+    OFBool& removeOldRep) const;
 
   /** checks if this codec is able to convert from the
    *  given current transfer syntax to the given new
@@ -349,12 +359,40 @@ private:
     Uint32 width,
     Uint32 height,
     Uint16 bitsAllocated) const;
+
+  /** Adjust the padding of the JPEG-LS bitstream in the buffer if it has odd length,
+   *  such that the End of Image (EOI) marker ends on an even byte boundary.
+   *  @param buffer pointer to buffer containing compressed JPEG-LS bitstream
+   *  @param bufSize size of the buffer in bytes
+   *  @param bytesWritten number of bytes written to buffer; value is increased
+   *   if this method adds a pad byte.
+   *  @param useFFpadding true if a standard-conforming extended EOI marker
+   *   should be used for padding an odd-length bitstream
+   */
+  static void fixPaddingIfNecessary(
+    Uint8 *buffer,
+    size_t bufSize,
+    unsigned long &bytesWritten,
+    OFBool useFFpadding);
+
+  /** compute the parameters for the CharLS JlsCustomParameters struct, which maintains
+   *  the JPEG-LS encoding process parameters T1, T2, T3, MAXVAL and RESET.
+   *  @param custom reference to initialized JlsCustomParameters object, values filled by this method
+   *  @param bitsAllocated number of bits allocated
+   *  @param nearLosslessDeviation parameter NEAR of near-lossless mode
+   *  @param djcp parameters for the codec
+   */
+  static void setCustomParameters(
+    JlsCustomParameters& custom,
+    Uint16 bitsAllocated,
+    Uint16 nearLosslessDeviation,
+    const DJLSCodecParameter *djcp);
 };
 
 
 /** codec class for JPEG-LS lossless only TS encoding
  */
-class DJLSLosslessEncoder : public DJLSEncoderBase
+class DCMTK_DCMJPLS_EXPORT DJLSLosslessEncoder : public DJLSEncoderBase
 {
   /** returns the transfer syntax that this particular codec
    *  is able to encode
@@ -365,7 +403,7 @@ class DJLSLosslessEncoder : public DJLSEncoderBase
 
 /** codec class for JPEG-LS lossy and lossless TS encoding
  */
-class DJLSNearLosslessEncoder : public DJLSEncoderBase
+class DCMTK_DCMJPLS_EXPORT DJLSNearLosslessEncoder : public DJLSEncoderBase
 {
   /** returns the transfer syntax that this particular codec
    *  is able to encode
@@ -375,61 +413,3 @@ class DJLSNearLosslessEncoder : public DJLSEncoderBase
 };
 
 #endif
-
-/*
- * CVS/RCS Log:
- * $Log: djcodece.h,v $
- * Revision 1.8  2010-10-14 13:17:19  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.7  2010-03-01 10:35:28  uli
- * Renamed include guards to avoid name clash with e.g. dcmjpeg.
- *
- * Revision 1.6  2010-02-26 10:54:41  uli
- * Fixed a compiler warning with MSVC about unsafe casts.
- *
- * Revision 1.5  2010-02-25 10:17:14  uli
- * Fix doxygen comments in a couple of places.
- *
- * Revision 1.4  2009-11-17 16:57:14  joergr
- * Added new method that allows for determining the color model of the
- * decompressed image.
- *
- * Revision 1.3  2009-10-07 13:16:47  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.2  2009-07-31 09:14:52  meichel
- * Added codec parameter and command line options that allow to control
- *   the interleave mode used in the JPEG-LS bitstream when compressing
- *   color images.
- *
- * Revision 1.1  2009-07-29 14:46:46  meichel
- * Initial release of module dcmjpls, a JPEG-LS codec for DCMTK based on CharLS
- *
- * Revision 1.3  2008-05-29 10:54:05  meichel
- * Implemented new method DcmPixelData::getUncompressedFrame
- *   that permits frame-wise access to compressed and uncompressed
- *   objects without ever loading the complete object into main memory.
- *   For this new method to work with compressed images, all classes derived from
- *   DcmCodec need to implement a new method decodeFrame(). For now, only
- *   dummy implementations returning an error code have been defined.
- *
- * Revision 1.2  2007/06/20 12:37:37  meichel
- * Completed implementation of encoder, which now supports lossless
- *   "raw" and "cooked" and near-lossless "cooked" modes.
- *
- * Revision 1.1  2007/06/15 14:35:45  meichel
- * Renamed CMake project and include directory from dcmjpgls to dcmjpls
- *
- * Revision 1.4  2007/06/15 10:38:43  meichel
- * Further code clean-up. Encoder now produces valid offset tables if
- *   a JPEG-LS frame size an odd number of bytes.
- *
- * Revision 1.3  2007/06/14 12:36:14  meichel
- * Further code clean-up. Updated doxygen comments.
- *
- * Revision 1.2  2007/06/13 16:41:07  meichel
- * Code clean-up and removal of dead code
- *
- *
- */

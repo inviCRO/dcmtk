@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2010, OFFIS e.V.
+ *  Copyright (C) 2002-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,25 +17,10 @@
  *
  *  Purpose: Scale DICOM images
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:13:34 $
- *  CVS/RCS Revision: $Revision: 1.26 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
-
-#define INCLUDE_CSTDIO
-#define INCLUDE_CSTRING
-#include "dcmtk/ofstd/ofstdinc.h"
-
-#ifdef HAVE_GUSI_H
-#include <GUSI.h>
-#endif
 
 #include "dcmtk/dcmdata/dctk.h"          /* for various dcmdata headers */
 #include "dcmtk/dcmdata/cmdlnarg.h"      /* for prepareCmdLineArgs */
@@ -85,7 +70,7 @@ int main(int argc, char *argv[])
 
     OFBool opt_uidCreation = OFTrue;
     E_FileReadMode opt_readMode = ERM_autoDetect;
-    E_FileWriteMode opt_writeMode = EWM_fileformat;
+    E_FileWriteMode opt_writeMode = EWM_createNewMeta;
     E_TransferSyntax opt_ixfer = EXS_Unknown;
     E_TransferSyntax opt_oxfer = EXS_Unknown;
     E_GrpLenEncoding opt_oglenc = EGL_recalcGL;
@@ -151,7 +136,7 @@ int main(int argc, char *argv[])
       cmd.addOption("--conv-never",         "+cn",      "never convert color space");
 #endif
      cmd.addSubGroup("scaling:");
-      cmd.addOption("--recognize-aspect",    "+a",      "recognize pixel aspect ratio (default)");
+      cmd.addOption("--recognize-aspect",    "+a",      "recognize pixel aspect ratio when scaling (def)");
       cmd.addOption("--ignore-aspect",       "-a",      "ignore pixel aspect ratio when scaling");
       cmd.addOption("--interpolate",         "+i",   1, "[n]umber of algorithm: integer",
                                                         "use interpolation when scaling (1..4, def: 1)");
@@ -341,7 +326,7 @@ int main(int argc, char *argv[])
       /* output options */
 
       cmd.beginOptionBlock();
-      if (cmd.findOption("--write-file")) opt_writeMode = EWM_fileformat;
+      if (cmd.findOption("--write-file")) opt_writeMode = EWM_createNewMeta;
       if (cmd.findOption("--write-dataset")) opt_writeMode = EWM_dataset;
       cmd.endOptionBlock();
 
@@ -353,16 +338,8 @@ int main(int argc, char *argv[])
       cmd.endOptionBlock();
 
       cmd.beginOptionBlock();
-      if (cmd.findOption("--enable-new-vr"))
-      {
-          dcmEnableUnknownVRGeneration.set(OFTrue);
-          dcmEnableUnlimitedTextVRGeneration.set(OFTrue);
-      }
-      if (cmd.findOption("--disable-new-vr"))
-      {
-          dcmEnableUnknownVRGeneration.set(OFFalse);
-          dcmEnableUnlimitedTextVRGeneration.set(OFFalse);
-      }
+      if (cmd.findOption("--enable-new-vr")) dcmEnableGenerationOfNewVRs();
+      if (cmd.findOption("--disable-new-vr")) dcmDisableGenerationOfNewVRs();
       cmd.endOptionBlock();
 
       cmd.beginOptionBlock();
@@ -455,9 +432,7 @@ int main(int argc, char *argv[])
     OFLOG_INFO(dcmscaleLogger, "check if new output transfer syntax is possible");
 
     DcmXfer opt_oxferSyn(opt_oxfer);
-    dataset->chooseRepresentation(opt_oxfer, NULL);
-
-    if (dataset->canWriteXfer(opt_oxfer))
+    if (dataset->chooseRepresentation(opt_oxfer, NULL).good() && dataset->canWriteXfer(opt_oxfer))
     {
         OFLOG_INFO(dcmscaleLogger, "output transfer syntax " << opt_oxferSyn.getXferName()
             << " can be written");
@@ -588,7 +563,7 @@ int main(int argc, char *argv[])
     if (!derivationDescription.empty())
     {
         const char *oldDerivation = NULL;
-        if (dataset->findAndGetString(DCM_DerivationDescription, oldDerivation).good())
+        if (dataset->findAndGetString(DCM_DerivationDescription, oldDerivation).good() && oldDerivation)
         {
              // append old Derivation Description, if any
             derivationDescription += " [";
@@ -609,10 +584,13 @@ int main(int argc, char *argv[])
     const char *oldImageType = NULL;
     if (dataset->findAndGetString(DCM_ImageType, oldImageType).good())
     {
-        // append old image type information beginning with second entry
-        const char *pos = strchr(oldImageType, '\\');
-        if (pos != NULL)
-            imageType += pos;
+        if (oldImageType != NULL)
+        {
+            // append old image type information beginning with second entry
+            const char *pos = strchr(oldImageType, '\\');
+            if (pos != NULL)
+                imageType += pos;
+        }
     }
     dataset->putAndInsertString(DCM_ImageType, imageType.c_str());
 
@@ -636,9 +614,6 @@ int main(int argc, char *argv[])
         // create new SOP instance UID
         char new_uid[100];
         dataset->putAndInsertString(DCM_SOPInstanceUID, dcmGenerateUniqueIdentifier(new_uid));
-        // force meta-header to refresh SOP Instance UID
-        if (opt_writeMode == EWM_fileformat)
-            opt_writeMode = EWM_updateMeta;
     }
 
     // ======================================================================
@@ -666,106 +641,3 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
-
-/*
- * CVS/RCS Log:
- * $Log: dcmscale.cc,v $
- * Revision 1.26  2010-10-14 13:13:34  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.25  2010-03-24 15:07:25  joergr
- * Added missing command line options for the color space conversion.
- *
- * Revision 1.24  2009-10-14 10:26:37  joergr
- * Fixed minor issues in log output.
- *
- * Revision 1.23  2009-10-13 14:08:33  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.22  2009-08-21 09:28:12  joergr
- * Added parameter 'writeMode' to save/write methods which allows for specifying
- * whether to write a dataset or fileformat as well as whether to update the
- * file meta information or to create a new file meta information header.
- *
- * Revision 1.21  2009-04-21 14:04:12  joergr
- * Fixed minor inconsistencies in manpage / syntax usage.
- *
- * Revision 1.20  2009-04-03 11:45:02  joergr
- * Added check whether neither scaling nor clipping is required.
- *
- * Revision 1.19  2008-09-25 14:43:22  joergr
- * Moved output of resource identifier in order to avoid printing the same
- * information twice.
- *
- * Revision 1.18  2008-09-25 12:47:58  joergr
- * Added support for printing the expanded command line arguments.
- * Always output the resource identifier of the command line tool in debug mode.
- *
- * Revision 1.17  2008-05-20 09:58:22  joergr
- * Added new bilinear and bicubic scaling algorithms for image magnification.
- * Allow width and height of the clipping area to be 0 (compute automatically).
- *
- * Revision 1.16  2006/08/15 16:35:00  meichel
- * Updated the code in module dcmimage to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.15  2006/07/27 13:59:24  joergr
- * Changed parameter "exclusive" of method addOption() from type OFBool into an
- * integer parameter "flags". Option "--help" is no longer an exclusive option
- * by default.
- *
- * Revision 1.14  2005/12/15 17:42:10  joergr
- * Changed type of local variable, reported by Sun CC 2.0.1 on Solaris.
- *
- * Revision 1.13  2005/12/08 15:42:18  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.12  2005/12/02 09:31:17  joergr
- * Added new command line option that ignores the transfer syntax specified in
- * the meta header and tries to detect the transfer syntax automatically from
- * the dataset.
- * Added new command line option that checks whether a given file starts with a
- * valid DICOM meta header.
- *
- * Revision 1.11  2005/07/26 18:29:01  joergr
- * Added new command line option that allows to clip a rectangular image region
- * (combination with scaling not yet fully implemented in corresponding classes).
- * Update ImageType, add DerivationDescription and SourceImageSequence.
- * Cleaned up use of CERR and COUT.
- *
- * Revision 1.10  2005/03/22 13:54:10  joergr
- * Minor code corrections, e.g. write pixel data if no scaling factor is given.
- *
- * Revision 1.9  2003/12/11 15:39:50  joergr
- * Made usage output consistent with other tools.
- *
- * Revision 1.8  2003/12/05 10:50:52  joergr
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- *
- * Revision 1.7  2002/12/13 13:44:43  meichel
- * Activated file padding options
- *
- * Revision 1.6  2002/11/27 14:16:53  meichel
- * Adapted module dcmimage to use of new header file ofstdinc.h
- *
- * Revision 1.5  2002/11/26 08:44:57  meichel
- * Replaced all includes for "zlib.h" with <zlib.h>
- *   to avoid inclusion of zlib.h in the makefile dependencies.
- *
- * Revision 1.4  2002/09/23 18:01:19  joergr
- * Added new command line option "--version" which prints the name and version
- * number of external libraries used (incl. preparation for future support of
- * 'config.guess' host identifiers).
- *
- * Revision 1.3  2002/08/21 09:54:07  meichel
- * Fixed argument lists for loadFile and saveFile
- *
- * Revision 1.2  2002/08/20 12:20:21  meichel
- * Adapted code to new loadFile and saveFile methods, thus removing direct
- *   use of the DICOM stream classes.
- *
- * Revision 1.1  2002/08/02 15:14:16  joergr
- * Added new command line program which allows to scale DICOM images.
- *
- */

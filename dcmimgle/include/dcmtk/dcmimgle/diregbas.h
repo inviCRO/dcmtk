@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1996-2010, OFFIS e.V.
+ *  Copyright (C) 1996-2011, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Joerg Riesmeier
  *
  *  Purpose: DicomRegisterBase (Header)
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:27 $
- *  CVS/RCS Revision: $Revision: 1.8 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -52,7 +45,7 @@ class DiRegisterBase;
 
 /** Abstract base class to register additional libraries
  */
-class DiRegisterBase
+class DCMTK_DCMIMGLE_EXPORT DiRegisterBase
 {
 
  public:
@@ -101,37 +94,3 @@ class DiRegisterBase
 
 
 #endif
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: diregbas.h,v $
- * Revision 1.8  2010-10-14 13:16:27  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.7  2005-12-08 16:48:07  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.6  2003/12/08 19:28:05  joergr
- * Removed leading underscore characters from preprocessor symbols (reserved
- * symbols). Updated CVS header. Updated copyright header.
- *
- * Revision 1.5  2001/06/01 15:49:50  meichel
- * Updated copyright header
- *
- * Revision 1.4  2000/03/08 16:24:23  meichel
- * Updated copyright header.
- *
- * Revision 1.3  1999/09/17 12:48:28  joergr
- * Added/changed/completed DOC++ style comments in the header files.
- *
- * Revision 1.2  1999/03/24 17:20:24  joergr
- * Added/Modified comments and formatting.
- *
- * Revision 1.1  1998/11/27 13:08:07  joergr
- * Added registration class to allow easy combination of both modules.
- * Added copyright message to all source files.
- *
- *
- */

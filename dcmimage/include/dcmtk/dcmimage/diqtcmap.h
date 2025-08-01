@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2010, OFFIS e.V.
+ *  Copyright (C) 2002-2016, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Marco Eichelberg
  *
  *  Purpose: class DcmQuantColorMapping
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:29 $
- *  CVS/RCS Revision: $Revision: 1.5 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -89,9 +82,9 @@ public:
     long limitcol;
     long col; // must be signed!
     long maxval_l = OFstatic_cast(long, maxval);
-    register int ind;
+    int ind;
     const DcmQuantComponent *currentpixel;
-    register DcmQuantComponent cr, cg, cb;
+    DcmQuantComponent cr, cg, cb;
 
     // create scale table
     DcmQuantScaleTable scaletable;
@@ -106,10 +99,10 @@ public:
         fs.startRow(col, limitcol);
         do
         {
-        	currentpixel = cp + col + col + col;
-        	cr = *currentpixel++;
-        	cg = *currentpixel++;
-        	cb = *currentpixel;
+            currentpixel = cp + col + col + col;
+            cr = *currentpixel++;
+            cg = *currentpixel++;
+            cb = *currentpixel;
             px.scale(cr, cg, cb, scaletable);
 
             fs.adjust(px, col, maxval_l);
@@ -136,27 +129,3 @@ public:
 
 
 #endif
-
-
-/*
- * CVS/RCS Log:
- * $Log: diqtcmap.h,v $
- * Revision 1.5  2010-10-14 13:16:29  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.4  2005/12/08 16:01:44  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.3  2004/04/21 10:00:31  meichel
- * Minor modifications for compilation with gcc 3.4.0
- *
- * Revision 1.2  2003/12/23 12:14:38  joergr
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- * Updated copyright header.
- *
- * Revision 1.1  2002/01/25 13:32:04  meichel
- * Initial release of new color quantization classes and
- *   the dcmquant tool in module dcmimage.
- *
- *
- */

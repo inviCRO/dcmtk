@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,39 +18,43 @@
  *  Purpose:
  *    classes: SiCertificate
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:24 $
- *  CVS/RCS Revision: $Revision: 1.8 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef SICERT_H
 #define SICERT_H
 
 #include "dcmtk/config/osconfig.h"
-#include "dcmtk/dcmsign/sitypes.h"
 
 #ifdef WITH_OPENSSL
 
+#include "dcmtk/dcmsign/sitypes.h"
 #include "dcmtk/ofstd/ofstring.h"   /* for class OFString */
 
 class DcmItem;
 class SiAlgorithm;
+class OFDateTime;
 struct x509_st;
+struct asn1_string_st;
 typedef struct x509_st X509;
+typedef struct asn1_string_st ASN1_STRING;
+typedef struct asn1_string_st ASN1_GENERALIZEDTIME;
 
 /** a class representing X.509 public key certificates.
+ *  @remark this class is only available if DCMTK is compiled with
+ *  OpenSSL support enabled.
  */
-class SiCertificate
-{    
+class DCMTK_DCMSIGN_EXPORT SiCertificate
+{
 public:
 
   /// default constructor
   SiCertificate();
-  
+
+  /** constructor
+   *  @param cert pointer to OpenSSL X509 object. Ownership is transferred to the SiCertificate instance
+   */
+  SiCertificate(X509 *cert);
+
   ///destructor
   virtual ~SiCertificate();
 
@@ -74,11 +78,11 @@ public:
    *  @return dcmdata OFCondition status code
    */
   OFCondition write(DcmItem& item);
-  
+
   /** returns the type of public key stored in this certificate
    */
   E_KeyType getKeyType();
-  
+
   /** creates an SiAlgorithm object for the public key contained in this certificate.
    *  If no certificate loaded or operation fails, returns NULL.
    *  New SiAlgorithm object must be deleted by caller.
@@ -129,10 +133,71 @@ public:
    */
   long getCertKeyBits();
 
-  /** returns a pointer to the raw certificate structure or NULL if no 
+  /** returns the name of the elliptic curve used in the certificate.
+   *  @return empty string if the certificate is not of elliptic curve type,
+   *    "unnamed curve" if the curve name has not been stored in the certificate,
+   *    or the short name of the elliptic curve if available.
+   */
+  OFString getCertCurveName();
+
+  /** checks if the length of the public key in the certificate is too short
+   *  and must be considered weak. Currently, an RSA or DSA key with less than
+   *  1024 bits and an ECDSA key with less than 256 bits are considered weak.
+   *  @return OFTrue if key is weak, OFFalse otherwise.
+   */
+  OFBool isWeakKey();
+
+  /** checks if the length of the public key in the certificate is too short
+   *  and must be considered weak, and if so, prints a warning to the logger.
+   */
+  void checkForWeakKey();
+
+  /** returns a pointer to the raw certificate structure or NULL if no
    *  certificate present. Should not be called by users of this library.
    */
   X509 *getRawCertificate();
+
+  /** returns true if the certificate expires before the given date.
+   *  @param date a string in the format YYMMDDHHMMSSZ or YYYYMMDDHHMMSSZ
+   *    (where Z represents the letter 'Z', meaning time zone UTC+0)
+   *  @return OFTrue if certificate expires before the given date,
+   *    or if the given date is invalid; OFFalse otherwise.
+   */
+  OFBool isCertExpiredAt(OFString& date);
+
+  /** returns true if the certificate is expired.
+   *  @return OFTrue if certificate is expired, OFFalse otherwise
+   */
+  OFBool isCertExpiredNow() const;
+
+  /** returns true if the certificate is not yet valid at the given date.
+   *  @param date a string in the format YYMMDDHHMMSSZ or YYYYMMDDHHMMSSZ
+   *    (where Z represents the letter 'Z', meaning time zone UTC+0)
+   *  @return OFTrue if certificate is not yet valid at the given date,
+   *    or if the given date is invalid; OFFalse otherwise.
+   */
+  OFBool isCertNotYetValidAt(OFString& date);
+
+  /** returns true if the certificate is not yet valid.
+   *  @return OFTrue if certificate is not yet valid, OFFalse otherwise
+   */
+  OFBool isCertNotYetValidNow() const;
+
+  /** this helper function converts a datetime in ASN1_GENERALIZEDTIME
+   *  format to OFDateTime.
+   *  @param d datetime in ASN1_GENERALIZEDTIME format
+   *  @param dt dt datetime stored in this parameter upon success
+   *  @return EC_Normal if successful, an error code otherwise
+   */
+  static OFCondition convertGeneralizedTime(const ASN1_GENERALIZEDTIME *d, OFDateTime& dt);
+
+  /** this helper function converts a datetime in ASN1_TIME format
+   *  (which is in fact an alias for ASN1_STRING) to OFDateTime.
+   *  @param d datetime in ASN1_TIME format
+   *  @param dt dt datetime stored in this parameter upon success
+   *  @return EC_Normal if successful, an error code otherwise
+   */
+  static OFCondition convertASN1Time(const ASN1_STRING *d, OFDateTime& dt);
 
 private:
 
@@ -149,35 +214,3 @@ private:
 
 #endif
 #endif
-
-/*
- *  $Log: sicert.h,v $
- *  Revision 1.8  2010-10-14 13:17:24  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.7  2010-02-22 11:39:54  uli
- *  Remove some unneeded includes.
- *
- *  Revision 1.6  2005-12-08 16:04:33  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.5  2003/07/04 13:28:13  meichel
- *  Replaced forward declarations for OFString with explicit includes,
- *    needed when compiling with HAVE_STD_STRING
- *
- *  Revision 1.4  2003/06/04 14:21:03  meichel
- *  Simplified include structure to avoid preprocessor limitation
- *    (max 32 #if levels) on MSVC5 with STL.
- *
- *  Revision 1.3  2001/09/26 14:30:19  meichel
- *  Adapted dcmsign to class OFCondition
- *
- *  Revision 1.2  2001/06/01 15:50:47  meichel
- *  Updated copyright header
- *
- *  Revision 1.1  2000/11/07 16:48:53  meichel
- *  Initial release of dcmsign module for DICOM Digital Signatures
- *
- *
- */
-

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2011, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Marco Eichelberg
  *
  *  Purpose: List class with procedural API compatible to MIR CTN
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:29 $
- *  CVS/RCS Revision: $Revision: 1.8 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -107,17 +100,15 @@ LST_HEAD *LST_Create()
   return new LST_HEAD();
 }
 
-OFCondition LST_Destroy(LST_HEAD **lst)
+void LST_Destroy(LST_HEAD **lst)
 {
   delete *lst;
   *lst = NULL;
-  return EC_Normal;
 }
 
-OFCondition LST_Enqueue(LST_HEAD **lst, void *node)
+void LST_Enqueue(LST_HEAD **lst, void *node)
 {
   (*lst)->push_back(node);
-  return EC_Normal;
 }
 
 void *LST_Dequeue(LST_HEAD **lst)
@@ -155,26 +146,3 @@ void *LST_Position(LST_HEAD ** lst, void *node)
 {
   return (*lst)->position(node);
 }
-
-
-/*
- * CVS Log
- * $Log: lst.cc,v $
- * Revision 1.8  2010-10-14 13:14:29  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.7  2009-09-04 13:53:09  meichel
- * Minor const iterator related changes needed to compile with VC6 with HAVE_STL
- *
- * Revision 1.6  2005-12-08 15:44:55  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.5  2003/06/02 16:44:11  meichel
- * Renamed local variables to avoid name clashes with STL
- *
- * Revision 1.4  2001/10/12 10:17:36  meichel
- * Re-implemented the LST module (double linked list functions)
- *   used in the dcmnet module from scratch based on OFList.
- *
- *
- */

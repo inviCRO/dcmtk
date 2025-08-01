@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2003-2010, OFFIS e.V.
+ *  Copyright (C) 2003-2020, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose:
  *    classes: DSRXMLDocument
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:33 $
- *  CVS/RCS Revision: $Revision: 1.7 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -33,7 +26,6 @@
 
 #include "dcmtk/config/osconfig.h"   /* make sure OS specific configuration is included first */
 
-#include "dcmtk/ofstd/ofstream.h"
 #include "dcmtk/dcmsr/dsrtypes.h"
 #include "dcmtk/dcmsr/dsrxmlc.h"
 
@@ -60,7 +52,7 @@ typedef char xmlChar;
  *  structures it should be possible to replace the XML library with little
  *  effort (if required).
  */
-class DSRXMLDocument
+class DCMTK_DCMSR_EXPORT DSRXMLDocument
   : protected DSRTypes
 {
 
@@ -91,9 +83,12 @@ class DSRXMLDocument
   // --- input and output ---
 
     /** read XML document from file.
-     *  In order to enable the optional Schema validation the flag XF_validateSchema has to be set.
-     ** @param  filename  name of the file from which the XML document is read ("-" for stdin)
-     *  @param  flags     optional flag used to customize the reading process (see DSRTypes::XF_xxx)
+     *  In order to enable the optional Schema validation the flag DSRTypes::XF_validateSchema
+     *  has to be set.
+     ** @param  filename  name of the file from which the XML document is read
+     *                    ("-" for stdin)
+     *  @param  flags     optional flag used to customize the reading process
+     *                    (see DSRTypes::XF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
     OFCondition read(const OFString &filename,
@@ -108,7 +103,9 @@ class DSRXMLDocument
      */
     OFBool encodingHandlerValid() const;
 
-    /** set the specified character encoding handler.
+    /** set character encoding handler for converting internally stored character strings
+     *  (UTF-8) to a particular character set.  This conversion is only done when requested,
+     *  e.g. when calling getStringFromAttribute() with the 'encoding' parameter being OFTrue.
      *  NB: 'libxml' relies on GNU 'libiconv' for most character sets.
      ** @param  charset  XML name of the character set (e.g. "ISO-8859-1" for ISO Latin-1)
      ** @return status, EC_Normal if successful, an error code otherwise
@@ -128,13 +125,26 @@ class DSRXMLDocument
      *  deep search is performed.
      ** @param  cursor    cursor pointing to the node where to start from
      *  @param  name      name of the node (XML element) to be searched for
-     *  @param  required  flag specifying whether the node is required or not.  If the node
-     *                    is required to be present an error message is reported.
+     *  @param  required  flag specifying whether the node is required or not.  If the node is
+     *                    required to be present, an error message is reported if necessary.
      ** @return cursor pointing to the named node if successful, invalid cursor otherwise
      */
     DSRXMLCursor getNamedNode(const DSRXMLCursor &cursor,
                               const char *name,
                               const OFBool required = OFTrue) const;
+
+    /** get a particular named child node of the document.
+     *  Please note that the search process is limited to the first level below the current
+     *  one, i.e. no deep search is performed.
+     ** @param  cursor    cursor pointing to the parent of the node where to start from
+     *  @param  name      name of the node (XML element) to be searched for
+     *  @param  required  flag specifying whether the node is required or not.  If the node is
+     *                    required to be present, an error message is reported if necessary.
+     ** @return cursor pointing to the named node if successful, invalid cursor otherwise
+     */
+    DSRXMLCursor getNamedChildNode(const DSRXMLCursor &cursor,
+                                   const char *name,
+                                   const OFBool required = OFTrue) const;
 
     /** check whether particular node matches a given name
      ** @param  cursor  cursor pointing to the particular node
@@ -227,7 +237,7 @@ class DSRXMLDocument
      *  Additionally, by-reference relationships are also supported (either by attribute
      *  "ref" being present or element named "reference").
      ** @param  cursor  cursor pointing to the particular node
-     ** @return value type (incl. by-reference) if successful, VT_invalid/unknown otherwise
+     ** @return value type (incl. by-reference) if successful, DSRTypes::VT_invalid otherwise
      */
     E_ValueType getValueTypeFromNode(const DSRXMLCursor &cursor) const;
 
@@ -235,7 +245,8 @@ class DSRXMLDocument
      *  The relationship type is either stored in the element "relationship" or in the
      *  attribute "relType".
      ** @param  cursor  cursor pointing to the particular node
-     ** @return relationship type if successful, RT_invalid/unknown otherwise
+     ** @return relationship type if successful, DSRTypes::RT_invalid or DSRTypes::RT_unknown
+     *          otherwise
      */
     E_RelationshipType getRelationshipTypeFromNode(const DSRXMLCursor &cursor) const;
 
@@ -246,6 +257,13 @@ class DSRXMLDocument
      ** @param  cursor  cursor pointing to the unexpected node
      */
     void printUnexpectedNodeWarning(const DSRXMLCursor &cursor) const;
+
+    /** print warning message for missing attribute
+     ** @param  cursor  cursor pointing to the relevant node
+     *  @param  name    name of the XML attribute
+     */
+    void printMissingAttributeWarning(const DSRXMLCursor &cursor,
+                                      const char *name) const;
 
     /** print general node error message
      ** @param  cursor  cursor pointing to the unexpected node
@@ -273,11 +291,11 @@ class DSRXMLDocument
 
   // --- static function ---
 
-    /** get the full path (incl. all predecessors) to the current node.
-     *  Returns "<invalid>" in case of an invalid 'cursor'.
+    /** get the full path (incl.\ all predecessors) to the current node
      ** @param  cursor       cursor pointing to the relevant node
      *  @param  stringValue  reference to string object in which the result should be stored
      *  @param  omitCurrent  flag indicating whether to omit the current node or not
+     ** @return resulting character string, set to "<invalid>" in case of an invalid 'cursor'
      */
     static OFString &getFullNodePath(const DSRXMLCursor &cursor,
                                      OFString &stringValue,
@@ -299,33 +317,3 @@ class DSRXMLDocument
 
 
 #endif
-
-
-/*
- *  CVS/RCS Log:
- *  $Log: dsrxmld.h,v $
- *  Revision 1.7  2010-10-14 13:16:33  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.6  2009-10-13 14:57:51  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.5  2005-12-08 16:05:36  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.4  2004/01/05 14:35:44  joergr
- *  Renamed XML attribute "ref_id" to "ref".
- *
- *  Revision 1.3  2003/12/01 15:46:18  joergr
- *  Changed XML encoding of by-reference relationships if flag
- *  XF_valueTypeAsAttribute is set.
- *
- *  Revision 1.2  2003/08/07 17:31:00  joergr
- *  Removed libxml dependency from header files. Simplifies linking (MSVC).
- *
- *  Revision 1.1  2003/08/07 12:16:37  joergr
- *  Added interface classes hiding the access to libxml (document and cursor
- *  class).
- *
- *
- */

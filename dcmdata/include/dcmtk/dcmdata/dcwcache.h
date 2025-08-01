@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2007-2010, OFFIS e.V.
+ *  Copyright (C) 2007-2011, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Marco Eichelberg
  *
  *  Purpose: file cache facility for DcmElement::getPartialValue
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:43 $
- *  CVS/RCS Revision: $Revision: 1.4 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -47,7 +40,7 @@ class DcmOutputStream;
  *  because both DcmElement::getPartialValue and DcmOutputStream::write expect
  *  a buffer to write to and read from, respectively.
  */
-class DcmWriteCache
+class DCMTK_DCMDATA_EXPORT DcmWriteCache
 {
 public:
 
@@ -141,24 +134,3 @@ private:
 };
 
 #endif
-
-/*
- * CVS/RCS Log:
- * $Log: dcwcache.h,v $
- * Revision 1.4  2010-10-14 13:15:43  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.3  2009-02-25 12:58:55  joergr
- * Removed wrong comment (apparently copied from other class).
- *
- * Revision 1.2  2009-02-04 17:54:31  joergr
- * Fixed various layout and formatting issues.
- *
- * Revision 1.1  2007-11-29 14:30:18  meichel
- * Write methods now handle large raw data elements (such as pixel data)
- *   without loading everything into memory. This allows very large images to
- *   be sent over a network connection, or to be copied without ever being
- *   fully in memory.
- *
- *
- */

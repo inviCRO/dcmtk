@@ -6,13 +6,13 @@
 \page dsr2xml dsr2xml: Convert DICOM SR file and data set to XML
 \endif
 
-\section synopsis SYNOPSIS
+\section dsr2xml_synopsis SYNOPSIS
 
 \verbatim
 dsr2xml [options] dsrfile-in [xmlfile-out]
 \endverbatim
 
-\section description DESCRIPTION
+\section dsr2xml_description DESCRIPTION
 
 The \b dsr2xml utility converts the contents of a DICOM Structured Reporting
 (SR) document (file format or raw data set) to XML (Extensible Markup
@@ -29,7 +29,7 @@ whenever possible (using the \b dcmconv utility).  It is also possible to use
 the \e -f and <em>-t[ieb]</em> options to force \b dsr2xml to read a dataset
 with a particular transfer syntax.
 
-\section parameters PARAMETERS
+\section dsr2xml_parameters PARAMETERS
 
 \verbatim
 dsrfile-in   DICOM SR input filename to be converted
@@ -37,9 +37,9 @@ dsrfile-in   DICOM SR input filename to be converted
 xmlfile-out  XML output filename (default: stdout)
 \endverbatim
 
-\section options OPTIONS
+\section dsr2xml_options OPTIONS
 
-\subsection general_options general options
+\subsection dsr2xml_general_options general options
 \verbatim
   -h   --help
          print this help text and exit
@@ -67,23 +67,7 @@ xmlfile-out  XML output filename (default: stdout)
          use config file f for the logger
 \endverbatim
 
-\subsection processing_options processing options
-\verbatim
-character set:
-
-  +Cr  --charset-require
-         require declaration of extended charset (default)
-
-  +Ca  --charset-assume  [c]harset: string constant
-         (latin-1 to -5, greek, cyrillic, arabic, hebrew)
-         assume charset c if no extended charset found
-
-  +Cc  --charset-check-all
-         check all data elements with string values
-         (default: only PN, LO, LT, SH, ST and UT)
-\endverbatim
-
-\subsection input_options input options
+\subsection dsr2xml_input_options input options
 \verbatim
 input file format:
 
@@ -114,7 +98,54 @@ input transfer syntax:
          read with implicit VR little endian TS
 \endverbatim
 
-\subsection output_options output options
+\subsection dsr2xml_processing_options processing options
+\verbatim
+error handling:
+
+  -Er  --unknown-relationship
+         accept unknown/missing relationship type
+
+  -Ev  --invalid-item-value
+         accept invalid content item value
+         (e.g. violation of VR or VM definition)
+
+  -Ec  --ignore-constraints
+         ignore relationship content constraints
+
+  -Ee  --ignore-item-errors
+         do not abort on content item errors, just warn
+         (e.g. missing value type specific attributes)
+
+  -Ei  --skip-invalid-items
+         skip invalid content items (including sub-tree)
+
+  -Dv  --disable-vr-checker
+         disable check for VR-conformant string values
+
+specific character set:
+
+  +Cr  --charset-require
+         require declaration of extended charset (default)
+
+  +Ca  --charset-assume  [c]harset: string
+         assume charset c if no extended charset declared
+
+  +Cc  --charset-check-all
+         check all data elements with string values
+         (default: only PN, LO, LT, SH, ST, UC and UT)
+
+         # this option is only used for the mapping to an appropriate
+         # XML character encoding, but not for the conversion to UTF-8
+
+  +U8  --convert-to-utf8
+         convert all element values that are affected
+         by Specific Character Set (0008,0005) to UTF-8
+
+         # requires support from an underlying character encoding library
+         # (see output of --version on which one is available)
+\endverbatim
+
+\subsection dsr2xml_output_options output options
 \verbatim
 encoding:
 
@@ -160,31 +191,93 @@ writing:
          write template identification information
 \endverbatim
 
-\section notes NOTES
+\section dsr2xml_notes NOTES
 
-\subsection dicom_conformance DICOM Conformance
+\subsection dsr2xml_dicom_conformance DICOM Conformance
 
 The \b dsr2xml utility supports the following SOP Classes:
 
 \verbatim
-SpectaclePrescriptionReportStorage          1.2.840.10008.5.1.4.1.1.78.6
-MacularGridThicknessAndVolumeReportStorage  1.2.840.10008.5.1.4.1.1.79.1
-BasicTextSRStorage                          1.2.840.10008.5.1.4.1.1.88.11
-EnhancedSRStorage                           1.2.840.10008.5.1.4.1.1.88.22
-ComprehensiveSRStorage                      1.2.840.10008.5.1.4.1.1.88.33
-ProcedureLogStorage                         1.2.840.10008.5.1.4.1.1.88.40
-MammographyCADSRStorage                     1.2.840.10008.5.1.4.1.1.88.50
-KeyObjectSelectionDocumentStorage           1.2.840.10008.5.1.4.1.1.88.59
-ChestCADSRStorage                           1.2.840.10008.5.1.4.1.1.88.65
-XRayRadiationDoseSRStorage                  1.2.840.10008.5.1.4.1.1.88.67
-ColonCADSRStorage                           1.2.840.10008.5.1.4.1.1.88.69
-ImplantationPlanSRDocumentStorage           1.2.840.10008.5.1.4.1.1.88.70
+SpectaclePrescriptionReportStorage           1.2.840.10008.5.1.4.1.1.78.6
+MacularGridThicknessAndVolumeReportStorage   1.2.840.10008.5.1.4.1.1.79.1
+BasicTextSRStorage                           1.2.840.10008.5.1.4.1.1.88.11
+EnhancedSRStorage                            1.2.840.10008.5.1.4.1.1.88.22
+ComprehensiveSRStorage                       1.2.840.10008.5.1.4.1.1.88.33
+Comprehensive3DSRStorage                     1.2.840.10008.5.1.4.1.1.88.34
+ProcedureLogStorage                          1.2.840.10008.5.1.4.1.1.88.40
+MammographyCADSRStorage                      1.2.840.10008.5.1.4.1.1.88.50
+KeyObjectSelectionDocumentStorage            1.2.840.10008.5.1.4.1.1.88.59
+ChestCADSRStorage                            1.2.840.10008.5.1.4.1.1.88.65
+XRayRadiationDoseSRStorage                   1.2.840.10008.5.1.4.1.1.88.67
+RadiopharmaceuticalRadiationDoseSRStorage    1.2.840.10008.5.1.4.1.1.88.68
+ColonCADSRStorage                            1.2.840.10008.5.1.4.1.1.88.69
+ImplantationPlanSRDocumentStorage            1.2.840.10008.5.1.4.1.1.88.70
+AcquisitionContextSRStorage                  1.2.840.10008.5.1.4.1.1.88.71
+SimplifiedAdultEchoSRStorage                 1.2.840.10008.5.1.4.1.1.88.72
+PatientRadiationDoseSRStorage                1.2.840.10008.5.1.4.1.1.88.73
+PlannedImagingAgentAdministrationSRStorage   1.2.840.10008.5.1.4.1.1.88.74
+PerformedImagingAgentAdministrationSRStorage 1.2.840.10008.5.1.4.1.1.88.75
 \endverbatim
 
 Please note that currently only mandatory and some optional attributes are
 supported.
 
-\section logging LOGGING
+\subsection dsr2xml_character_encoding Character Encoding
+
+The XML encoding is determined automatically from the DICOM attribute
+(0008,0005) "Specific Character Set" using the following mapping:
+
+\verbatim
+ASCII         (ISO_IR 6)                       =>  "UTF-8"
+UTF-8         "ISO_IR 192"                     =>  "UTF-8"
+ISO Latin 1   "ISO_IR 100"                     =>  "ISO-8859-1"
+ISO Latin 2   "ISO_IR 101"                     =>  "ISO-8859-2"
+ISO Latin 3   "ISO_IR 109"                     =>  "ISO-8859-3"
+ISO Latin 4   "ISO_IR 110"                     =>  "ISO-8859-4"
+ISO Latin 5   "ISO_IR 148"                     =>  "ISO-8859-9"
+Cyrillic      "ISO_IR 144"                     =>  "ISO-8859-5"
+Arabic        "ISO_IR 127"                     =>  "ISO-8859-6"
+Greek         "ISO_IR 126"                     =>  "ISO-8859-7"
+Hebrew        "ISO_IR 138"                     =>  "ISO-8859-8"
+Thai          "ISO_IR 166"                     =>  "TIS-620"
+Japanese      "ISO 2022 IR 13\ISO 2022 IR 87"  =>  "ISO-2022-JP"
+Korean        "ISO 2022 IR 6\ISO 2022 IR 149"  =>  "ISO-2022-KR"
+Chinese       "ISO 2022 IR 6\ISO 2022 IR 58"   =>  "ISO-2022-CN"
+Chinese       "GB18030"                        =>  "GB18030"
+Chinese       "GBK"                            =>  "GBK"
+\endverbatim
+
+If this DICOM attribute is missing in the input file, although needed, option
+\e --charset-assume can be used to specify an appropriate character set
+manually (using one of the DICOM defined terms).  For reasons of backward
+compatibility with previous versions of this tool, the following terms are also
+supported and mapped automatically to the associated DICOM defined terms:
+latin-1, latin-2, latin-3, latin-4, latin-5, cyrillic, arabic, greek, hebrew.
+
+Option \e --convert-to-utf8 can be used to convert the DICOM file or data set
+to UTF-8 encoding prior to the conversion to XML format.
+
+If no mapping is defined and option \e --convert-to-utf8 is not used, non-ASCII
+characters and those below #32 are stored as "&#nnn;" where "nnn" refers to the
+numeric character code.  This might lead to invalid character entity references
+(such as "&#27;" for ESC) and will cause most XML parsers to reject the document.
+
+\subsection dsr2xml_error_handling Error Handling
+
+Please be careful with the processing options \e --unknown-relationship,
+\e --invalid-item-value, \e --ignore-constraints, \e --ignore-item-errors and
+\e --skip-invalid-items since they disable certain validation checks on the
+DICOM SR input file and, therefore, might result in non-standard conformant
+output.  However, there might be reasons for using one or more of these
+options, e.g. in order to read and process an incorrectly encoded SR document.
+
+\subsection dsr2xml_limitations Limitations
+
+The XML Schema <em>dsr2xml.xsd</em> does not support all variations of the
+\b dsr2xml output format.  However, the default output format (plus option
+\e --use-xml-namespace) should work.
+
+\section dsr2xml_logging LOGGING
 
 The level of logging output of the various command line tools and underlying
 libraries can be specified by the user.  By default, only errors and warnings
@@ -201,9 +294,9 @@ rotation), to syslog (Unix) or the event log (Windows) option \e --log-config
 can be used.  This configuration file also allows for directing only certain
 messages to a particular output stream and for filtering certain messages
 based on the module or application where they are generated.  An example
-configuration file is provided in <em>\<etcdir\>/logger.cfg</em>).
+configuration file is provided in <em>\<etcdir\>/logger.cfg</em>.
 
-\section command_line COMMAND LINE
+\section dsr2xml_command_line COMMAND LINE
 
 All command line tools use the following notation for parameters: square
 brackets enclose optional values (0-1), three trailing dots indicate that
@@ -212,7 +305,7 @@ multiple values are allowed (1-n), a combination of both means 0 to n values.
 Command line options are distinguished from parameters by a leading '+' or '-'
 sign, respectively.  Usually, order and position of command line options are
 arbitrary (i.e. they can appear anywhere).  However, if options are mutually
-exclusive the rightmost appearance is used.  This behaviour conforms to the
+exclusive the rightmost appearance is used.  This behavior conforms to the
 standard evaluation rules of common Unix shells.
 
 In addition, one or more command files can be specified using an '@' sign as a
@@ -221,11 +314,11 @@ is replaced by the content of the corresponding text file (multiple
 whitespaces are treated as a single separator unless they appear between two
 quotation marks) prior to any further evaluation.  Please note that a command
 file cannot contain another command file.  This simple but effective approach
-allows to summarize common combinations of options/parameters and avoids
+allows one to summarize common combinations of options/parameters and avoids
 longish and confusing command lines (an example is provided in file
 <em>\<datadir\>/dumppat.txt</em>).
 
-\section environment ENVIRONMENT
+\section dsr2xml_environment ENVIRONMENT
 
 The \b dsr2xml utility will attempt to load DICOM data dictionaries specified
 in the \e DCMDICTPATH environment variable.  By default, i.e. if the
@@ -233,7 +326,7 @@ in the \e DCMDICTPATH environment variable.  By default, i.e. if the
 <em>\<datadir\>/dicom.dic</em> will be loaded unless the dictionary is built
 into the application (default for Windows).
 
-The default behaviour should be preferred and the \e DCMDICTPATH environment
+The default behavior should be preferred and the \e DCMDICTPATH environment
 variable only used when alternative data dictionaries are required.  The
 \e DCMDICTPATH environment variable has the same format as the Unix shell
 \e PATH variable in that a colon (":") separates entries.  On Windows systems,
@@ -241,16 +334,16 @@ a semicolon (";") is used as a separator.  The data dictionary code will
 attempt to load each file specified in the \e DCMDICTPATH environment variable.
 It is an error if no data dictionary can be loaded.
 
-\section files FILES
+\section dsr2xml_files FILES
 
 <em>\<datadir\>/dsr2xml.xsd</em> - XML Schema file
 
-\section see_also SEE ALSO
+\section dsr2xml_see_also SEE ALSO
 
 <b>xml2dsr</b>(1), <b>dcmconv</b>(1)
 
-\section copyright COPYRIGHT
+\section dsr2xml_copyright COPYRIGHT
 
-Copyright (C) 2000-2010 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany.
+Copyright (C) 2000-2022 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany.
 
 */

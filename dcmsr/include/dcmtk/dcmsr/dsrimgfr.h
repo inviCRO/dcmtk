@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2000-2010, OFFIS e.V.
+ *  Copyright (C) 2000-2015, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose:
  *    classes: DSRImageFrameList
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:32 $
- *  CVS/RCS Revision: $Revision: 1.13 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -41,9 +34,9 @@
  *  class declaration  *
  *---------------------*/
 
-/** Class for image frame list
+/** Class for image frame number list
  */
-class DSRImageFrameList
+class DCMTK_DCMSR_EXPORT DSRImageFrameList
   : public DSRListOfItems<Sint32>
 {
 
@@ -80,13 +73,15 @@ class DSRImageFrameList
                       const char separator = ',') const;
 
     /** read list of referenced frame numbers
-     ** @param  dataset    DICOM dataset from which the list should be read
+     ** @param  dataset  DICOM dataset from which the list should be read
+     *  @param  flags    flag used to customize the reading process (see DSRTypes::RF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
-    OFCondition read(DcmItem &dataset);
+    OFCondition read(DcmItem &dataset,
+                     const size_t flags);
 
     /** write list of referenced frame numbers
-     ** @param  dataset    DICOM dataset to which the list should be written
+     ** @param  dataset  DICOM dataset to which the list should be written
      ** @return status, EC_Normal if successful, an error code otherwise
      */
     OFCondition write(DcmItem &dataset) const;
@@ -102,51 +97,3 @@ class DSRImageFrameList
 
 
 #endif
-
-
-/*
- *  CVS/RCS Log:
- *  $Log: dsrimgfr.h,v $
- *  Revision 1.13  2010-10-14 13:16:32  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.12  2009-10-13 14:57:50  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.11  2007-11-15 16:33:19  joergr
- *  Fixed coding style to be more consistent.
- *
- *  Revision 1.10  2006/08/15 16:40:03  meichel
- *  Updated the code in module dcmsr to correctly compile when
- *    all standard C++ classes remain in namespace std.
- *
- *  Revision 1.9  2005/12/08 16:05:04  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.8  2003/08/07 12:36:58  joergr
- *  Added new putString() method.
- *
- *  Revision 1.7  2003/06/03 10:16:44  meichel
- *  Renamed local variables to avoid name clashes with STL
- *
- *  Revision 1.6  2001/09/26 13:04:08  meichel
- *  Adapted dcmsr to class OFCondition
- *
- *  Revision 1.5  2001/06/01 15:51:01  meichel
- *  Updated copyright header
- *
- *  Revision 1.4  2000/11/06 11:16:06  joergr
- *  Added parameter to print() method specifying the item separator character.
- *
- *  Revision 1.3  2000/11/01 16:19:20  joergr
- *  Updated comments/formatting.
- *
- *  Revision 1.2  2000/10/18 17:03:28  joergr
- *  Added doc++ comments.
- *
- *  Revision 1.1  2000/10/13 07:49:27  joergr
- *  Added new module 'dcmsr' providing access to DICOM structured reporting
- *  documents (supplement 23).  Doc++ documentation not yet completed.
- *
- *
- */

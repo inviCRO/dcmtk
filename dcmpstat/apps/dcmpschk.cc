@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2000-2010, OFFIS e.V.
+ *  Copyright (C) 2000-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,29 +18,9 @@
  *  Purpose:
  *    VR and IOD checker for Presentation States
  *
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:13:45 $
- *  CVS/RCS Revision: $Revision: 1.31 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"     /* make sure OS specific configuration is included first */
-
-#define INCLUDE_CSTDLIB
-#include "dcmtk/ofstd/ofstdinc.h"
-
-#ifdef HAVE_WINDOWS_H
-#include <windows.h>                   /* this includes either winsock.h or winsock2.h */
-#endif
-
-#ifdef HAVE_GUSI_H
-#include <GUSI.h>                      /* needed for Macintosh */
-#include <SIOUX.h>
-#endif
 
 #include "dcmtk/ofstd/ofstream.h"
 #include "dcmtk/ofstd/ofstring.h"      /* for class OFString */
@@ -87,7 +67,7 @@ enum ErrorMode
 #define MSGw_wrongDType    "Warning: Attribute value uses retired form."
 #define MSGw_dubiousDate   "Warning: Dubious date (year before 1850 or after 2050)."
 
-void printVRError(
+static void printVRError(
   ErrorMode mode,
   const char *elementDescription,
   const DcmDictEntry* dictRef,
@@ -121,7 +101,7 @@ void printVRError(
   OFSTRINGSTREAM_FREESTR(tmp)
 }
 
-void printResult(
+static void printResult(
   DcmStack& stack,
   OFBool showFullData)
 {
@@ -154,7 +134,7 @@ void printResult(
     OFLOG_WARN(dcmpschkLogger, tmp << DcmObject::PrintHelper(*dobj, showFullData ? 0 : DCMTypes::PF_shortenLongTagValues));
 }
 
-OFBool isaStringVR(DcmVR& vr)
+static OFBool isaStringVR(DcmVR& vr)
 {
     OFBool isaString = OFFalse;
     switch(vr.getEVR())
@@ -183,7 +163,7 @@ OFBool isaStringVR(DcmVR& vr)
     return isaString;
 }
 
-const char* streamvm(const DcmDictEntry *e)
+static const char* streamvm(const DcmDictEntry *e)
 {
     static char buf[256];
     if (e->isFixedSingleVM()) {
@@ -198,7 +178,7 @@ const char* streamvm(const DcmDictEntry *e)
     return buf;
 }
 
-const char* streamLengthOfValue(DcmVR& vr)
+static const char* streamLengthOfValue(DcmVR& vr)
 {
     static char buf[256];
     Uint32 min = vr.getMinValueLength();
@@ -219,7 +199,7 @@ const char* streamLengthOfValue(DcmVR& vr)
     return buf;
 }
 
-int splitFields(
+static int splitFields(
   char* line,
   char* fields[],
   Uint32 maxFields,
@@ -227,7 +207,7 @@ int splitFields(
 {
     char* p;
     Uint32 foundFields = 0;
-    int len;
+    size_t len;
 
     do {
         p = strchr(line, splitChar);
@@ -247,7 +227,7 @@ int splitFields(
     return foundFields;
 }
 
-OFBool isaKnownPointer(DcmTag& t)
+static OFBool isaKnownPointer(DcmTag& t)
 {
     /*
     ** The DICOMDIR code automatically converts any pointers
@@ -262,11 +242,11 @@ OFBool isaKnownPointer(DcmTag& t)
 
     if (dictRef && (t.getEVR() == EVR_up) && (t.getEVR() == dictRef->getEVR())) result = OFTrue;
 
-    dcmDataDict.unlock();
+    dcmDataDict.rdunlock();
     return result;
 }
 
-int checkelem(
+static int checkelem(
   DcmElement *elem,
   DcmXfer& oxfer,
   DcmStack& stack,
@@ -353,7 +333,7 @@ int checkelem(
                }
                for (i=0; (Uint32)i<vm; i++) {
                    char* s = fields[i];
-                   int slen = strlen(s);
+                   size_t slen = strlen(s);
                    if ((Uint32)slen > vr.getMaxValueLength()) {
                        OFLOG_WARN(dcmpschkLogger, MSG_lengthtoolarge << OFendl
                            << "   Affected length   : " << slen << " bytes, should be "
@@ -574,11 +554,11 @@ int checkelem(
       } //end of if (isaStringVR(vr))
 
     }
-    dcmDataDict.unlock();
+    dcmDataDict.rdunlock();
     return 0;
 }
 
-int checkitem(
+static int checkitem(
   DcmItem *item,
   DcmXfer& oxfer,
   DcmStack& stack,
@@ -615,7 +595,7 @@ int checkitem(
     return 0;
 }
 
-int dcmchk(
+static int dcmchk(
   const char* ifname,
   E_FileReadMode readMode,
   E_TransferSyntax xfer,
@@ -701,7 +681,7 @@ chkType1AttributeExistance(
     return found;
 }
 
-int dcmchkMetaHeader(
+static int dcmchkMetaHeader(
   DcmMetaInfo* meta,
   DcmDataset* dset)
 {
@@ -859,7 +839,7 @@ int dcmchkMetaHeader(
     return nErrs;
 }
 
-int checkfile(const char *filename)
+static int checkfile(const char *filename)
 {
     DcmFileFormat *dfile = new DcmFileFormat();
     if (dfile == NULL)
@@ -906,15 +886,8 @@ int checkfile(const char *filename)
           << "Pass 3 - Semantic Check of Presentation State Object         " << OFendl
           << "-------------------------------------------------------------");
 
-    DcmUniqueIdentifier sopclassuid(DCM_SOPClassUID);
-    DcmStack stack;
-    if (EC_Normal == DataSet->search(DCM_SOPClassUID, stack, ESM_fromHere, OFFalse))
-    {
-      sopclassuid = *((DcmUniqueIdentifier *)(stack.top()));
-    }
     OFString aString;
-    sopclassuid.getOFString(aString,0);
-    if (aString == UID_GrayscaleSoftcopyPresentationStateStorage)
+    if ((DataSet->findAndGetOFString(DCM_SOPClassUID, aString).good()) && (aString == UID_GrayscaleSoftcopyPresentationStateStorage))
     {
       DcmPresentationState pState;
       if (pState.read(*DataSet).bad())
@@ -938,24 +911,13 @@ int checkfile(const char *filename)
 
 int main(int argc, char *argv[])
 {
-
-#ifdef HAVE_GUSI_H
-    GUSISetup(GUSIwithSIOUXSockets);
-    GUSISetup(GUSIwithInternetSockets);
-#endif
+    OFStandard::initializeNetwork();
 
 #ifdef WITH_TCPWRAPPER
     // this code makes sure that the linker cannot optimize away
     // the DUL part of the network module where the external flags
     // for libwrap are defined. Needed on OpenBSD.
     dcmTCPWrapperDaemonName.set(NULL);
-#endif
-
-#ifdef HAVE_WINSOCK_H
-    WSAData winSockData;
-    /* we need at least version 1.1 */
-    WORD winSockVersionNeeded = MAKEWORD( 1, 1 );
-    WSAStartup(winSockVersionNeeded, &winSockData);
 #endif
 
     OFConsoleApplication app(OFFIS_CONSOLE_APPLICATION , "Checking tool for presentation states", rcsid);
@@ -972,7 +934,7 @@ int main(int argc, char *argv[])
 
     /* evaluate command line */
     prepareCmdLineArgs(argc, argv, OFFIS_CONSOLE_APPLICATION);
-    if (app.parseCommandLine(cmd, argc, argv, OFCommandLine::PF_ExpandWildcards))
+    if (app.parseCommandLine(cmd, argc, argv))
     {
       /* check exclusive options first */
       if (cmd.hasExclusiveOption())
@@ -1009,121 +971,3 @@ int main(int argc, char *argv[])
 #endif
     return 0;
 }
-
-/*
- * CVS/RCS Log:
- * $Log: dcmpschk.cc,v $
- * Revision 1.31  2010-10-14 13:13:45  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.30  2009-11-27 10:51:16  joergr
- * Fixed various issues with syntax usage (e.g. layout and formatting).
- *
- * Revision 1.29  2009-11-24 14:12:56  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.28  2009-08-03 09:12:53  joergr
- * Added support for checking the data type UT (Unlimited Text).
- * Moved flex++ generated lexical scanner from module "dcmpstat" to "dcmdata".
- *
- * Revision 1.27  2009-07-28 14:17:55  joergr
- * Added support for dubious date checking (year before 1850 or after 2050).
- *
- * Revision 1.26  2008-09-25 16:30:24  joergr
- * Added support for printing the expanded command line arguments.
- * Always output the resource identifier of the command line tool in debug mode.
- *
- * Revision 1.25  2008-04-30 12:38:43  meichel
- * Fixed compile errors due to changes in attribute tag names
- *
- * Revision 1.24  2006/08/15 16:57:01  meichel
- * Updated the code in module dcmpstat to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.23  2006/07/27 14:38:03  joergr
- * Changed parameter "exclusive" of method addOption() from type OFBool into an
- * integer parameter "flags". Prepended prefix "PF_" to parseLine() flags.
- * Option "--help" is no longer an exclusive option by default.
- * Made naming conventions for command line parameters more consistent, e.g.
- * used "dcmfile-in", "dcmfile-out" and "bitmap-out".
- *
- * Revision 1.22  2005/12/14 17:43:42  meichel
- * Adapted code for compilation with TCP wrappers to NetBSD
- *
- * Revision 1.21  2005/12/12 15:14:34  meichel
- * Added code needed for compilation with TCP wrappers on OpenBSD
- *
- * Revision 1.20  2005/12/08 15:46:07  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.19  2005/12/02 09:46:27  joergr
- * Added new file read mode that makes it possible to distinguish between DICOM
- * files, datasets and other non-DICOM files.  For this reason, the last
- * parameter of method loadFile() changed from OFBool to E_FileReadMode.
- *
- * Revision 1.18  2005/11/28 15:29:05  meichel
- * File dcdebug.h is not included by any other header file in the toolkit
- *   anymore, to minimize the risk of name clashes of macro debug().
- *
- * Revision 1.17  2005/03/09 18:07:53  joergr
- * Fixed spelling error.
- *
- * Revision 1.16  2004/02/04 15:44:38  joergr
- * Removed acknowledgements with e-mail addresses from CVS log.
- *
- * Revision 1.15  2003/09/05 09:00:49  meichel
- * Updated presentation state checker to use class DcmPresentationState
- *   instead of DVPresentationState. Imported updated VR checking code
- *   from module dcmcheck.
- *
- * Revision 1.14  2003/09/01 12:58:58  wilkens
- * Added #include to file to be able to compile again under Win32.
- *
- * Revision 1.13  2003/03/12 17:34:20  meichel
- * Updated DcmObject::print() flags
- *
- * Revision 1.12  2002/11/27 15:47:52  meichel
- * Adapted module dcmpstat to use of new header file ofstdinc.h
- *
- * Revision 1.11  2002/11/26 08:44:27  meichel
- * Replaced all includes for "zlib.h" with <zlib.h>
- *   to avoid inclusion of zlib.h in the makefile dependencies.
- *
- * Revision 1.10  2002/09/23 18:26:07  joergr
- * Added new command line option "--version" which prints the name and version
- * number of external libraries used (incl. preparation for future support of
- * 'config.guess' host identifiers).
- *
- * Revision 1.9  2002/08/20 12:21:53  meichel
- * Adapted code to new loadFile and saveFile methods, thus removing direct
- *   use of the DICOM stream classes.
- *
- * Revision 1.8  2002/06/14 10:44:18  meichel
- * Adapted log file handling to ofConsole singleton
- *
- * Revision 1.7  2002/05/02 14:10:04  joergr
- * Added support for standard and non-standard string streams (which one is
- * supported is detected automatically via the configure mechanism).
- *
- * Revision 1.6  2002/04/16 14:01:27  joergr
- * Added configurable support for C++ ANSI standard includes (e.g. streams).
- *
- * Revision 1.5  2001/11/09 16:04:51  joergr
- * Changed type of variable to avoid compiler warnings (comparison of signed
- * and unsigned data).
- *
- * Revision 1.4  2001/10/02 11:51:59  joergr
- * Introduced new general purpose functions to get/put DICOM element values
- * from/to an item/dataset - removed some old and rarely used functions.
- *
- * Revision 1.3  2001/09/26 15:36:02  meichel
- * Adapted dcmpstat to class OFCondition
- *
- * Revision 1.2  2001/06/01 15:50:08  meichel
- * Updated copyright header
- *
- * Revision 1.1  2000/06/21 15:40:32  meichel
- * Added initial version of Presentation State Checker.
- *
- *
- */

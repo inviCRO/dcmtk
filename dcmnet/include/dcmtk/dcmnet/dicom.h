@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were partly developed by
@@ -84,13 +84,6 @@
 **      OFFIS/University of Oldenburg, Germany.
 **
 **
-** Last Update:      $Author: joergr $
-** Update Date:      $Date: 2010-12-01 08:26:10 $
-** CVS/RCS Revision: $Revision: 1.14 $
-** Status:           $State: Exp $
-**
-** CVS/RCS Log at end of file
-**
 */
 
 #ifndef DICOM_H
@@ -98,14 +91,8 @@
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CSTDIO
-#define INCLUDE_LIBC
-#define INCLUDE_UNISTD
-#include "dcmtk/ofstd/ofstdinc.h"
-
 #include "dcmtk/dcmnet/cond.h"		/* condition typedefs */
-#include "dcmtk/dcmnet/dcompat.h"	/* compatability routines */
+#include "dcmtk/dcmnet/dcompat.h"	/* compatibility routines */
 #include "dcmtk/dcmdata/dctypes.h"	/* dcmdata toolkit basic types */
 #include "dcmtk/dcmdata/dcuid.h"	/* dcmdata UID definitions */
 
@@ -120,8 +107,6 @@ typedef Uint32	MASK_32;	/* for bit masks */
 
 
 #define DICOM_STDAPPLICATIONCONTEXT UID_StandardApplicationContext
-#define DICOM_NET_IMPLEMENTATIONCLASSUID OFFIS_IMPLEMENTATION_CLASS_UID
-#define DICOM_NET_IMPLEMENTATIONVERSIONNAME OFFIS_DTK_IMPLEMENTATION_VERSION_NAME
 
 /* network type constants as used by the DUL layer */
 #define	DICOM_APPLICATION_ACCEPTOR	0x01
@@ -142,7 +127,11 @@ typedef Uint32	MASK_32;	/* for bit masks */
 #define DIC_DS_LEN		16
 #define DIC_IS_LEN		12
 #define DIC_AT_LEN		(2*sizeof(DIC_US))
-#define DIC_NODENAME_LEN	128
+
+/* a valid DNS name can be up to 253 characters, and we need to add
+ * a port number. This should be sufficient.
+ */
+#define DIC_NODENAME_LEN	270
 
 #define DICOM_UI_LENGTH DIC_UI_LEN
 
@@ -180,59 +169,3 @@ typedef char	DIC_NODENAME[DIC_NODENAME_LEN + 1];
 #endif
 
 #endif
-
-/*
-** CVS Log
-** $Log: dicom.h,v $
-** Revision 1.14  2010-12-01 08:26:10  joergr
-** Added OFFIS copyright header (beginning with the year 1994).
-**
-** Revision 1.13  2010-10-14 13:17:22  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.12  2005/12/08 16:02:20  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.11  2004/08/03 11:42:43  meichel
-** Headers libc.h and unistd.h are now included via ofstdinc.h
-**
-** Revision 1.10  2002/11/27 13:04:35  meichel
-** Adapted module dcmnet to use of new header file ofstdinc.h
-**
-** Revision 1.9  2001/10/12 10:18:26  meichel
-** Replaced the CONDITION types, constants and functions in the dcmnet module
-**   by an OFCondition based implementation which eliminates the global condition
-**   stack.  This is a major change, caveat emptor!
-**
-** Revision 1.8  2001/09/26 12:28:59  meichel
-** Implemented changes in dcmnet required by the adaptation of dcmdata
-**   to class OFCondition.  Removed some unused code.
-**
-** Revision 1.7  2000/08/10 14:50:53  meichel
-** Added initial OpenSSL support.
-**
-** Revision 1.6  2000/02/23 15:12:25  meichel
-** Corrected macro for Borland C++ Builder 4 workaround.
-**
-** Revision 1.5  2000/02/01 10:24:06  meichel
-** Avoiding to include <stdlib.h> as extern "C" on Borland C++ Builder 4,
-**   workaround for bug in compiler header files.
-**
-** Revision 1.4  1997/07/21 08:40:09  andreas
-** - Replace all boolean types (BOOLEAN, CTNBOOLEAN, DICOM_BOOL, BOOL)
-**   with one unique boolean type OFBool.
-**
-** Revision 1.3  1997/02/06 12:15:41  hewett
-** Updated preliminary Apple Macintosh support for the Metrowerks CodeWarrior
-** version 11 compiler and environment.
-**
-** Revision 1.2  1996/09/27 08:29:42  hewett
-** Support for Win32.  Now does not define a type BOOLEAN if <WINSOCK.H>
-** is included.  Renames the ERROR(A) macro to be CONDERROR(A) macro due
-** to a clash with Windows include files.
-**
-** Revision 1.1.1.1  1996/03/26 18:38:45  hewett
-** Initial Release.
-**
-**
-*/

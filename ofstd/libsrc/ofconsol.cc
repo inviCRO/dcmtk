@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2000-2010, OFFIS e.V.
+ *  Copyright (C) 2000-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,21 +17,28 @@
  *
  *  Purpose: Define alias for cout, cerr and clog
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:53 $
- *  CVS/RCS Revision: $Revision: 1.15 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"
 #include "dcmtk/ofstd/ofconsol.h"
 #include "dcmtk/ofstd/ofthread.h"
 
-#define INCLUDE_CASSERT
-#include "dcmtk/ofstd/ofstdinc.h"
+#include <cassert>
+#ifdef HAVE_UNISTD_H
+BEGIN_EXTERN_C
+#include <unistd.h>
+END_EXTERN_C
+#endif
+
+
+BEGIN_EXTERN_C
+#ifdef HAVE_FCNTL_H
+#include <fcntl.h>
+#endif
+#ifdef HAVE_IO_H
+#include <io.h>
+#endif
+END_EXTERN_C
 
 
 #ifdef DCMTK_GUI
@@ -127,6 +134,64 @@ OFConsole& OFConsole::instance()
   return instance_;
 }
 
+int OFConsole::old_stderr = -1;
+
+void OFConsole::mergeStderrStdout()
+{
+    fflush(stderr);
+    if (fileno(stderr) != fileno(stdout))
+    {
+        /* duplicate the stderr file descriptor to be the same as stdout */
+        if (old_stderr < 0) old_stderr = dup(fileno(stderr));
+
+        /* now duplicate the file descriptor of stdout into the file descriptor of stderr.
+         * This will silently close the previous file descriptor of stderr.
+         */
+        if (0 != dup2(fileno(stdout), fileno(stderr)))
+        {
+            OFConsole::instance().lockCerr() << "Unable to redirect stderr to stdout" << OFendl;
+            OFConsole::instance().unlockCerr();
+        }
+    }
+
+#ifndef __BORLANDC__  /* setvbuf on stdout/stderr does not work with Borland C++ */
+    /* set stdout and stderr to unbuffered mode */
+    if (setvbuf(stdout, NULL, _IONBF, 0 ) != 0 )
+    {
+        OFConsole::instance().lockCerr() << "Unable to switch stdout to unbuffered mode" << OFendl;
+        OFConsole::instance().unlockCerr();
+    }
+    if (setvbuf(stderr, NULL, _IONBF, 0 ) != 0 )
+    {
+        OFConsole::instance().lockCerr() << "Unable to switch stderr to unbuffered mode" << OFendl;
+        OFConsole::instance().unlockCerr();
+    }
+#endif /* __BORLANDC__ */
+}
+
+
+void OFConsole::unmergeStderrStdout()
+{
+    /* only execute this code if stderr was actually redirected before */
+    if (old_stderr > 0)
+    {
+        if (0 != dup2(old_stderr, fileno(stderr)))
+        {
+            OFConsole::instance().lockCerr() << "Error: Unable to release redirection of stderr to stdout" << OFendl;
+            OFConsole::instance().unlockCerr();
+        }
+
+#ifndef __BORLANDC__
+        /* switch stdout to buffered mode */
+        if (setvbuf(stdout, NULL, _IOFBF, BUFSIZ ) != 0 )
+        {
+            OFConsole::instance().lockCerr() << "Error: Unable to switch stdout to buffered mode" << OFendl;
+            OFConsole::instance().unlockCerr();
+
+        }
+#endif /* __BORLANDC__ */
+    }
+}
 
 class OFConsoleInitializer
 {
@@ -142,66 +207,3 @@ public:
  * Required to make ofConsole thread-safe.
  */
 OFConsoleInitializer ofConsoleInitializer;
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: ofconsol.cc,v $
- * Revision 1.15  2010-10-14 13:14:53  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.14  2010-10-04 14:44:49  joergr
- * Replaced "#ifdef _REENTRANT" by "#ifdef WITH_THREADS" where appropriate (i.e.
- * in all cases where OFMutex, OFReadWriteLock, etc. are used).
- *
- * Revision 1.13  2006/08/14 16:42:46  meichel
- * Updated all code in module ofstd to correctly compile if the standard
- *   namespace has not included into the global one with a "using" directive.
- *
- * Revision 1.12  2005/12/08 15:48:53  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.11  2004/01/16 10:35:09  joergr
- * Removed acknowledgements with e-mail addresses from CVS log.
- *
- * Revision 1.10  2002/11/27 11:23:09  meichel
- * Adapted module ofstd to use of new header file ofstdinc.h
- *
- * Revision 1.9  2002/06/14 10:44:41  meichel
- * Fixed bug in ofConsole join/split mutex locking behaviour
- *
- * Revision 1.8  2002/05/16 15:56:35  meichel
- * Changed ofConsole into singleton implementation that can safely
- *   be used prior to start of main, i.e. from global constructors
- *
- * Revision 1.7  2002/05/16 08:16:46  meichel
- * changed return type of OFConsole::setCout() and OFConsole::setCerr()
- *   to pointer instead of reference.
- *
- * Revision 1.6  2002/05/02 14:06:07  joergr
- * Added support for standard and non-standard string streams (which one is
- * supported is detected automatically via the configure mechanism).
- *
- * Revision 1.5  2002/04/16 13:36:26  joergr
- * Added configurable support for C++ ANSI standard includes (e.g. streams).
- *
- * Revision 1.4  2001/06/01 15:51:38  meichel
- * Updated copyright header
- *
- * Revision 1.3  2000/12/13 15:14:35  joergr
- * Introduced dummy parameter for "default" constructor of class OFConsole
- * to "convince" linker of gcc 2.5.8 (NeXTSTEP) to allocate memory for global
- * variable 'ofConsole'.
- *
- * Revision 1.2  2000/04/14 15:16:13  meichel
- * Added new class OFConsole and global instance ofConsole which provide
- *   access to standard output and error streams in a way that allows multiple
- *   threads to safely create output concurrently.
- *
- * Revision 1.1  2000/03/03 14:02:51  meichel
- * Implemented library support for redirecting error messages into memory
- *   instead of printing them to stdout/stderr for GUI applications.
- *
- *
- */

@@ -11,9 +11,16 @@ The main interface classes are:
 \li \b DcmItem
 \li \b DcmElement
 
+Here are some further classes that are of interest:
+\li \b DcmTag
+\li \b DcmTagKey
+\li \b DicomDirInterface
+
 \section Tools
 
 This module contains the following command line tools:
+\li \ref cda2dcm
+\li \ref dcm2json
 \li \ref dcm2pdf
 \li \ref dcm2xml
 \li \ref dcmconv
@@ -26,6 +33,7 @@ This module contains the following command line tools:
 \li \ref dump2dcm
 \li \ref img2dcm
 \li \ref pdf2dcm
+\li \ref stl2dcm
 \li \ref xml2dcm
 
 \section Files

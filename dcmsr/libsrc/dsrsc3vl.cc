@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2010, OFFIS e.V.
+ *  Copyright (C) 2010-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -11,19 +11,12 @@
  *    D-26121 Oldenburg, Germany
  *
  *
- *  Module:  dcmsr
+ *  Module: dcmsr
  *
- *  Author:  Joerg Riesmeier
+ *  Author: Joerg Riesmeier
  *
  *  Purpose:
  *    classes: DSRSpatialCoordinates3DValue
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:41 $
- *  CVS/RCS Revision: $Revision: 1.3 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -33,11 +26,15 @@
 #include "dcmtk/dcmsr/dsrsc3vl.h"
 #include "dcmtk/dcmsr/dsrxmld.h"
 
+#include "dcmtk/dcmdata/dcdeftag.h"
+#include "dcmtk/dcmdata/dcvrui.h"
+
 
 DSRSpatialCoordinates3DValue::DSRSpatialCoordinates3DValue()
   : GraphicType(DSRTypes::GT3_invalid),
     GraphicDataList(),
-    FrameOfReferenceUID()
+    FrameOfReferenceUID(),
+    FiducialUID()
 {
 }
 
@@ -45,7 +42,8 @@ DSRSpatialCoordinates3DValue::DSRSpatialCoordinates3DValue()
 DSRSpatialCoordinates3DValue::DSRSpatialCoordinates3DValue(const DSRTypes::E_GraphicType3D graphicType)
   : GraphicType(graphicType),
     GraphicDataList(),
-    FrameOfReferenceUID()
+    FrameOfReferenceUID(),
+    FiducialUID()
 {
 }
 
@@ -53,7 +51,8 @@ DSRSpatialCoordinates3DValue::DSRSpatialCoordinates3DValue(const DSRTypes::E_Gra
 DSRSpatialCoordinates3DValue::DSRSpatialCoordinates3DValue(const DSRSpatialCoordinates3DValue &coordinatesValue)
   : GraphicType(coordinatesValue.GraphicType),
     GraphicDataList(coordinatesValue.GraphicDataList),
-    FrameOfReferenceUID(coordinatesValue.FrameOfReferenceUID)
+    FrameOfReferenceUID(coordinatesValue.FrameOfReferenceUID),
+    FiducialUID(coordinatesValue.FiducialUID)
 {
 }
 
@@ -68,7 +67,26 @@ DSRSpatialCoordinates3DValue &DSRSpatialCoordinates3DValue::operator=(const DSRS
     GraphicType = coordinatesValue.GraphicType;
     GraphicDataList = coordinatesValue.GraphicDataList;
     FrameOfReferenceUID = coordinatesValue.FrameOfReferenceUID;
+    FiducialUID = coordinatesValue.FiducialUID;
     return *this;
+}
+
+
+OFBool DSRSpatialCoordinates3DValue::operator==(const DSRSpatialCoordinates3DValue &coordinatesValue) const
+{
+    return (GraphicType == coordinatesValue.GraphicType) &&
+           (GraphicDataList == coordinatesValue.GraphicDataList) &&
+           (FrameOfReferenceUID == coordinatesValue.FrameOfReferenceUID) &&
+           (FiducialUID == coordinatesValue.FiducialUID);
+}
+
+
+OFBool DSRSpatialCoordinates3DValue::operator!=(const DSRSpatialCoordinates3DValue &coordinatesValue) const
+{
+    return (GraphicType != coordinatesValue.GraphicType) ||
+           (GraphicDataList != coordinatesValue.GraphicDataList) ||
+           (FrameOfReferenceUID != coordinatesValue.FrameOfReferenceUID) ||
+           (FiducialUID != coordinatesValue.FiducialUID);
 }
 
 
@@ -77,12 +95,13 @@ void DSRSpatialCoordinates3DValue::clear()
     GraphicType = DSRTypes::GT3_invalid;
     GraphicDataList.clear();
     FrameOfReferenceUID.clear();
+    FiducialUID.clear();
 }
 
 
 OFBool DSRSpatialCoordinates3DValue::isValid() const
 {
-    return checkData(GraphicType, GraphicDataList, FrameOfReferenceUID);
+    return checkGraphicData(GraphicType, GraphicDataList).good() && checkFrameOfReferenceUID(FrameOfReferenceUID).good();
 }
 
 
@@ -113,21 +132,27 @@ OFCondition DSRSpatialCoordinates3DValue::print(STD_NAMESPACE ostream &stream,
 
 
 OFCondition DSRSpatialCoordinates3DValue::readXML(const DSRXMLDocument &doc,
-                                                  DSRXMLCursor cursor)
+                                                  DSRXMLCursor cursor,
+                                                  const size_t /*flags*/)
 {
     OFCondition result = SR_EC_CorruptedXMLStructure;
     if (cursor.valid())
     {
-        /* graphic data (required) */
-        cursor = doc.getNamedNode(cursor.getChild(), "data");
-        if (cursor.valid())
+        cursor.gotoChild();
+        /* GraphicData (required) */
+        const DSRXMLCursor dataNode = doc.getNamedNode(cursor, "data");
+        if (dataNode.valid())
         {
             OFString tmpString;
-            /* referenced frame of reference UID (required) */
-            doc.getStringFromAttribute(cursor, FrameOfReferenceUID, "uid");
+            /* ReferencedFrameOfReferenceUID (required) */
+            doc.getStringFromAttribute(dataNode, FrameOfReferenceUID, "uid");
             /* put value to the graphic data list */
-            result = GraphicDataList.putString(doc.getStringFromNodeContent(cursor, tmpString).c_str());
+            result = GraphicDataList.putString(doc.getStringFromNodeContent(dataNode, tmpString).c_str());
         }
+        /* FiducialUID (optional) */
+        const DSRXMLCursor fiducialNode = doc.getNamedNode(cursor, "fiducial", OFFalse /*required*/);
+        if (fiducialNode.valid())
+            doc.getStringFromAttribute(fiducialNode, FiducialUID, "uid");
     }
     return result;
 }
@@ -143,15 +168,19 @@ OFCondition DSRSpatialCoordinates3DValue::writeXML(STD_NAMESPACE ostream &stream
         GraphicDataList.print(stream);
         stream << "</data>" << OFendl;
     }
+    if ((flags & DSRTypes::XF_writeEmptyTags) || !FiducialUID.empty())
+        stream << "<fiducial uid=\"" << FiducialUID << "\"/>" << OFendl;
     return EC_Normal;
 }
 
 
-OFCondition DSRSpatialCoordinates3DValue::read(DcmItem &dataset)
+OFCondition DSRSpatialCoordinates3DValue::read(DcmItem &dataset,
+                                               const size_t flags)
 {
+    const OFBool acceptViolation = (flags & DSRTypes::RF_acceptInvalidContentItemValue) > 0;
     /* read ReferencedFrameOfReferenceUID */
     OFString tmpString;
-    OFCondition result = DSRTypes::getAndCheckStringValueFromDataset(dataset, DCM_ReferencedFrameOfReferenceUID, FrameOfReferenceUID, "1", "1", "SCOORD3D content item");
+    OFCondition result = DSRTypes::getAndCheckStringValueFromDataset(dataset, DCM_ReferencedFrameOfReferenceUID, FrameOfReferenceUID, "1", "1", "SCOORD3D content item", acceptViolation);
     /* read GraphicType */
     if (result.good())
         result = DSRTypes::getAndCheckStringValueFromDataset(dataset, DCM_GraphicType, tmpString, "1", "1", "SCOORD3D content item");
@@ -162,9 +191,12 @@ OFCondition DSRSpatialCoordinates3DValue::read(DcmItem &dataset)
         if (GraphicType == DSRTypes::GT3_invalid)
             DSRTypes::printUnknownValueWarningMessage("GraphicType", tmpString.c_str());
         /* read GraphicData */
-        result = GraphicDataList.read(dataset);
+        result = GraphicDataList.read(dataset, flags);
+        /* read optional attributes */
+        if (result.good())
+            DSRTypes::getAndCheckStringValueFromDataset(dataset, DCM_FiducialUID, FiducialUID, "1", "3", "SCOORD3D content item");
         /* check GraphicData and report warnings if any */
-        checkData(GraphicType, GraphicDataList, FrameOfReferenceUID);
+        checkGraphicData(GraphicType, GraphicDataList, OFTrue /*reportWarnings*/);
     }
     return result;
 }
@@ -183,8 +215,11 @@ OFCondition DSRSpatialCoordinates3DValue::write(DcmItem &dataset) const
         if (!GraphicDataList.isEmpty())
             result = GraphicDataList.write(dataset);
     }
+    /* write optional attributes */
+    if (result.good())
+        DSRTypes::putStringValueToDataset(dataset, DCM_FiducialUID, FiducialUID, OFFalse /*allowEmpty*/);
     /* check GraphicData and report warnings if any */
-    checkData(GraphicType, GraphicDataList, FrameOfReferenceUID);
+    checkGraphicData(GraphicType, GraphicDataList, OFTrue /*reportWarnings*/);
     return result;
 }
 
@@ -221,9 +256,50 @@ OFCondition DSRSpatialCoordinates3DValue::renderHTML(STD_NAMESPACE ostream &docS
 }
 
 
-OFCondition DSRSpatialCoordinates3DValue::setGraphicType(const DSRTypes::E_GraphicType3D graphicType)
+OFCondition DSRSpatialCoordinates3DValue::getValue(DSRSpatialCoordinates3DValue &coordinatesValue) const
+{
+    coordinatesValue = *this;
+    return EC_Normal;
+}
+
+
+OFCondition DSRSpatialCoordinates3DValue::setValue(const DSRSpatialCoordinates3DValue &coordinatesValue,
+                                                   const OFBool check)
+{
+    OFCondition result = EC_Normal;
+    if (check)
+    {
+        /* check whether the passed values are valid */
+        result = checkGraphicData(coordinatesValue.GraphicType, coordinatesValue.GraphicDataList);
+        if (result.good())
+            result = checkFrameOfReferenceUID(coordinatesValue.FrameOfReferenceUID);
+        if (result.good())
+            result = checkFiducialUID(coordinatesValue.FiducialUID);
+    } else {
+        /* make sure that the mandatory values are non-empty/invalid */
+        if ((coordinatesValue.GraphicType == DSRTypes::GT3_invalid) ||
+            coordinatesValue.GraphicDataList.isEmpty() ||
+            coordinatesValue.FrameOfReferenceUID.empty())
+        {
+            result = EC_IllegalParameter;
+        }
+    }
+    if (result.good())
+    {
+        GraphicType = coordinatesValue.GraphicType;
+        GraphicDataList = coordinatesValue.GraphicDataList;
+        FrameOfReferenceUID = coordinatesValue.FrameOfReferenceUID;
+        FiducialUID = coordinatesValue.FiducialUID;
+    }
+    return result;
+}
+
+
+OFCondition DSRSpatialCoordinates3DValue::setGraphicType(const DSRTypes::E_GraphicType3D graphicType,
+                                                         const OFBool /*check*/)
 {
     OFCondition result = EC_IllegalParameter;
+    /* check whether the passed value is valid */
     if (graphicType != DSRTypes::GT3_invalid)
     {
         GraphicType = graphicType;
@@ -233,50 +309,47 @@ OFCondition DSRSpatialCoordinates3DValue::setGraphicType(const DSRTypes::E_Graph
 }
 
 
-OFCondition DSRSpatialCoordinates3DValue::setFrameOfReferenceUID(const OFString &frameOfReferenceUID)
+OFCondition DSRSpatialCoordinates3DValue::setFrameOfReferenceUID(const OFString &frameOfReferenceUID,
+                                                                 const OFBool check)
 {
-    OFCondition result = EC_IllegalParameter;
-    // do further checks?
-    if (!frameOfReferenceUID.empty())
-    {
+    OFCondition result = EC_Normal;
+    /* check whether the passed value is valid */
+    if (check)
+        result = checkFrameOfReferenceUID(frameOfReferenceUID);
+    else if (frameOfReferenceUID.empty())
+        result = EC_IllegalParameter;
+    if (result.good())
         FrameOfReferenceUID = frameOfReferenceUID;
-        result = EC_Normal;
-    }
     return result;
 }
 
 
-OFCondition DSRSpatialCoordinates3DValue::getValue(DSRSpatialCoordinates3DValue &coordinatesValue) const
+OFCondition DSRSpatialCoordinates3DValue::setFiducialUID(const OFString &fiducialUID,
+                                                         const OFBool check)
 {
-    coordinatesValue = *this;
-    return EC_Normal;
-}
-
-
-OFCondition DSRSpatialCoordinates3DValue::setValue(const DSRSpatialCoordinates3DValue &coordinatesValue)
-{
-    OFCondition result = EC_IllegalParameter;
-    if (checkData(coordinatesValue.GraphicType, coordinatesValue.GraphicDataList, coordinatesValue.FrameOfReferenceUID))
-    {
-        GraphicType = coordinatesValue.GraphicType;
-        GraphicDataList = coordinatesValue.GraphicDataList;
-        FrameOfReferenceUID = coordinatesValue.FrameOfReferenceUID;
-        result = EC_Normal;
-    }
+    OFCondition result = EC_Normal;
+    /* check whether the passed value is valid */
+    if (check)
+        result = checkFiducialUID(fiducialUID);
+    if (result.good())
+        FiducialUID = fiducialUID;
     return result;
 }
 
 
-OFBool DSRSpatialCoordinates3DValue::checkData(const DSRTypes::E_GraphicType3D graphicType,
-                                               const DSRGraphicData3DList &graphicDataList,
-                                               const OFString &frameOfReferenceUID) const
+// helper macro to avoid annoying check of boolean flag
+#define REPORT_WARNING(msg) { if (reportWarnings) DCMSR_WARN(msg); }
+
+OFCondition DSRSpatialCoordinates3DValue::checkGraphicData(const DSRTypes::E_GraphicType3D graphicType,
+                                                           const DSRGraphicData3DList &graphicDataList,
+                                                           const OFBool reportWarnings) const
 {
-    OFBool result = OFFalse;
+    OFCondition result = SR_EC_InvalidValue;
     // check graphic type and data
     if (graphicType == DSRTypes::GT3_invalid)
-        DCMSR_WARN("Invalid GraphicType for SCOORD3D content item");
+        REPORT_WARNING("Invalid Graphic Type for SCOORD3D content item")
     else if (graphicDataList.isEmpty())
-        DCMSR_WARN("No GraphicData for SCOORD3D content item");
+        REPORT_WARNING("No Graphic Data for SCOORD3D content item")
     else
     {
         const size_t count = graphicDataList.getNumberOfItems();
@@ -284,46 +357,47 @@ OFBool DSRSpatialCoordinates3DValue::checkData(const DSRTypes::E_GraphicType3D g
         {
             case DSRTypes::GT3_Point:
                 if (count > 1)
-                    DCMSR_WARN("GraphicData has too many entries, only a single entry expected");
-                result = OFTrue;
+                    REPORT_WARNING("Graphic Data has too many entries, only a single entry expected")
+                result = EC_Normal;
                 break;
             case DSRTypes::GT3_Multipoint:
                 if (count < 1)
-                    DCMSR_WARN("GraphicData has too few entries, at least one entry expected");
-                result = OFTrue;
+                    REPORT_WARNING("Graphic Data has too few entries, at least one entry expected")
+                result = EC_Normal;
                 break;
             case DSRTypes::GT3_Polyline:
                 if (count < 1)
-                    DCMSR_WARN("GraphicData has too few entries, at least one entry expected");
-                result = OFTrue;
+                    REPORT_WARNING("Graphic Data has too few entries, at least one entry expected")
+                result = EC_Normal;
                 break;
             case DSRTypes::GT3_Polygon:
                 if (count < 1)
-                    DCMSR_WARN("GraphicData has too few entries, at least one entry expected");
-                else if (graphicDataList.getItem(1) != graphicDataList.getItem(count))
+                    REPORT_WARNING("Graphic Data has too few entries, at least one entry expected")
+                else
                 {
-                    DCMSR_WARN("First and last entry in GraphicData are not equal (POLYGON)");
-                    result = OFTrue;
+                    if (graphicDataList.getItem(1) != graphicDataList.getItem(count))
+                        REPORT_WARNING("First and last entry in Graphic Data are not equal (POLYGON)")
+                    result = EC_Normal;
                 }
                 break;
             case DSRTypes::GT3_Ellipse:
                 if (count < 4)
-                    DCMSR_WARN("GraphicData has too few entries, exactly four entries expected");
+                    REPORT_WARNING("Graphic Data has too few entries, exactly four entries expected")
                 else
                 {
                     if (count > 4)
-                        DCMSR_WARN("GraphicData has too many entries, exactly four entries expected");
-                    result = OFTrue;
+                        REPORT_WARNING("Graphic Data has too many entries, exactly four entries expected")
+                    result = EC_Normal;
                 }
                 break;
             case DSRTypes::GT3_Ellipsoid:
                 if (count < 6)
-                    DCMSR_WARN("GraphicData has too few entries, exactly six entries expected");
+                    REPORT_WARNING("Graphic Data has too few entries, exactly six entries expected")
                 else
                 {
                     if (count > 6)
-                        DCMSR_WARN("GraphicData has too many entries, exactly six entries expected");
-                    result = OFTrue;
+                        REPORT_WARNING("Graphic Data has too many entries, exactly six entries expected")
+                    result = EC_Normal;
                 }
                 break;
             default:
@@ -331,27 +405,21 @@ OFBool DSRSpatialCoordinates3DValue::checkData(const DSRTypes::E_GraphicType3D g
                 break;
         }
     }
-    // check referenced frame of reference UID
-    if (frameOfReferenceUID.empty())
-    {
-        DCMSR_WARN("Empty ReferencedFrameOfReferenceUID for SCOORD3D content item");
-        result = OFFalse;
-    }
     return result;
 }
 
 
-/*
- *  CVS/RCS Log:
- *  $Log: dsrsc3vl.cc,v $
- *  Revision 1.3  2010-10-14 13:14:41  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.2  2010-09-28 14:15:20  joergr
- *  Removed old CVS log entries (copied from master file).
- *
- *  Revision 1.1  2010-09-28 14:07:29  joergr
- *  Added support for Colon CAD SR which requires a new value type (SCOORD3D).
- *
- *
- */
+OFCondition DSRSpatialCoordinates3DValue::checkFrameOfReferenceUID(const OFString &frameOfReferenceUID) const
+{
+    /* referenced frame of reference UID should never be empty */
+    return frameOfReferenceUID.empty() ? SR_EC_InvalidValue
+                                       : DcmUniqueIdentifier::checkStringValue(frameOfReferenceUID, "1");
+}
+
+
+OFCondition DSRSpatialCoordinates3DValue::checkFiducialUID(const OFString &fiducialUID) const
+{
+    /* fiducial UID might be empty */
+    return fiducialUID.empty() ? EC_Normal
+                               : DcmUniqueIdentifier::checkStringValue(fiducialUID, "1");
+}

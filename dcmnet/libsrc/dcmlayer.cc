@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,44 +18,38 @@
  *  Purpose:
  *    classes: DcmTransportLayer
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:28 $
- *  CVS/RCS Revision: $Revision: 1.4 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 #include "dcmtk/dcmnet/dcmlayer.h"
 #include "dcmtk/dcmnet/dcmtrans.h"
+#include "dcmtk/dcmnet/dndefine.h"
+
+#ifdef WITH_TCPWRAPPER
+BEGIN_EXTERN_C
+#include <syslog.h>
+END_EXTERN_C
+#endif
 
 DcmTransportLayer::~DcmTransportLayer()
 {
 }
 
-DcmTransportConnection * DcmTransportLayer::createConnection(int openSocket, OFBool useSecureLayer)
+DcmTransportConnection * DcmTransportLayer::createConnection(DcmNativeSocketType openSocket, OFBool useSecureLayer)
 {
   if (useSecureLayer) return NULL;  /* secure layer connections not supported */
   else return new DcmTCPConnection(openSocket);
 }
 
+#ifdef WITH_TCPWRAPPER
+#ifndef TCPWRAPPER_SEVERITY_EXTERN
 
-/*
- *  $Log: dcmlayer.cc,v $
- *  Revision 1.4  2010-10-14 13:14:28  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.3  2005/12/08 15:44:34  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.2  2001/06/01 15:50:05  meichel
- *  Updated copyright header
- *
- *  Revision 1.1  2000/08/10 14:50:56  meichel
- *  Added initial OpenSSL support.
- *
- *
+/* libwrap expects that two global flags, deny_severity and allow_severity,
+ * are defined and initialized by user code. If these flags are already present
+ * somewhere else, compile DCMTK with TCPWRAPPER_SEVERITY_EXTERN defined
+ * to avoid linker errors due to duplicate symbols.
  */
-
+int DCMTK_DCMNET_EXPORT deny_severity = LOG_WARNING;
+int DCMTK_DCMNET_EXPORT allow_severity = LOG_INFO;
+#endif
+#endif

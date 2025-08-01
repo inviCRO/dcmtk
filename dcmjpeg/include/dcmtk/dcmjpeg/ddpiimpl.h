@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2003-2010, OFFIS e.V.
+ *  Copyright (C) 2003-2011, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: Implementation of DICOMDIR image support (plugin)
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:16 $
- *  CVS/RCS Revision: $Revision: 1.4 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -34,6 +27,8 @@
 
 #include "dcmtk/dcmdata/dcddirif.h"
 
+#include "dcmtk/dcmjpeg/djdefine.h"
+
 
 /*---------------------*
  *  class declaration  *
@@ -41,7 +36,7 @@
 
 /** Implementation of the plugable image support for the DICOMDIR class
  */
-class DicomDirImageImplementation
+class DCMTK_DCMJPEG_EXPORT DicomDirImageImplementation
   : public DicomDirImagePlugin
 {
   public:
@@ -94,23 +89,3 @@ class DicomDirImageImplementation
 
 
 #endif
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: ddpiimpl.h,v $
- * Revision 1.4  2010-10-14 13:17:16  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.3  2009-11-25 13:36:47  joergr
- * Adapted code for new approach to access individual frames of a DICOM image.
- *
- * Revision 1.2  2005-12-08 16:59:09  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.1  2003/08/12 13:15:27  joergr
- * Added plugable image support for the new DICOMDIR class.
- *
- *
- */

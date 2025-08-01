@@ -52,11 +52,11 @@ DEBUG = @DEBUG@
 #
 
 # We want the old behavior of OFString(NULL) for now, no crashes.
-GLOBALDEFS = @DEFS@ -DUSE_NULL_SAFE_OFSTRING
+GLOBALDEFS = @DEFS@ -DUSE_NULL_SAFE_OFSTRING -DDCMTK_BUILD_IN_PROGRESS
 # -DDCMTK_BUILD_DATE=\"YYYY-MM-DD\"
 
 #
-# ARCH defines special machine archtecture compiler settings
+# ARCH defines special machine architecture compiler settings
 # (e.g. -arch i386 on NeXT)
 #
 
@@ -80,8 +80,10 @@ ZLIBLIBS = @ZLIBLIBS@
 XMLLIBS = @XMLLIBS@
 TCPWRAPPERLIBS = @TCPWRAPPERLIBS@
 SNDFILELIBS = @SNDFILELIBS@
+CHARCONVLIBS = @CHARCONVLIBS@
 LIBEXT = @LIBEXT@
 BINEXT = @BINEXT@
+STRIP = @STRIP@
 
 #
 # for clean and distclean
@@ -89,7 +91,7 @@ BINEXT = @BINEXT@
 TRASH = *~ "\#*\#" *.bak core
 DISTTRASH = $(TRASH) Makefile *.cache *.log *.status
 
-includes = -I. -I$(srcdir) -I$(top_srcdir)/include -I$(configdir)/include $(LOCALINCLUDES)
+includes = -I. -I$(srcdir) -I$(top_srcdir)/include -I$(configdir)/include $(LOCALINCLUDES) @CHARCONVINCLUDES@
 defines = $(GLOBALDEFS) $(LOCALDEFS) $(DEBUG) $(LOCALDEBUG)
 
 
@@ -98,8 +100,8 @@ defines = $(GLOBALDEFS) $(LOCALDEFS) $(DEBUG) $(LOCALDEBUG)
 
 .cc.o:
 	$(CXX)	$(defines) -c $(includes) $(ARCH) \
-		$(CPPFLAGS) $(CXXFLAGS) $<
+	$(CPPFLAGS) $(CXXFLAGS) $<
 
 .c.o:
 	$(CC)	$(defines) -c $(includes) $(ARCH) \
-		$(CPPFLAGS) $(CFLAGS) $<
+	$(CPPFLAGS) $(CFLAGS) $<

@@ -1,5 +1,13 @@
 # create library from source files
-ADD_LIBRARY(dcmtls tlslayer tlstrans tlsscu)
+DCMTK_ADD_LIBRARY(dcmtls
+  tlscond.cc
+  tlslayer.cc
+  tlsopt.cc
+  tlstrans.cc
+  tlsscu.cc
+  tlsciphr.cc
+)
 
-# declare installation files
-INSTALL_TARGETS(${INSTALL_LIBDIR} dcmtls)
+DCMTK_TARGET_LINK_MODULES(dcmtls ofstd dcmdata dcmnet)
+DCMTK_TARGET_LINK_LIBRARIES(dcmtls ${OPENSSL_LIBS})
+set_property(TARGET dcmtls PROPERTY OUTPUT_NAME "dcmtls${DCMTK_TLS_LIBRARY_POSTFIX}")

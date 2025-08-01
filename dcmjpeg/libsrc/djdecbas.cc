@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2010, OFFIS e.V.
+ *  Copyright (C) 2001-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Marco Eichelberg, Norbert Olges
  *
  *  Purpose: Codec class for decoding JPEG Baseline (lossy, 8-bit)
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:21 $
- *  CVS/RCS Revision: $Revision: 1.3 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -47,9 +40,13 @@ DJDecoderBaseline::~DJDecoderBaseline()
 
 E_TransferSyntax DJDecoderBaseline::supportedTransferSyntax() const
 {
-  return EXS_JPEGProcess1TransferSyntax;
+  return EXS_JPEGProcess1;
 }
 
+OFBool DJDecoderBaseline::isLosslessProcess() const
+{
+  return OFFalse;
+}
 
 DJDecoder *DJDecoderBaseline::createDecoderInstance(
     const DcmRepresentationParameter * /* toRepParam */,
@@ -59,19 +56,3 @@ DJDecoder *DJDecoderBaseline::createDecoderInstance(
 {
   return new DJDecompressIJG8Bit(*cp, isYBR);
 }
-
-
-/*
- * CVS/RCS Log
- * $Log: djdecbas.cc,v $
- * Revision 1.3  2010-10-14 13:14:21  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.2  2005-12-08 15:43:29  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.1  2001/11/13 15:58:25  meichel
- * Initial release of module dcmjpeg
- *
- *
- */

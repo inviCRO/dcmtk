@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1993-2010, OFFIS e.V.
+ *  Copyright (C) 1993-2011, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: class DcmQueryRetrieveStoreContext
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:41 $
- *  CVS/RCS Revision: $Revision: 1.5 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCMQRCBS_H
@@ -31,6 +24,7 @@
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 #include "dcmtk/dcmnet/dimse.h"
+#include "dcmtk/dcmqrdb/qrdefine.h"
 
 class DcmQueryRetrieveDatabaseHandle;
 class DcmQueryRetrieveOptions;
@@ -39,7 +33,7 @@ class DcmFileFormat;
 /** this class maintains the context information that is passed to the
  *  callback function called by DIMSE_storeProvider.
  */
-class DcmQueryRetrieveStoreContext
+class DCMTK_DCMQRDB_EXPORT DcmQueryRetrieveStoreContext
 {
 public:
     /** constructor
@@ -65,7 +59,7 @@ public:
     }
 
     /** set DIMSE status
-     *  param s new status
+     *  @param s new status
      */
     void setStatus(DIC_US s) { status = s; }
 
@@ -137,27 +131,3 @@ private:
 };
 
 #endif
-
-/*
- * CVS Log
- * $Log: dcmqrcbs.h,v $
- * Revision 1.5  2010-10-14 13:16:41  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.4  2009-08-21 09:50:07  joergr
- * Replaced tabs by spaces and updated copyright date.
- *
- * Revision 1.3  2005/12/15 12:38:00  joergr
- * Removed naming conflicts.
- *
- * Revision 1.2  2005/12/08 16:04:19  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.1  2005/03/30 13:34:50  meichel
- * Initial release of module dcmqrdb that will replace module imagectn.
- *   It provides a clear interface between the Q/R DICOM front-end and the
- *   database back-end. The imagectn code has been re-factored into a minimal
- *   class structure.
- *
- *
- */

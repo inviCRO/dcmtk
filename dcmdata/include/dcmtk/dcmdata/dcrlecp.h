@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 2002-2014, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: codec parameter for RLE
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:42 $
- *  CVS/RCS Revision: $Revision: 1.6 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCRLECP_H
@@ -34,7 +27,7 @@
 
 /** codec parameter for RLE codec
  */
-class DcmRLECodecParameter: public DcmCodecParameter
+class DCMTK_DCMDATA_EXPORT DcmRLECodecParameter: public DcmCodecParameter
 {
 public:
 
@@ -42,6 +35,9 @@ public:
    *  @param pCreateSOPInstanceUID true if a new SOP instance UID should be assigned
    *    upon compression/decompression
    *  @param pFragmentSize maximum fragment size (in kbytes) for compression, 0 for unlimited.
+   *    Please note that the DICOM standard does not allow for storing the pixel data with
+   *    multiple fragments per frame (when RLE compression is used). So limiting the fragment
+   *    size may result in non-standard conformant DICOM images.
    *  @param pCreateOffsetTable create offset table during image compression?
    *  @param pConvertToSC flag indicating whether image should be converted to
    *    Secondary Capture upon compression
@@ -63,7 +59,7 @@ public:
   virtual ~DcmRLECodecParameter();
 
   /** this methods creates a copy of type DcmCodecParameter *
-   *  it must be overweritten in every subclass.
+   *  it must be overwritten in every subclass.
    *  @return copy of this object
    */
   virtual DcmCodecParameter *clone() const;
@@ -139,29 +135,3 @@ private:
 
 
 #endif
-
-/*
- * CVS/RCS Log
- * $Log: dcrlecp.h,v $
- * Revision 1.6  2010-10-14 13:15:42  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.5  2009-11-04 09:58:07  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.4  2008-06-23 12:09:13  joergr
- * Fixed inconsistencies in Doxygen API documentation.
- *
- * Revision 1.3  2005/12/08 16:28:35  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.2  2005/07/26 17:08:33  meichel
- * Added option to RLE decoder that allows to correctly decode images with
- *   incorrect byte order of byte segments (LSB instead of MSB).
- *
- * Revision 1.1  2002/06/06 14:52:35  meichel
- * Initial release of the new RLE codec classes
- *   and the dcmcrle/dcmdrle tools in module dcmdata
- *
- *
- */

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Andreas Barth
  *
  *  Purpose: Interface of class DcmPixelData
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:41 $
- *  CVS/RCS Revision: $Revision: 1.40 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -47,7 +40,7 @@ class DcmStack;
  *  between compressed image representations using the same transfer syntax,
  *  for example the quality factor or compression factor for lossy compression.
  */
-class DcmRepresentationParameter
+class DCMTK_DCMDATA_EXPORT DcmRepresentationParameter
 {
 public:
     /// default constructor
@@ -60,7 +53,7 @@ public:
     virtual ~DcmRepresentationParameter() {}
 
     /** this methods creates a copy of type DcmRepresentationParameter *
-     *  it must be overweritten in every subclass.
+     *  it must be overwritten in every subclass.
      *  @return copy of this object
      */
     virtual DcmRepresentationParameter *clone() const = 0;
@@ -85,7 +78,7 @@ public:
  *  transfer syntaxes (compression algorithms) or representation
  *  parameters (e.g. compression factors).
  */
-class DcmRepresentationEntry
+class DCMTK_DCMDATA_EXPORT DcmRepresentationEntry
 {
     /** constructor
      *  @param rt transfer syntax
@@ -150,7 +143,7 @@ typedef OFListConstIterator(DcmRepresentationEntry *) DcmRepresentationListConst
  * else a representation with the default parameter set defined in the
  * codec is the conforming representation.
  */
-class DcmPixelData : public DcmPolymorphOBOW
+class DCMTK_DCMDATA_EXPORT DcmPixelData : public DcmPolymorphOBOW
 {
 private:
     friend class DcmRepresentationEntry;
@@ -158,7 +151,7 @@ private:
     /// List of representations of pixel data
     DcmRepresentationList repList;
 
-    /// Iterator to the last dummy element in representation lis
+    /// Iterator to the last dummy element in representation list
     DcmRepresentationListIterator repListEnd;
 
     /// Iterator to the original representation. if an uncompressed
@@ -168,7 +161,7 @@ private:
     /// current list element for some operations
     DcmRepresentationListIterator current;
 
-    /// shows if an unecapsulated representation is stored
+    /// shows if an unencapsulated representation is stored
     OFBool existUnencapsulated;
 
     /** this flag indicates that this pixel data element will be written
@@ -186,6 +179,13 @@ private:
 
     /// in write function: pointer to current pixel sequence
     DcmPixelSequence * pixelSeqForWrite;
+
+    /** check if this element should be written unencapsulated, even though an
+     *  encapsulated transfer syntax is used. In other words, this checks if
+     *  this pixel data element is on the main level on the dataset or not.
+     *  @param xfer the transfer syntax that should be used
+     */
+    OFBool writeUnencapsulated(const E_TransferSyntax xfer);
 
     /** This function removes all pixel representations from the list
      *  of pixel representations except the one which was passed. Note
@@ -210,17 +210,29 @@ private:
      *  if such an entry is found or EC_RepresentationNotFound. The pixSeq
      *  attribute in findEntry can be NULL, it is not needed for the find
      *  operation!
+     *  @param findEntry the entry to find
+     *  @param result the found entry
+     *  @return EC_Normal if entry is found, EC_RepresentationNotFound otherwise.
      */
     OFCondition findRepresentationEntry(
         const DcmRepresentationEntry & findEntry,
         DcmRepresentationListIterator & result);
 
     /** insert or replace a representation entry in the list
+     *  @param repEntry the DcmRepresentationEntry to be inserted
+     *  @return the inserted entry
      */
     DcmRepresentationListIterator insertRepresentationEntry(
         DcmRepresentationEntry * repEntry);
 
     /** decode representation to unencapsulated format
+     *  @param fromType transfer syntax to decode from
+     *  @param fromParam representation parameter of current compressed
+     *    representation, may be NULL.
+     *  @param fromPixSeq compressed pixel sequence
+     *  @param pixelStack stack pointing to the location of the pixel data
+     *    element in the current dataset.
+     *  @return EC_Normal if successful, an error code otherwise.
      */
     OFCondition decode(
         const DcmXfer & fromType,
@@ -229,6 +241,15 @@ private:
         DcmStack & pixelStack);
 
     /** encode to encapsulated format
+     *  @param fromType current transfer syntax of the compressed image
+     *  @param fromParam current representation parameter of compressed data, may be NULL
+     *  @param fromPixSeq compressed pixel sequence
+     *  @param toType transfer syntax to compress to
+     *  @param toParam representation parameter describing the desired
+     *    new compressed representation (e.g. JPEG quality)
+     *  @param pixelStack stack pointing to the location of the pixel data
+     *    element in the current dataset.
+     *  @return EC_Normal if successful, an error code otherwise.
      */
     OFCondition encode(
         const DcmXfer & fromType,
@@ -249,7 +270,8 @@ private:
 
 public:
 
-    /** constructor
+    /** constructor.
+     *  Create new element from given tag and length.
      *  @param tag attribute tag
      *  @param len length of the attribute value
      */
@@ -276,7 +298,21 @@ public:
       return new DcmPixelData(*this);
     }
 
-    /** Virtual object copying. This method can be used for DcmObject
+    /** comparison operator that compares the value of this element
+     *  with a given element of the same type (e.g. an DcmPixelData with a
+     *  DcmPixelData). The tag of the element is also considered as the first
+     *  component that is compared, followed by the object types (VR, i.e. DCMTK'S EVR).
+     *  The DcmPixelData implementation checks whether the uncompressed data of
+     *  both objects are identical, and if not provided, if the compressed data
+     *  of both objects is the same, by comparing the pixel items bytewise.
+     *  @param  rhs the right hand side of the comparison
+     *  @return 0 if the object values are equal.
+     *          -1 is returned if rhs is considered greater than this object.
+     *          1 is returned if rhs is considered smaller than this object.
+     */
+    virtual int compare(const DcmElement& rhs) const;
+
+    /** virtual object copying. This method can be used for DcmObject
      *  and derived classes to get a deep copy of an object. Internally
      *  the assignment operator is called if the given DcmObject parameter
      *  is of the same type as "this" object instance. If not, an error
@@ -292,9 +328,9 @@ public:
 
     /** set/change the current value representation of the uncompressed image representation, if any
      *  @param vr new value representation to be set.  All VRs except for OW (Other
-     *    Word String) are treated as 8 bit data (OB).  This is particularily useful
+     *    Word String) are treated as 8 bit data (OB).  This is particularly useful
      *    for unknown (UN) or unsupported VRs.
-     *  @return status status, EC_Normal if successful, an error code otherwise
+     *  @return status, EC_Normal if successful, an error code otherwise
      */
     virtual OFCondition setVR(DcmEVR vr);
 
@@ -313,7 +349,7 @@ public:
      *  @param pixelFileName optional filename used to write the raw pixel data file
      *  @param pixelCounter optional counter used for automatic pixel data filename creation
      */
-    virtual void print(STD_NAMESPACE ostream&out,
+    virtual void print(STD_NAMESPACE ostream &out,
                        const size_t flags = 0,
                        const int level = 0,
                        const char *pixelFileName = NULL,
@@ -322,19 +358,20 @@ public:
     /** tests if it is possible to write a specific representation
      *  Only existing representations are considered, since this
      *  method does not create a representation.
+     *  @param newXfer the syntax to be checked
      */
     virtual OFBool canWriteXfer(const E_TransferSyntax newXfer,
                                 const E_TransferSyntax oldXfer);
 
-    /** returns length of representation conforming to the
-     *  transfer syntax with tag, vr, ... It does not create a
-     *  representation. If no conforming representation exists an
-     *  error code is set and 0 returned.
+    /** @copydoc DcmObject::calcElementLength()
      */
     virtual Uint32 calcElementLength(const E_TransferSyntax xfer,
                                      const E_EncodingType enctype);
 
-    /** returns length of representation value field conforming to
+    /** returns length of representation conforming to the transfer syntax
+     *  @param xfer the transfer syntax
+     *  @param enctype the encoding type
+     *  @return returns length of representation value field conforming to
      *  given transfer syntax. It does not create a representation.
      *  If no conforming representation exists, an error code is set
      *  and 0 returned.
@@ -361,7 +398,7 @@ public:
      *  @param maxReadLength Maximum read length for reading an attribute value.
      *  @return status, EC_Normal if successful, an error code otherwise
      */
-    virtual OFCondition read(DcmInputStream & inStream,
+    virtual OFCondition read(DcmInputStream &inStream,
                              const E_TransferSyntax ixfer,
                              const E_GrpLenEncoding glenc = EGL_noChange,
                              const Uint32 maxReadLength = DCM_MaxReadLength);
@@ -370,6 +407,11 @@ public:
      *  It does not create a representation. If no conforming
      *  representation exists,  an error code is returned.
      *  The written representation is the new current representation
+     *  @param outStream the output stream
+     *  @param oxfer the transfer syntax that should be used
+     *  @param enctype encoding types (undefined or explicit length)
+     *  @param pointer to write cache object, may be NULL
+     *  @return EC_Normal on success, the error otherwise
      */
     virtual OFCondition write(
       DcmOutputStream &outStream,
@@ -382,8 +424,16 @@ public:
      *  @param flags optional flag used to customize the output (see DCMTypes::XF_xxx)
      *  @return status, EC_Normal if successful, an error code otherwise
      */
-    virtual OFCondition writeXML(STD_NAMESPACE ostream&out,
+    virtual OFCondition writeXML(STD_NAMESPACE ostream &out,
                                  const size_t flags = 0);
+
+    /** write object in JSON format to a stream
+     *  @param out output stream to which the JSON document is written
+     *  @param format used to format and customize the output
+     *  @return status, EC_Normal if successful, an error code otherwise
+     */
+    virtual OFCondition writeJson(STD_NAMESPACE ostream &out,
+                                  DcmJsonFormat &format);
 
     /** special write method for creation of digital signatures
      *  @param outStream DICOM output stream
@@ -414,52 +464,77 @@ public:
     virtual void transferEnd();
 
     /** test if it is possible to choose the representation in the parameters
+     * @param repType the representation type
+     * @param repParam the representation parameters
      */
     OFBool canChooseRepresentation(
         const E_TransferSyntax repType,
         const DcmRepresentationParameter * repParam);
 
-    /** choose a specific representation. if representation does not exist
-     *  it is created (if possible).
-     *  if repParam is zero, a representation is chosen or created that
-     *  is equal to the default representation parameters
+    /** choose a specific representation.
+     *  @remarks if representation does not exist it is created (if possible).
+     *    if repParam is zero, a representation is chosen or created that
+     *    is equal to the default representation parameters
+     *  @deprecated The direct call of this method by user code is deprecated.
+     *    Use DcmDataset::chooseRepresentation() instead.
+     *  @repType the representation type
+     *  @repParam the representation parameters
+     *  @stack the object stack
      */
     OFCondition chooseRepresentation(
         const E_TransferSyntax repType,
         const DcmRepresentationParameter * repParam,
         DcmStack & stack);
 
-    /** Inserts an original encapsulated representation. current and original
-     *  representations are changed, all old representations are deleted
+    /** Inserts an original encapsulated representation.
+     *  @remarks current and original representations are changed,
+     *  all old representations are deleted
+     *  @param repType the representation type
+     *  @param repParam the representation parameters
+     *  @param pixSeq the pixel sequence
      */
     void putOriginalRepresentation(
         const E_TransferSyntax repType,
         const DcmRepresentationParameter * repParam,
         DcmPixelSequence * pixSeq);
 
-    /**insert an original unencapsulated
-     *  representation. current and original representations are changed,
+    /** insert an original unencapsulated representation.
+     *  @remarks current and original representations are changed,
      *  all old representations are deleted. The array data is copied.
+     *  @param byteValue used to check for corrupted data
+     *  @param length the length of the element to put
      */
     virtual OFCondition putUint8Array(
         const Uint8 * byteValue,
         const unsigned long length);
 
-    /** insert an original unencapsulated
-     *  representation. current and original representations are changed,
+    /** insert an original unencapsulated representation.
+     *  @remarks current and original representations are changed,
      *  all old representations are deleted. The array data is copied.
+     *  @param wordValue new attribute value
+     *  @param length number of values in array vals
      */
     virtual OFCondition putUint16Array(
         const Uint16 * wordValue,
         const unsigned long length);
 
-    /** create an empty Uint8 array of given number of words and set it
+    /** create an empty Uint8 array of given number of bytes and set it.
+     *  All array elements are initialized with a value of 0 (using 'memset').
+     *  This method is only applicable to certain VRs, e.g. OB.
+     *  @param numBytes number of bytes (8 bit) to be created
+     *  @param bytes stores the pointer to the resulting buffer
+     *  @return status, EC_Normal if successful, an error code otherwise
      */
     virtual OFCondition createUint8Array(
         const Uint32 numBytes,
         Uint8 * & bytes);
 
-    /** create an empty Uint16 array of given number of words and set it
+    /** create an empty Uint16 array of given number of words and set it.
+     *  All array elements are initialized with a value of 0 (using 'memset').
+     *  This method is only applicable to OW data.
+     *  @param numWords number of words (16 bit) to be created
+     *  @param words stores the pointer to the resulting buffer
+     *  @return status, EC_Normal if successful, an error code otherwise
      */
     virtual OFCondition createUint16Array(
         const Uint32 numWords,
@@ -481,9 +556,12 @@ public:
       const Uint32 length,
       const E_ByteOrder byteOrder);
 
-    /** get a specific exisiting Representation, creates no representation
+    /** get a specific existing Representation, creates no representation
      *  if repParam is NULL, then the representation conforming to the default
-     *  presentationParameters (defined with the codec) is returned.
+     *  representationParameters (defined with the codec) is returned.
+     *  @param repType the transfer syntax
+     *  @param repParam representation parameters
+     *  @param pixSeq the found representation
      */
     OFCondition getEncapsulatedRepresentation(
         const E_TransferSyntax repType,
@@ -492,6 +570,8 @@ public:
 
     /** returns the representation identification (key) consisting of
      *  representation type and parameter of the original representation
+     *  @param repType the transfer syntax
+     *  @param the representations parameters
      */
     void getOriginalRepresentationKey(
         E_TransferSyntax & repType,
@@ -499,25 +579,34 @@ public:
 
     /** returns the representation identification (key) consisting of
      *  representation type and parameter of the current representation
+     *  @param repType the transfer Syntax
+     *  @param repParam the DcmRepresentationParameter
      */
     void getCurrentRepresentationKey(
         E_TransferSyntax & repType,
         const DcmRepresentationParameter * & repParam);
 
-    /** sets the representation identification parameter of the current
-     *  representation
+    /** sets the representation identification parameter of the current representation
+     * @param repParam the representation Parameter
+     * @return EC_Normal on success, EC_RepresentationNotFound if the representation was not found
      */
     OFCondition setCurrentRepresentationParameter(
         const DcmRepresentationParameter * repParam);
 
-    /** returns if a specific conforming  representation exists.
+    /** checks if a specific conforming representation exists.
+     * @param repType the representation Type
+     * @param repParam the representation Parameter
+     * @return OFTrue if a specific conforming representation exists, OFFalse otherwise
      */
     OFBool hasRepresentation(
         const E_TransferSyntax repType,
         const DcmRepresentationParameter * repParam = NULL);
 
-    /** delete a representation. It is not possible to delete the
-     *  original representation with this method
+    /** deletes a representation.
+     * @remark It is not possible to delete the original representation with this method
+     * @param repType the representation Type
+     * @param repParam the representation Parameter
+     * @return EC_NORMAL on success, the error otherwise
      */
     OFCondition removeRepresentation(
         const E_TransferSyntax repType,
@@ -527,14 +616,17 @@ public:
      */
     void removeAllButOriginalRepresentations();
 
-    /** removes all but the current representation
-     *  Makes the current representation original
+    /** removes all but the current representation.
+     *  Makes the current representation original.
      */
     void removeAllButCurrentRepresentations();
 
     /** delete original representation and set new original representation.
      *  If the new representation does not exist, the original one is not
      *  deleted and an error code returns
+     *  @param repType the representation type
+     *  @param repParam the representation parameter
+     *  @return EC_Normal on success, the error code otherwise
      */
     OFCondition removeOriginalRepresentation(
         const E_TransferSyntax repType,
@@ -604,164 +696,3 @@ public:
 };
 
 #endif
-
-
-/*
-** CVS/RCS Log:
-** $Log: dcpixel.h,v $
-** Revision 1.40  2010-10-14 13:15:41  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.39  2010-07-02 12:34:42  uli
-** Added comment explaining why an even buffer size is required.
-**
-** Revision 1.38  2010-02-22 11:39:54  uli
-** Remove some unneeded includes.
-**
-** Revision 1.37  2009-11-17 16:36:51  joergr
-** Added new method that allows for determining the color model of the
-** decompressed image.
-**
-** Revision 1.36  2008-11-03 14:32:50  joergr
-** Added method createValueFromTempFile() - overrides method in DcmElement.
-**
-** Revision 1.35  2008-07-17 11:19:49  onken
-** Updated copyFrom() documentation.
-**
-** Revision 1.34  2008-07-17 10:30:23  onken
-** Implemented copyFrom() method for complete DcmObject class hierarchy, which
-** permits setting an instance's value from an existing object. Implemented
-** assignment operator where necessary.
-**
-** Revision 1.33  2008-06-23 12:09:13  joergr
-** Fixed inconsistencies in Doxygen API documentation.
-**
-** Revision 1.32  2008-05-29 10:46:13  meichel
-** Implemented new method DcmPixelData::getUncompressedFrame
-**   that permits frame-wise access to compressed and uncompressed
-**   objects without ever loading the complete object into main memory.
-**   For this new method to work with compressed images, all classes derived from
-**   DcmCodec need to implement a new method decodeFrame(). For now, only
-**   dummy implementations returning an error code have been defined.
-**
-** Revision 1.31  2007/11/29 14:30:19  meichel
-** Write methods now handle large raw data elements (such as pixel data)
-**   without loading everything into memory. This allows very large images to
-**   be sent over a network connection, or to be copied without ever being
-**   fully in memory.
-**
-** Revision 1.30  2007/06/29 14:17:49  meichel
-** Code clean-up: Most member variables in module dcmdata are now private,
-**   not protected anymore.
-**
-** Revision 1.29  2006/08/15 15:49:56  meichel
-** Updated all code in module dcmdata to correctly compile when
-**   all standard C++ classes remain in namespace std.
-**
-** Revision 1.28  2005/12/08 16:28:30  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.27  2005/05/26 09:06:53  meichel
-** Renamed isIconImage flag to alwaysUnencapsulated to clarify meaning.
-**   Added public method DcmPixelData::setNonEncapsulationFlag() that allows
-**   DcmCodec instances to enable the flag. Improved documentation.
-**
-** Revision 1.26  2004/07/01 12:28:25  meichel
-** Introduced virtual clone method for DcmObject and derived classes.
-**
-** Revision 1.25  2004/04/07 13:55:56  meichel
-** Compressed image datasets containing uncompressed icon images
-**   are now correctly handled by the parser.
-**
-** Revision 1.24  2004/01/16 14:06:20  joergr
-** Removed acknowledgements with e-mail addresses from CVS log.
-**
-** Revision 1.23  2003/06/12 18:21:24  joergr
-** Modified code to use const_iterators where appropriate (required for STL).
-**
-** Revision 1.22  2003/06/12 14:03:24  joergr
-** Fixed inconsistent API documentation reported by Doxygen.
-**
-** Revision 1.21  2003/06/02 16:55:34  meichel
-** Cleaned up implementation of DcmRepresentationEntry, added doc++ comments
-**
-** Revision 1.20  2003/04/17 15:56:59  joergr
-** Corrected API documentation of createUint8/16Array() methods.
-**
-** Revision 1.19  2003/04/01 12:35:12  joergr
-** Added implementation of createUint8/16Array() methods to DcmPixelData.
-** Required to work properly with chooseRepresentation() for pixel compression.
-**
-** Revision 1.18  2002/12/09 09:31:16  wilkens
-** Modified/Added doc++ documentation.
-**
-** Revision 1.17  2002/12/06 12:49:12  joergr
-** Enhanced "print()" function by re-working the implementation and replacing
-** the boolean "showFullData" parameter by a more general integer flag.
-** Added doc++ documentation.
-** Made source code formatting more consistent with other modules/files.
-**
-** Revision 1.16  2002/08/27 16:55:37  meichel
-** Initial release of new DICOM I/O stream classes that add support for stream
-**   compression (deflated little endian explicit VR transfer syntax)
-**
-** Revision 1.15  2002/04/25 09:38:48  joergr
-** Added support for XML output of DICOM objects.
-**
-** Revision 1.14  2001/09/25 17:18:34  meichel
-** Updated abstract class DcmRepresentationParameter for use with dcmjpeg
-**
-** Revision 1.13  2001/06/01 15:48:42  meichel
-** Updated copyright header
-**
-** Revision 1.12  2000/11/07 16:56:08  meichel
-** Initial release of dcmsign module for DICOM Digital Signatures
-**
-** Revision 1.11  2000/09/27 08:19:55  meichel
-** Minor changes in DcmCodec interface, required for future dcmjpeg module.
-**
-** Revision 1.10  2000/04/14 15:31:33  meichel
-** Removed default value from output stream passed to print() method.
-**   Required for use in multi-thread environments.
-**
-** Revision 1.9  2000/03/08 16:26:17  meichel
-** Updated copyright header.
-**
-** Revision 1.8  2000/03/03 14:05:25  meichel
-** Implemented library support for redirecting error messages into memory
-**   instead of printing them to stdout/stderr for GUI applications.
-**
-** Revision 1.7  2000/02/10 10:50:52  joergr
-** Added new feature to dcmdump (enhanced print method of dcmdata): write
-** pixel data/item value fields to raw files.
-**
-** Revision 1.6  2000/02/03 16:28:10  joergr
-** Fixed bug: encapsulated data (pixel items) have never been loaded using
-** method 'loadAllDataIntoMemory'. Therefore, encapsulated pixel data was
-** never printed with 'dcmdump'.
-**
-** Revision 1.5  1999/03/31 09:24:44  meichel
-** Updated copyright header in module dcmdata
-**
-** Revision 1.4  1998/11/12 16:47:42  meichel
-** Implemented operator= for all classes derived from DcmObject.
-**
-** Revision 1.3  1998/07/15 15:48:50  joergr
-** Removed several compiler warnings reported by gcc 2.8.1 with
-** additional options, e.g. missing copy constructors and assignment
-** operators, initialization of member variables in the body of a
-** constructor instead of the member initialization list, hiding of
-** methods by use of identical names, uninitialized member variables,
-** missing const declaration of char pointers. Replaced tabs by spaces.
-**
-** Revision 1.2  1997/07/24 13:08:24  andreas
-** - Removed const for method DcmRepresentationParameter::copy
-**
-** Revision 1.1  1997/07/21 07:54:57  andreas
-** - New environment for encapsulated pixel representations. DcmPixelData
-**   can contain different representations and uses codecs to convert
-**   between them. Codecs are derived from the DcmCodec class. New error
-**   codes are introduced for handling of representations. New internal
-**   value representation (only for ident()) for PixelData
-**
-*/

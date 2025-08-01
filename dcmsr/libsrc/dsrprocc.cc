@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2003-2010, OFFIS e.V.
+ *  Copyright (C) 2003-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose:
  *    classes: DSRProcedureLogConstraintChecker
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:41 $
- *  CVS/RCS Revision: $Revision: 1.3 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -52,13 +45,16 @@ OFBool DSRProcedureLogConstraintChecker::isByReferenceAllowed() const
 
 OFBool DSRProcedureLogConstraintChecker::isTemplateSupportRequired() const
 {
-    return OFTrue;
+    return OFFalse;
 }
 
 
-const char *DSRProcedureLogConstraintChecker::getRootTemplateIdentifier() const
+OFCondition DSRProcedureLogConstraintChecker::getRootTemplateIdentification(OFString &templateIdentifier,
+                                                                            OFString &mappingResource) const
 {
-    return "3001";
+    templateIdentifier.clear();
+    mappingResource.clear();
+    return EC_Normal;
 }
 
 
@@ -91,6 +87,11 @@ OFBool DSRProcedureLogConstraintChecker::checkContentRelationship(const E_ValueT
             result = (targetValueType == VT_Text)     || (targetValueType == VT_Code)   || (targetValueType == VT_Num)  ||
                      (targetValueType == VT_DateTime) || (targetValueType == VT_UIDRef) || (targetValueType == VT_PName);
         }
+        /* new row introduced with CP-2084 */
+        else if ((relationshipType == RT_hasObsContext) && (sourceValueType == VT_Container))
+        {
+            result = (targetValueType == VT_Container);
+        }
         /* row 3 of the table */
         else if ((relationshipType == RT_hasAcqContext) && ((sourceValueType == VT_Container) ||
             (sourceValueType == VT_Image) || (sourceValueType == VT_Waveform) || (sourceValueType == VT_Composite)))
@@ -119,19 +120,3 @@ OFBool DSRProcedureLogConstraintChecker::checkContentRelationship(const E_ValueT
     }
     return result;
 }
-
-
-/*
- *  CVS/RCS Log:
- *  $Log: dsrprocc.cc,v $
- *  Revision 1.3  2010-10-14 13:14:41  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.2  2005-12-08 15:48:02  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.1  2003/10/09 13:00:20  joergr
- *  Added support for Procedure Log.
- *
- *
- */

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2005-2010, OFFIS e.V.
+ *  Copyright (C) 2005-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,24 +18,11 @@
  *  Purpose: Termination Service Class User (negotiates the private shutdown
  *           SOP class in order to shutdown server applications)
  *
- *  Last Update:      $Author: uli $
- *  Update Date:      $Date: 2010-11-01 10:42:44 $
- *  CVS/RCS Revision: $Revision: 1.14 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 // ----------------------------------------------------------------------------
 
 #include "dcmtk/config/osconfig.h"
-
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CSTDIO
-#define INCLUDE_CSTRING
-#define INCLUDE_CSTDARG
-#include "dcmtk/ofstd/ofstdinc.h"
 
 #include "dcmtk/ofstd/ofcmdln.h"
 #include "dcmtk/ofstd/ofconapp.h"
@@ -75,24 +62,12 @@ int main( int argc, char *argv[] )
   T_ASC_Network *net;
   T_ASC_Parameters *params;
   T_ASC_Association *assoc;
-  DIC_NODENAME localHost;
   DIC_NODENAME peerHost;
   char rcsid[] = "$dcmtk: " OFFIS_CONSOLE_APPLICATION " v"  OFFIS_DCMTK_VERSION " " OFFIS_DCMTK_RELEASEDATE " $";
   const char* transferSyntaxes[] = { UID_LittleEndianImplicitTransferSyntax, UID_LittleEndianExplicitTransferSyntax, UID_BigEndianExplicitTransferSyntax };
   int transferSyntaxCount = 3;
 
-#ifdef HAVE_GUSI_H
-    // needed for Macintosh
-    GUSISetup(GUSIwithSIOUXSockets);
-    GUSISetup(GUSIwithInternetSockets);
-#endif
-
-#ifdef HAVE_WINSOCK_H
-    WSAData winSockData;
-    // we need at least version 1.1
-    WORD winSockVersionNeeded = MAKEWORD( 1, 1 );
-    WSAStartup(winSockVersionNeeded, &winSockData);
-#endif
+  OFStandard::initializeNetwork();
 
   char tempstr[20];
   OFString temp_str;
@@ -204,9 +179,8 @@ int main( int argc, char *argv[] )
 
   // figure out the presentation addresses and copy the
   // corresponding values into the association parameters.
-  gethostname( localHost, sizeof( localHost ) - 1 );
   sprintf( peerHost, "%s:%d", opt_peer, OFstatic_cast(int, opt_port));
-  ASC_setPresentationAddresses( params, localHost, peerHost );
+  ASC_setPresentationAddresses( params, OFStandard::getHostName().c_str(), peerHost );
 
   // set the presentation context which will be negotiated
   // when the network connection will be established
@@ -294,67 +268,9 @@ int main( int argc, char *argv[] )
     exit( 1 );
   }
 
-#ifdef HAVE_WINSOCK_H
-  WSACleanup();
-#endif
+  OFStandard::shutdownNetwork();
 
   return( 0 );
 }
 
 // ----------------------------------------------------------------------------
-
-/*
-** CVS Log
-** $Log: termscu.cc,v $
-** Revision 1.14  2010-11-01 10:42:44  uli
-** Fixed some compiler warnings reported by gcc with additional flags.
-**
-** Revision 1.13  2010-10-14 13:13:43  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.12  2010-05-18 16:10:25  joergr
-** Replaced '\n' by OFendl in log messages.
-**
-** Revision 1.11  2009-11-18 11:53:58  uli
-** Switched to logging mechanism provided by the "new" oflog module.
-**
-** Revision 1.10  2009-04-24 12:26:06  joergr
-** Fixed minor inconsistencies regarding layout/formatting in syntax usage.
-**
-** Revision 1.9  2009-04-21 14:09:23  joergr
-** Fixed minor inconsistencies in manpage / syntax usage.
-**
-** Revision 1.8  2008-09-25 16:00:58  joergr
-** Added support for printing the expanded command line arguments.
-** Always output the resource identifier of the command line tool in debug mode.
-**
-** Revision 1.7  2007/10/01 16:21:26  joergr
-** Fixed layout issue with --version output.
-**
-** Revision 1.6  2006/08/15 16:04:28  meichel
-** Updated the code in module dcmnet to correctly compile when
-**   all standard C++ classes remain in namespace std.
-**
-** Revision 1.5  2006/07/27 14:18:48  joergr
-** Changed parameter "exclusive" of method addOption() from type OFBool into an
-** integer parameter "flags". Option "--help" is no longer an exclusive option
-** by default.
-** Removed option "ExpandWildcards" from parseComandLine() call.
-**
-** Revision 1.4  2005/12/08 15:44:23  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.3  2005/11/16 14:58:07  meichel
-** Set association timeout in ASC_initializeNetwork to 30 seconds. This improves
-**   the responsiveness of the tools if the peer blocks during assoc negotiation.
-**
-** Revision 1.2  2005/09/15 08:41:42  joergr
-** Fixed wrong value for LONGCOL.
-**
-** Revision 1.1  2005/09/12 11:39:04  wilkens
-** Added command line tool termscu in dcmnet; this tool can be used to shutdown
-** DCMTK server applications which support negotiating the private Shutdown SOP
-** Class in DCMTK.
-**
-**
-*/

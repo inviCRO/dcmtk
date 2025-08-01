@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2000-2010, OFFIS e.V.
+ *  Copyright (C) 2000-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose:
  *    classes: DSRListOfItems
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:33 $
- *  CVS/RCS Revision: $Revision: 1.14 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -33,9 +26,19 @@
 
 #include "dcmtk/config/osconfig.h"   /* make sure OS specific configuration is included first */
 
-#include "dcmtk/ofstd/oflist.h"
-
 #include "dcmtk/dcmdata/dcerror.h"
+
+#include "dcmtk/ofstd/oflist.h"
+#include "dcmtk/ofstd/ofvector.h"
+
+
+/** get the default item which is returned in DSRListOfItems::getItem() if the index is invalid.
+ *  This function needs to be specialized and instantiated for each different use of DSRListOfItems.
+ *  @tparam T the type of the object that will be returned.
+ *  @return a reference to an object of type T.
+ */
+template<typename T>
+const T& DSRgetEmptyItem();
 
 
 /*---------------------*
@@ -78,16 +81,68 @@ template<class T> class DSRListOfItems
      */
     inline DSRListOfItems<T> &operator=(const DSRListOfItems<T> &lst)
     {
-        /* class OFList has no overloaded assignment operator */
-        ItemList.clear();
-        const OFLIST_TYPENAME OFListConstIterator(T) endPos = lst.ItemList.end();
-        OFLIST_TYPENAME OFListConstIterator(T) iterator = lst.ItemList.begin();
-        while (iterator != endPos)
+        /* check for self-assignment, which would not work */
+        if (this != &lst)
         {
-            ItemList.push_back(*iterator);
-            iterator++;
+            /* class OFList has no overloaded assignment operator */
+            ItemList.clear();
+            const OFLIST_TYPENAME OFListConstIterator(T) endPos = lst.ItemList.end();
+            OFLIST_TYPENAME OFListConstIterator(T) iterator = lst.ItemList.begin();
+            while (iterator != endPos)
+            {
+                ItemList.push_back(*iterator);
+                iterator++;
+            }
         }
         return *this;
+    }
+
+    /** comparison operator "equal"
+     ** @param  lst  list that should be compared to the current one
+     ** @return OFTrue if both lists are equal, OFFalse otherwise
+     */
+    OFBool operator==(const DSRListOfItems<T> &lst) const
+    {
+        /* first check whether the size of both lists is equal */
+        OFBool result = (ItemList.size() == lst.ItemList.size());
+        /* then iterate over all list entries (if any) */
+        if (result && !ItemList.empty())
+        {
+            /* since OFList does not implement a comparison operator we need the following */
+            const OFLIST_TYPENAME OFListConstIterator(T) endPos = ItemList.end();
+            OFLIST_TYPENAME OFListConstIterator(T) iterator = ItemList.begin();
+            OFLIST_TYPENAME OFListConstIterator(T) lstIter = lst.ItemList.begin();
+            do {
+                result = (*iterator == *lstIter);
+                iterator++;
+                lstIter++;
+            } while (result && (iterator != endPos));
+        }
+        return result;
+    }
+
+    /** comparison operator "not equal"
+     ** @param  lst  list that should be compared to the current one
+     ** @return OFTrue if both lists are not equal, OFFalse otherwise
+     */
+    OFBool operator!=(const DSRListOfItems<T> &lst) const
+    {
+        /* first check whether the size of both lists is not equal */
+        OFBool result = (ItemList.size() != lst.ItemList.size());
+        /* then iterate over all list entries (if any) */
+        if (!result && !ItemList.empty())
+        {
+            /* since OFList does not implement a comparison operator we need the following */
+            const OFLIST_TYPENAME OFListConstIterator(T) endPos = ItemList.end();
+            OFLIST_TYPENAME OFListConstIterator(T) iterator = ItemList.begin();
+            OFLIST_TYPENAME OFListConstIterator(T) lstIter = lst.ItemList.begin();
+            do {
+                result = (*iterator != *lstIter);
+                iterator++;
+                lstIter++;
+            } while (!result && (iterator != endPos));
+        }
+        return result;
     }
 
     /** clear all internal variables
@@ -133,7 +188,7 @@ template<class T> class DSRListOfItems
         if (gotoItemPos(idx, iterator))
             return *iterator;
         else
-            return EmptyItem;
+            return DSRgetEmptyItem<T>();
     }
 
     /** get copy of the specified item
@@ -155,6 +210,32 @@ template<class T> class DSRListOfItems
         return result;
     }
 
+    /** get copy of all items (as a vector)
+     ** @param  items  reference to a variable where the result should be stored.
+     *                 (always cleared before items are added)
+     ** @return status, EC_Normal if successful, an error code otherwise
+     */
+    OFCondition getItems(OFVector<T> &items) const
+    {
+        items.clear();
+        if (!ItemList.empty())
+        {
+            /* avoid re-allocations */
+            items.reserve(ItemList.size());
+            /* iterate over all list items */
+            const OFLIST_TYPENAME OFListConstIterator(T) endPos = ItemList.end();
+            OFLIST_TYPENAME OFListConstIterator(T) iterator = ItemList.begin();
+            while (iterator != endPos)
+            {
+                /* and copy them to the passed vector */
+                items.push_back(*iterator);
+                iterator++;
+            }
+        }
+        /* always return OK */
+        return EC_Normal;
+    }
+
     /** add item to the list
      ** @param  item  item to be added
      */
@@ -172,6 +253,20 @@ template<class T> class DSRListOfItems
             ItemList.push_back(item);
     }
 
+    /** add items to the list
+     ** @param  items  items to be added (stored as a vector)
+     */
+    inline void addItems(const OFVector<T> &items)
+    {
+        const OFTypename OFVector<T>::const_iterator endPos = items.end();
+        OFTypename OFVector<T>::const_iterator iterator = items.begin();
+        while (iterator != endPos)
+        {
+            ItemList.push_back(*iterator);
+            iterator++;
+        }
+    }
+
     /** insert item at specified position to the list
      ** @param  idx   index of the item before the new one should be inserted (starting from 1)
      *  @param  item  item to be inserted
@@ -187,7 +282,7 @@ template<class T> class DSRListOfItems
             ItemList.push_back(item);
             result = EC_Normal;
         } else {
-            OFLIST_TYPENAME OFListIterator(T) iterator = ItemList.begin();
+            OFLIST_TYPENAME OFListConstIterator(T) iterator = ItemList.begin();
             if (gotoItemPos(idx, iterator))
             {
                 ItemList.insert(iterator, 1, item);
@@ -204,7 +299,7 @@ template<class T> class DSRListOfItems
     OFCondition removeItem(const size_t idx)
     {
         OFCondition result = EC_IllegalParameter;
-        OFLIST_TYPENAME OFListIterator(T) iterator = ItemList.begin();
+        OFLIST_TYPENAME OFListConstIterator(T) iterator = ItemList.begin();
         if (gotoItemPos(idx, iterator))
         {
             ItemList.erase(iterator);
@@ -213,17 +308,12 @@ template<class T> class DSRListOfItems
         return result;
     }
 
-    /// default item which is returned in getItem() if the index is invalid.
-    /// This static member variable needs to be defined (not only declared)
-    /// in each derived class.
-    static const T EmptyItem;
-
 
   protected:
 
     /** goto specified item position
      ** @param  idx       index of the item to go to (starting from 1)
-     *  @param  iterator  list iterator storing the positition of the item
+     *  @param  iterator  list iterator storing the position of the item
      ** @return OFTrue if specified item was found, OFFalse otherwise
      */
     OFBool gotoItemPos(size_t idx,
@@ -243,7 +333,7 @@ template<class T> class DSRListOfItems
 
     /** goto specified item
      ** @param  item      value of the item to go to (starting from 1)
-     *  @param  iterator  list iterator storing the positition of the item
+     *  @param  iterator  list iterator storing the position of the item
      ** @return OFTrue if specified item was found, OFFalse otherwise
      */
     OFBool gotoItem(const T &item,
@@ -264,54 +354,3 @@ template<class T> class DSRListOfItems
 
 
 #endif
-
-
-/*
- *  CVS/RCS Log:
- *  $Log: dsrtlist.h,v $
- *  Revision 1.14  2010-10-14 13:16:33  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.13  2005-12-08 16:05:27  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.12  2003/08/07 12:55:13  joergr
- *  Updated documentation to get rid of doxygen warnings.
- *
- *  Revision 1.11  2003/07/11 13:44:00  joergr
- *  Added workaround to get rid of "implicit typename" warnings on gcc 3.x
- *  (introduced macro OFLIST_TYPENAME).
- *
- *  Revision 1.10  2003/06/04 12:40:01  meichel
- *  Replaced protected inheritance from OFList with protected aggregation
- *
- *  Revision 1.9  2003/06/03 10:16:44  meichel
- *  Renamed local variables to avoid name clashes with STL
- *
- *  Revision 1.8  2001/10/10 15:27:41  joergr
- *  Additonal adjustments for new OFCondition class.
- *
- *  Revision 1.7  2001/09/26 13:04:13  meichel
- *  Adapted dcmsr to class OFCondition
- *
- *  Revision 1.6  2001/05/07 16:13:24  joergr
- *  Updated CVS header.
- *
- *  Revision 1.5  2001/01/25 11:48:11  joergr
- *  Added method to insert item into a list.
- *
- *  Revision 1.4  2000/12/12 14:17:13  joergr
- *  Renamed method to avoid ambiguity reported by gcc 2.7.
- *
- *  Revision 1.3  2000/10/26 14:19:38  joergr
- *  Fixed bug: index in search routine was starting from 0 not 1.
- *
- *  Revision 1.2  2000/10/18 17:08:44  joergr
- *  Added doc++ comments.
- *
- *  Revision 1.1  2000/10/13 07:49:34  joergr
- *  Added new module 'dcmsr' providing access to DICOM structured reporting
- *  documents (supplement 23).  Doc++ documentation not yet completed.
- *
- *
- */

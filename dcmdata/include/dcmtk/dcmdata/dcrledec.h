@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2011, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: RLE decompressor
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:42 $
- *  CVS/RCS Revision: $Revision: 1.6 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCRLEDEC_H
@@ -35,7 +28,7 @@
 /** this class implements an RLE decompressor conforming to the DICOM standard.
  *  The class is loosely based on an implementation by Phil Norman <forrey@eh.org>
  */
-class DcmRLEDecoder
+class DCMTK_DCMDATA_EXPORT DcmRLEDecoder
 {
 public:
 
@@ -269,28 +262,3 @@ private:
 };
 
 #endif
-
-/*
- * CVS/RCS Log
- * $Log: dcrledec.h,v $
- * Revision 1.6  2010-10-14 13:15:42  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.5  2009-11-04 09:58:07  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.4  2005-12-08 16:28:36  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.3  2003/08/14 09:00:56  meichel
- * Adapted type casts to new-style typecast operators defined in ofcast.h
- *
- * Revision 1.2  2003/03/21 13:06:46  meichel
- * Minor code purifications for warnings reported by MSVC in Level 4
- *
- * Revision 1.1  2002/06/06 14:52:36  meichel
- * Initial release of the new RLE codec classes
- *   and the dcmcrle/dcmdrle tools in module dcmdata
- *
- *
- */

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1999-2010, OFFIS e.V.
+ *  Copyright (C) 1999-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose:
  *    classes: DVPSPresentationLUT
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:32 $
- *  CVS/RCS Revision: $Revision: 1.31 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -78,8 +71,8 @@ OFCondition DVPSPresentationLUT::read(DcmItem &dset, OFBool withSOPInstance)
 
   DcmCodeString presentationLUTShape(DCM_PresentationLUTShape);
   
-  READ_FROM_DATASET(DcmCodeString, presentationLUTShape)
-  if (withSOPInstance) { READ_FROM_DATASET(DcmUniqueIdentifier, sOPInstanceUID) }
+  READ_FROM_DATASET(DcmCodeString, EVR_CS, presentationLUTShape)
+  if (withSOPInstance) { READ_FROM_DATASET(DcmUniqueIdentifier, EVR_UI, sOPInstanceUID) }
   else sOPInstanceUID.clear();
   
   /* read Presentation LUT Sequence */
@@ -112,7 +105,7 @@ OFCondition DVPSPresentationLUT::read(DcmItem &dset, OFBool withSOPInstance)
          }
       } else {
         result=EC_TagNotFound;
-        DCMPSTAT_INFO("found Presentation LUT SQ with number of items != 1");
+        DCMPSTAT_WARN("found Presentation LUT SQ with number of items != 1");
       }
     }
   }
@@ -127,23 +120,23 @@ OFCondition DVPSPresentationLUT::read(DcmItem &dset, OFBool withSOPInstance)
     if (presentationLUTDescriptor.getLength() == 0)
     {
       result=EC_IllegalCall;
-      DCMPSTAT_INFO("presentationLUTShape and presentationLUTDescriptor absent or empty");
+      DCMPSTAT_WARN("presentationLUTShape and presentationLUTDescriptor absent or empty");
     }
     else if (presentationLUTDescriptor.getVM() != 3)
     {
       result=EC_IllegalCall;
-      DCMPSTAT_INFO("presentationLUTDescriptor present but VM != 3 in presentation state");
+      DCMPSTAT_WARN("presentationLUTDescriptor present but VM != 3 in presentation state");
     }
     if (presentationLUTData.getLength() == 0)
     {
       result=EC_IllegalCall;
-      DCMPSTAT_INFO("presentationLUTShape and presentationLUTData absent or empty");
+      DCMPSTAT_WARN("presentationLUTShape and presentationLUTData absent or empty");
     }
   } else {
     if (presentationLUTShape.getVM() != 1)
     {
       result=EC_IllegalCall;
-      DCMPSTAT_INFO("presentationLUTShape present but VM != 1");
+      DCMPSTAT_WARN("presentationLUTShape present but VM != 1");
     } else {
       // check presentation LUT shape
       aString.clear();
@@ -154,7 +147,7 @@ OFCondition DVPSPresentationLUT::read(DcmItem &dset, OFBool withSOPInstance)
       else
       {
         result=EC_IllegalCall;
-        DCMPSTAT_INFO("unknown presentationLUTShape keyword: " << aString);
+        DCMPSTAT_WARN("unknown presentationLUTShape keyword: " << aString);
       }
     }
   }
@@ -164,12 +157,12 @@ OFCondition DVPSPresentationLUT::read(DcmItem &dset, OFBool withSOPInstance)
     if (sOPInstanceUID.getLength() == 0)
     {
       result=EC_IllegalCall;
-      DCMPSTAT_INFO("sOPInstanceUID absent in Presentation LUT Content Sequence");
+      DCMPSTAT_WARN("sOPInstanceUID absent in Presentation LUT Content Sequence");
     }
     else if (sOPInstanceUID.getVM() != 1)
     {
       result=EC_IllegalCall;
-      DCMPSTAT_INFO("sOPInstanceUID VM != 1 in Presentation LUT Content Sequence");
+      DCMPSTAT_WARN("sOPInstanceUID VM != 1 in Presentation LUT Content Sequence");
     }
   }
   
@@ -379,7 +372,7 @@ OFBool DVPSPresentationLUT::printSCPCreate(
   
   if ((rqDataset==NULL)||(EC_Normal != read(*rqDataset, OFFalse)))
   {
-    DCMPSTAT_INFO("cannot create Presentation LUT: attribute list error.");
+    DCMPSTAT_WARN("cannot create Presentation LUT: attribute list error.");
     rsp.msg.NCreateRSP.DimseStatus = STATUS_N_NoSuchAttribute;
     result = OFFalse;
   }
@@ -405,7 +398,7 @@ OFBool DVPSPresentationLUT::printSCPCreate(
       else if (currentTag == DCM_PresentationLUTSequence) /* OK */ ;
       else
       {
-        DCMPSTAT_INFO("cannot create Presentation LUT: unsupported attribute received:" << OFendl
+        DCMPSTAT_WARN("cannot create Presentation LUT: unsupported attribute received:" << OFendl
             << DcmObject::PrintHelper(*stack.top(), DCMTypes::PF_shortenLongTagValues));
         rsp.msg.NCreateRSP.DimseStatus = STATUS_N_NoSuchAttribute;
         result = OFFalse;
@@ -432,7 +425,7 @@ OFBool DVPSPresentationLUT::printSCPCreate(
     }
     if (!matches)
     {
-      DCMPSTAT_INFO("cannot create Presentation LUT: Mismatch between LUT entries and image pixel depth.");
+      DCMPSTAT_WARN("cannot create Presentation LUT: Mismatch between LUT entries and image pixel depth.");
       rsp.msg.NCreateRSP.DimseStatus = STATUS_N_NoSuchAttribute;
       result = OFFalse;
     }
@@ -460,111 +453,3 @@ OFBool DVPSPresentationLUT::printSCPCreate(
   }
   return result;
 }
-
-/*
- *  $Log: dvpspl.cc,v $
- *  Revision 1.31  2010-10-14 13:14:32  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.30  2009-11-24 14:12:59  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.29  2009-09-30 10:42:38  uli
- *  Make dcmpstat's include headers self-sufficient by including all
- *  needed headers directly and stop using dctk.h
- *
- *  Revision 1.28  2006-08-15 16:57:02  meichel
- *  Updated the code in module dcmpstat to correctly compile when
- *    all standard C++ classes remain in namespace std.
- *
- *  Revision 1.27  2005/12/08 15:46:38  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.26  2004/02/04 15:57:49  joergr
- *  Removed acknowledgements with e-mail addresses from CVS log.
- *
- *  Revision 1.25  2003/08/27 14:59:08  meichel
- *  Moved all methods of class DVPSPresentationLUT that depend on module dcmimgle
- *    into a separate implementation file
- *
- *  Revision 1.24  2003/03/12 17:34:22  meichel
- *  Updated DcmObject::print() flags
- *
- *  Revision 1.23  2001/11/28 13:56:58  joergr
- *  Check return value of DcmItem::insert() statements where appropriate to
- *  avoid memory leaks when insert procedure fails.
- *
- *  Revision 1.22  2001/09/26 15:36:29  meichel
- *  Adapted dcmpstat to class OFCondition
- *
- *  Revision 1.21  2001/06/01 15:50:34  meichel
- *  Updated copyright header
- *
- *  Revision 1.20  2001/05/25 10:07:57  meichel
- *  Corrected some DIMSE error status codes for Print SCP
- *
- *  Revision 1.19  2000/09/06 08:55:38  meichel
- *  Updated Print SCP to accept and silently ignore group length attributes.
- *
- *  Revision 1.18  2000/07/11 14:53:06  joergr
- *  Corrected rendering of presentation LUT shape LIN OD.
- *
- *  Revision 1.17  2000/07/07 14:15:14  joergr
- *  Added support for LIN OD presentation LUT shape.
- *
- *  Revision 1.16  2000/07/07 13:39:50  joergr
- *  Added support for LIN OD presentation LUT shape.
- *
- *  Revision 1.15  2000/06/09 10:15:36  joergr
- *  Added support for rendering inverse presentation LUT into print bitmaps.
- *
- *  Revision 1.14  2000/06/08 10:44:36  meichel
- *  Implemented Referenced Presentation LUT Sequence on Basic Film Session level.
- *    Empty film boxes (pages) are not written to file anymore.
- *
- *  Revision 1.13  2000/06/07 14:27:13  joergr
- *  Added support for rendering "hardcopy" and "softcopy" presentation LUTs.
- *
- *  Revision 1.12  2000/06/07 13:17:07  meichel
- *  now using DIMSE status constants and log facilities defined in dcmnet
- *
- *  Revision 1.11  2000/06/02 16:01:03  meichel
- *  Adapted all dcmpstat classes to use OFConsole for log and error output
- *
- *  Revision 1.10  2000/05/31 12:58:15  meichel
- *  Added initial Print SCP support
- *
- *  Revision 1.9  2000/03/08 16:29:07  meichel
- *  Updated copyright header.
- *
- *  Revision 1.8  2000/03/03 14:14:02  meichel
- *  Implemented library support for redirecting error messages into memory
- *    instead of printing them to stdout/stderr for GUI applications.
- *
- *  Revision 1.7  1999/11/24 15:15:05  joergr
- *  Replaced call of method invertTable() by mirrorTable() to invert a
- *  presentation LUT.
- *
- *  Revision 1.6  1999/10/20 10:55:19  joergr
- *  Enhanced method invertTable to distinguish between copy of LUT data and
- *  original (referenced) LUT data.
- *
- *  Revision 1.5  1999/10/07 17:22:00  meichel
- *  Reworked management of Presentation LUTs in order to create tighter
- *    coupling between Softcopy and Print.
- *
- *  Revision 1.4  1999/09/24 15:24:07  meichel
- *  Print spooler (dcmprtsv) now logs diagnostic messages in log files
- *    when operating in spool mode.
- *
- *  Revision 1.3  1999/09/24 13:22:07  joergr
- *  Corrected bug writing inverse Presentation LUT Shape.
- *
- *  Revision 1.2  1999/09/10 07:32:43  thiel
- *  Added Presentation LUT Shape LIN OD
- *
- *  Revision 1.1  1999/07/30 13:34:57  meichel
- *  Added new classes managing Stored Print objects
- *
- *
- */

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2010, OFFIS e.V.
+ *  Copyright (C) 1997-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Marco Eichelberg
  *
  *  Purpose: singleton class that registers encoders for all supported JPEG processes.
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:17 $
- *  CVS/RCS Revision: $Revision: 1.9 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -44,7 +37,7 @@ class DJEncoderSpectralSelection;
 
 /** singleton class that registers encoders for all supported JPEG processes.
  */
-class DJEncoderRegistration
+class DCMTK_DCMJPEG_EXPORT DJEncoderRegistration
 {
 public:
 
@@ -58,9 +51,9 @@ public:
    *  @param pForcedBitDepth forced bit depth for image compression, 0 (auto) or 8/12/16
    *  @param pFragmentSize maximum fragment size (in kbytes) for compression, 0 for unlimited.
    *  @param pCreateOffsetTable create offset table during image compression?
-   *  @param pSampleFactors subsampling mode for color image compression
+   *  @param pSampleFactors subsampling mode for lossy YCbCr color image compression
    *  @param pWriteYBR422 flag indicating whether a compressed YBR color stream should
-   *    be marked as YBR_FULL or YBR_FULL_422 on DICOM level
+   *    be marked as YBR_FULL_422 (if true) or YBR_FULL (if false) on DICOM level
    *  @param pConvertToSC flag indicating whether image should be converted to
    *    Secondary Capture upon compression
    *  @param pWindowType mode for VOI transformation of monochrome images
@@ -86,8 +79,8 @@ public:
     int pForcedBitDepth = 0,
     Uint32 pFragmentSize = 0,
     OFBool pCreateOffsetTable = OFTrue,
-    E_SubSampling pSampleFactors = ESS_444,
-    OFBool pWriteYBR422 = OFFalse,
+    E_SubSampling pSampleFactors = ESS_422,
+    OFBool pWriteYBR422 = OFTrue,
     OFBool pConvertToSC = OFFalse,
     unsigned long pWindowType = 0,
     unsigned long pWindowParameter = 0,
@@ -139,42 +132,3 @@ private:
 };
 
 #endif
-
-/*
- * CVS/RCS Log
- * $Log: djencode.h,v $
- * Revision 1.9  2010-10-14 13:17:17  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.8  2009-10-07 12:44:33  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.7  2008-04-30 12:45:52  meichel
- * DJEncoderRegistration::registerCodecs now by default enables the
- *   true lossless codec instead of pseudo-lossless.
- *
- * Revision 1.6  2005/12/08 16:59:32  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.5  2005/11/29 15:57:05  onken
- * Added commandline options --accept-acr-nema and --accept-palettes
- * (same as in dcm2pnm) to dcmcjpeg and extended dcmjpeg to support
- * these options. Thanks to Gilles Mevel for suggestion.
- *
- * Revision 1.3  2005/11/29 08:50:34  onken
- * Added support for "true" lossless compression in dcmjpeg, that doesn't
- *   use dcmimage classes, but compresses raw pixel data (8 and 16 bit) to
- *   avoid losses in quality caused by color space conversions or modality
- *   transformations etc.
- * Corresponding commandline option in dcmcjpeg (new default)
- *
- * Revision 1.2  2001/11/19 15:13:29  meichel
- * Introduced verbose mode in module dcmjpeg. If enabled, warning
- *   messages from the IJG library are printed on ofConsole, otherwise
- *   the library remains quiet.
- *
- * Revision 1.1  2001/11/13 15:56:27  meichel
- * Initial release of module dcmjpeg
- *
- *
- */

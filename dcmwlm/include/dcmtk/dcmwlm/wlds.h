@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1996-2010, OFFIS e.V.
+ *  Copyright (C) 1996-2019, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,31 +17,30 @@
  *
  *  Purpose: (Partially) abstract class for connecting to an arbitrary data source.
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:38 $
- *  CVS/RCS Revision: $Revision: 1.28 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef WlmDataSource_h
 #define WlmDataSource_h
+
+#define WLM_CALLING_AETITLE_PLACEHOLDER "#a"
+#define WLM_CALLED_AETITLE_PLACEHOLDER "#c"
+#define WLM_TIMESTAMP_PLACEHOLDER "#t"
+#define WLM_PATIENT_ID_PLACEHOLDER "#p"
+#define WLM_PROCESS_ID_PLACEHOLDER "#i"
 
 #include "dcmtk/config/osconfig.h"
 #include "dcmtk/dcmwlm/wltypdef.h"
 #include "dcmtk/dcmdata/dcdatset.h"
 #include "dcmtk/oflog/oflog.h"
 
-OFLogger DCM_dcmwlmGetLogger();
+extern DCMTK_DCMWLM_EXPORT OFLogger DCM_dcmwlmLogger;
 
-#define DCMWLM_TRACE(msg) OFLOG_TRACE(DCM_dcmwlmGetLogger(), msg)
-#define DCMWLM_DEBUG(msg) OFLOG_DEBUG(DCM_dcmwlmGetLogger(), msg)
-#define DCMWLM_INFO(msg)  OFLOG_INFO(DCM_dcmwlmGetLogger(), msg)
-#define DCMWLM_WARN(msg)  OFLOG_WARN(DCM_dcmwlmGetLogger(), msg)
-#define DCMWLM_ERROR(msg) OFLOG_ERROR(DCM_dcmwlmGetLogger(), msg)
-#define DCMWLM_FATAL(msg) OFLOG_FATAL(DCM_dcmwlmGetLogger(), msg)
+#define DCMWLM_TRACE(msg) OFLOG_TRACE(DCM_dcmwlmLogger, msg)
+#define DCMWLM_DEBUG(msg) OFLOG_DEBUG(DCM_dcmwlmLogger, msg)
+#define DCMWLM_INFO(msg)  OFLOG_INFO(DCM_dcmwlmLogger, msg)
+#define DCMWLM_WARN(msg)  OFLOG_WARN(DCM_dcmwlmLogger, msg)
+#define DCMWLM_ERROR(msg) OFLOG_ERROR(DCM_dcmwlmLogger, msg)
+#define DCMWLM_FATAL(msg) OFLOG_FATAL(DCM_dcmwlmLogger, msg)
 
 class DcmAttributeTag;
 class DcmLongString;
@@ -49,12 +48,14 @@ class DcmLongString;
 /** This class encapsulates data structures and operations for connecting to an arbitrary
  *  data source in the framework of the DICOM basic worklist management service.
  */
-class WlmDataSource
+class DCMTK_DCMWLM_EXPORT WlmDataSource
 {
   protected:
 
     /// indicates if the application shall fail on an invalid C-Find RQ message
     OFBool failOnInvalidQuery;
+    /// calling AE Title
+    OFString callingApplicationEntityTitle;
     /// called AE title
     OFString calledApplicationEntityTitle;
     /// the search mask which is contained in the C-Find RQ message
@@ -171,13 +172,15 @@ class WlmDataSource
        *     > DCM_ScheduledProcedureStepEndDate                  (0040,0004)  DA  O  3  (from the Scheduled Procedure Step Module)
        *     > DCM_ScheduledProcedureStepEndTime                  (0040,0005)  TM  O  3  (from the Scheduled Procedure Step Module)
        *     > DCM_ScheduledProtocolCodeSequence                  (0040,0008)  SQ  O  1C
-       *     >  > DCM_CodeValue                                   (0008,0100)  SH  O  1C
-       *     >  > DCM_CodingSchemeVersion                         (0008,0103)  SH  O  3
-       *     >  > DCM_CodingSchemeDesignator                      (0008,0102)  SH  O  1C
-       *     >  > DCM_CodeMeaning                                 (0008,0104)  LO  O  3
+       *     > > DCM_CodeValue                                    (0008,0100)  SH  O  1C
+       *     > > DCM_CodingSchemeVersion                          (0008,0103)  SH  O  3
+       *     > > DCM_CodingSchemeDesignator                       (0008,0102)  SH  O  1C
+       *     > > DCM_CodeMeaning                                  (0008,0104)  LO  O  3
        *    DCM_RequestedProcedureID                              (0040,1001)  SH  O  1
        *    DCM_RequestedProcedureDescription                     (0032,1060)  LO  O  1
        *    DCM_StudyInstanceUID                                  (0020,000d)  UI  O  1
+       *    DCM_StudyDate                                         (0008,0020)  DA  O  3
+       *    DCM_StudyTime                                         (0008,0030)  TM  O  3
        *    DCM_ReferencedStudySequence                           (0008,1110)  SQ  O  2
        *     > DCM_ReferencedSOPClassUID                          (0008,1150)  UI  O  1
        *     > DCM_ReferencedSOPInstanceUID                       (0008,1155)  UI  O  1
@@ -193,6 +196,7 @@ class WlmDataSource
        *     > DCM_ReferencedSOPInstanceUID                       (0008,1155)  UI  O  2
        *    DCM_PatientName                                       (0010,0010)  PN  R  1
        *    DCM_PatientID                                         (0010,0020)  LO  R  1
+       *    DCM_IssuerOfPatientID                                 (0010,0021)  LO  O  3  (from the Patient Identification Module)
        *    DCM_PatientBirthDate                                  (0010,0030)  DA  O  2
        *    DCM_PatientSex                                        (0010,0040)  CS  O  2
        *    DCM_PatientWeight                                     (0010,1030)  DS  O  2
@@ -205,7 +209,7 @@ class WlmDataSource
        *    DCM_NamesOfIntendedRecipientsOfResults                (0040,1010)  PN  O  3  (from the Requested Procedure Module)
        *    DCM_InstitutionName                                   (0008,0080)  LO  O  3  (from the Visit Identification Module)
        *    DCM_AdmittingDiagnosesDescription                     (0008,1080)  LO  O  3  (from the Visit Admission Module)
-       *    DCM_OtherPatientIDs                                   (0010,1000)  LO  O  3  (from the Patient Identification Module)
+       *    DCM_RETIRED_OtherPatientIDs                           (0010,1000)  LO  O  3  (from the Patient Identification Module)
        *    DCM_PatientSize                                       (0010,1020)  DS  O  3  (from the Patient Demographic Module)
        *    DCM_EthnicGroup                                       (0010,2160)  SH  O  3  (from the Patient Demographic Module)
        *    DCM_PatientComments                                   (0010,4000)  LT  O  3  (from the Patient Demographic Module)
@@ -302,42 +306,6 @@ class WlmDataSource
        */
     OFBool ContainsOnlyValidCharacters( const char *s, const char *charset );
 
-      /** This function checks if the given value is a valid date or date range.
-       *  @param value The value which shall be checked.
-       *  @return OFTrue in case the given value is a valid date or date range, OFFalse otherwise.
-       */
-    OFBool IsValidDateOrDateRange( const OFString& value );
-
-      /** This function checks if the given date value is valid.
-       *  According to the 2001 DICOM standard, part 5, Table 6.2-1, a date
-       *  value is either in format "yyyymmdd" or in format "yyyy.mm.dd",
-       *  so that e.g. "19840822" represents August 22, 1984.
-       *  @param value The value which shall be checked.
-       *  @return OFTrue in case the Date is valid, OFFalse otherwise.
-       */
-    OFBool IsValidDate( const OFString& value );
-
-      /** This function checks if the given value is a valid time or time range.
-       *  @param value The value which shall be checked.
-       *  @return OFTrue in case the given value is a valid time or time range, OFFalse otherwise.
-       */
-    OFBool IsValidTimeOrTimeRange( const OFString& value );
-
-      /** This function checks if the given time value is valid.
-       *  According to the 2001 DICOM standard, part 5, Table 6.2-1, a time
-       *  value is either in format "hhmmss.fracxx" or "hh:mm:ss.fracxx" where
-       *  - hh represents the hour (0-23)
-       *  - mm represents the minutes (0-59)
-       *  - ss represents the seconds (0-59)
-       *  - fracxx represents the fraction of a second in millionths of seconds (000000-999999)
-       *  Note that one or more of the components mm, ss, or fracxx may be missing as
-       *  long as every component to the right of a missing component is also missing.
-       *  If fracxx is missing, the "." character in front of fracxx is also missing.
-       *  @param value The value which shall be checked.
-       *  @return OFTrue in case the time is valid, OFFalse otherwise.
-       */
-    OFBool IsValidTime( const OFString& value );
-
       /** This function returns the value of the given DICOM string element (attribute)
        *  in the parameter resultVal and returns OFTrue if successful.
        *  If the element does not refer to a string attribute or contains an empty value,
@@ -377,19 +345,19 @@ class WlmDataSource
     virtual ~WlmDataSource();
 
       /** Connects to the data source.
-       * @return Indicates if the connection was established succesfully.
+       * @return Indicates if the connection was established successfully.
        */
     virtual OFCondition ConnectToDataSource() = 0;
-
-      /** Disconnects from the data source.
-       * @return Indicates if the disconnection was completed succesfully.
-       */
-    virtual OFCondition DisconnectFromDataSource() = 0;
 
       /** Set value in member variable.
        *  @param value The value to set.
        */
     void SetCalledApplicationEntityTitle( const OFString& value );
+
+      /** Disconnects from the data source.
+       * @return Indicates if the disconnection was completed successfully.
+       */
+    virtual OFCondition DisconnectFromDataSource() = 0;
 
       /** Set value in member variable.
        *  @param value The value to set.
@@ -484,9 +452,13 @@ class WlmDataSource
     virtual void SetDatabaseType( WlmDatabaseType /*value*/ ) {}
 
       /** Set value in a member variable in a derived class.
-       *  @param int The value to set.
+       *  @param value The value to set.
        */
-    virtual void SetSerialNumber( const int /*value*/ ) {}
+#ifdef DOXYGEN
+    virtual void SetSerialNumber( const int value ) { }
+#else
+    virtual void SetSerialNumber( const int /* value */ ) { }
+#endif
 
       /** Set value in a member variable in a derived class.
        *  @param int The value to set.
@@ -523,123 +495,3 @@ class WlmDataSource
 };
 
 #endif
-
-/*
-** CVS Log
-** $Log: wlds.h,v $
-** Revision 1.28  2010-10-14 13:16:38  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.27  2010-08-09 13:29:38  joergr
-** Updated data dictionary to 2009 edition of the DICOM standard. From now on,
-** the official "keyword" is used for the attribute name which results in a
-** number of minor changes (e.g. "PatientsName" is now called "PatientName").
-**
-** Revision 1.26  2009-11-24 10:40:01  uli
-** Switched to logging mechanism provided by the "new" oflog module.
-**
-** Revision 1.25  2009-09-30 08:40:34  uli
-** Make dcmwlm's include headers self-sufficient by including all
-** needed headers directly.
-**
-** Revision 1.24  2006-12-15 14:49:21  onken
-** Removed excessive use char* and C-array in favour of OFString and
-** OFList. Simplified some implementation details.
-**
-** Revision 1.23  2005/12/08 16:05:40  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.22  2005/09/23 12:56:40  wilkens
-** Added attribute PatientsBirthDate as a matching key attribute to wlmscpfs.
-** Thanks to Andre M. Descombes <andre@descombes.info> for the code template.
-**
-** Revision 1.21  2005/05/04 11:34:31  wilkens
-** Added two command line options --enable-file-reject (default) and
-** --disable-file-reject to wlmscpfs: these options can be used to enable or
-** disable a file rejection mechanism which makes sure only complete worklist files
-** will be used during the matching process. A worklist file is considered to be
-** complete if it contains all necessary type 1 information which the SCP might
-** have to return to an SCU in a C-Find response message.
-**
-** Revision 1.20  2004/04/06 18:19:28  joergr
-** Updated data dictionary, UIDs and transfer syntaxes for the latest Final Text
-** Supplements (42 and 47) and Correction Proposals (CP 25).
-**
-** Revision 1.19  2004/01/15 12:01:24  wilkens
-** Added function to Worklist Management Data Source Base Class. This function
-** is needed in the private part of this toolkit.
-**
-** Revision 1.18  2004/01/07 09:52:18  wilkens
-** Fixed typo in comment.
-**
-** Revision 1.17  2004/01/07 08:32:28  wilkens
-** Added new sequence type return key attributes to wlmscpfs. Fixed bug that for
-** equally named attributes in sequences always the same value will be returned.
-** Added functionality that also more than one item will be returned in sequence
-** type return key attributes.
-**
-** Revision 1.16  2004/01/02 13:56:14  wilkens
-** Integrated new return key attributes into wlmscpfs and updated function that
-** checks integrity of matching key attribute values (added support for new VR).
-**
-** Revision 1.15  2003/12/23 13:04:36  wilkens
-** Integrated new matching key attributes into wlmscpfs.
-**
-** Revision 1.14  2003/12/11 10:45:33  wilkens
-** Added function to Worklist Management Data Source Base Class. This function
-** is needed in the private part of this toolkit.
-**
-** Revision 1.13  2003/08/21 13:38:23  wilkens
-** Moved declaration and initialization of member variables matchingDatasets and
-** numOfMatchingDatasets to base class.
-** Got rid of superfluous member variable objlist and of superfluous function
-** ClearObjList().
-**
-** Revision 1.12  2003/07/02 09:17:55  wilkens
-** Updated documentation to get rid of doxygen warnings.
-**
-** Revision 1.11  2003/02/17 12:02:03  wilkens
-** Made some minor modifications to be able to modify a special variant of the
-** worklist SCP implementation (wlmscpki).
-**
-** Revision 1.10  2002/12/16 11:08:33  wilkens
-** Added missing #include "osconfig.h" to certain files.
-**
-** Revision 1.9  2002/08/12 10:56:07  wilkens
-** Made some modifications in in order to be able to create a new application
-** which contains both wlmscpdb and ppsscpdb and another application which
-** contains both wlmscpfs and ppsscpfs.
-**
-** Revision 1.8  2002/07/17 13:10:36  wilkens
-** Corrected some minor logical errors in the wlmscpdb sources and completely
-** updated the wlmscpfs so that it does not use the original wlistctn sources
-** any more but standard wlm sources which are now used by all three variants
-** of wlmscps.
-**
-** Revision 1.7  2002/07/01 14:13:56  wilkens
-** Some more corrections to get rid of msvc6's warnings.
-**
-** Revision 1.6  2002/06/10 11:25:05  wilkens
-** Made some corrections to keep gcc 2.95.3 quiet.
-**
-** Revision 1.5  2002/05/08 13:20:51  wilkens
-** Added new command line option -nse to wlmscpki and wlmscpdb.
-**
-** Revision 1.4  2002/04/18 14:20:08  wilkens
-** Modified Makefiles. Updated latest changes again. These are the latest
-** sources. Added configure file.
-**
-** Revision 1.3  2002/01/08 17:45:34  joergr
-** Reformatted source files (replaced Windows newlines by Unix ones, replaced
-** tabulator characters by spaces, etc.)
-**
-** Revision 1.2  2002/01/08 16:50:12  joergr
-** Added preliminary database support using OTL interface library (modified by
-** MC/JR on 2001-12-21).
-**
-** Revision 1.1  2002/01/08 16:30:59  joergr
-** Added new module "dcmwlm" developed by Thomas Wilkens (initial release for
-** Windows, dated 2001-12-20).
-**
-**
-*/

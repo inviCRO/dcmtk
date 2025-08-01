@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2011, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose: DcmInputBufferStream and related classes,
  *    implements input to blocks of memory as needed in the dcmnet module.
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:41 $
- *  CVS/RCS Revision: $Revision: 1.6 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCISTRMB_H
@@ -37,7 +30,7 @@
 /** producer class that reads data from a buffer provided by the caller.
  *  Used for DICOM network communication.
  */
-class DcmBufferProducer: public DcmProducer
+class DCMTK_DCMDATA_EXPORT DcmBufferProducer: public DcmProducer
 {
 public:
   /** constructor
@@ -150,7 +143,7 @@ private:
 /** input stream that reads from a buffer of fixed length
  *  which must be provided by the caller.
  */
-class DcmInputBufferStream: public DcmInputStream
+class DCMTK_DCMDATA_EXPORT DcmInputBufferStream: public DcmInputStream
 {
 public:
   /** constructor
@@ -206,29 +199,3 @@ private:
 
 
 #endif
-
-/*
- * CVS/RCS Log:
- * $Log: dcistrmb.h,v $
- * Revision 1.6  2010-10-14 13:15:41  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.5  2008-06-23 12:09:13  joergr
- * Fixed inconsistencies in Doxygen API documentation.
- *
- * Revision 1.4  2007/02/19 15:45:41  meichel
- * Class DcmInputStream and related classes are now safe for use with
- *   large files (2 GBytes or more) if supported by compiler and operating system.
- *
- * Revision 1.3  2005/12/08 16:28:16  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.2  2003/06/12 13:34:36  joergr
- * Fixed inconsistent API documentation reported by Doxygen.
- *
- * Revision 1.1  2002/08/27 16:55:33  meichel
- * Initial release of new DICOM I/O stream classes that add support for stream
- *   compression (deflated little endian explicit VR transfer syntax)
- *
- *
- */

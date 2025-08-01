@@ -21,7 +21,8 @@ LOCALINCLUDES = -I$(dcmnetdir)/include -I$(dcmdatadir)/include \
 	-I$(oflogdir)/include -I$(ofstddir)/include
 LIBDIRS = -L$(top_srcdir)/libsrc -L$(dcmnetdir)/libsrc -L$(dcmdatadir)/libsrc \
 	-L$(oflogdir)/libsrc -L$(ofstddir)/libsrc
-LOCALLIBS = -ldcmwlm -ldcmnet -ldcmdata -loflog -lofstd $(ZLIBLIBS) $(TCPWRAPPERLIBS)
+LOCALLIBS = -ldcmwlm -ldcmnet -ldcmdata -loflog -lofstd $(ZLIBLIBS) \
+	$(TCPWRAPPERLIBS) $(CHARCONVLIBS) $(MATHLIBS)
 
 objs = wltest.o
 progs = wltest
@@ -30,8 +31,12 @@ progs = wltest
 all: $(progs)
 
 wltest: $(objs)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(LIBDIRS) -o $@ $(objs) $(LOCALLIBS) $(MATHLIBS) $(LIBS)
+	$(CXX) $(CXXFLAGS) $(LIBDIRS) $(LDFLAGS) -o $@ $(objs) $(LOCALLIBS) $(LIBS)
 
+
+check:
+
+check-exhaustive:
 
 install: all
 

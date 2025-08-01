@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2001-2010, OFFIS e.V.
+ *  Copyright (C) 2001-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,25 +17,9 @@
  *
  *  Purpose: Decompress DICOM file
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:13:38 $
- *  CVS/RCS Revision: $Revision: 1.26 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
-
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CSTDIO
-#define INCLUDE_CSTRING
-#include "dcmtk/ofstd/ofstdinc.h"
-
-#ifdef HAVE_GUSI_H
-#include <GUSI.h>
-#endif
 
 #include "dcmtk/dcmdata/dctk.h"
 #include "dcmtk/dcmdata/cmdlnarg.h"
@@ -64,16 +48,11 @@ static char rcsid[] = "$dcmtk: " OFFIS_CONSOLE_APPLICATION " v"
 int main(int argc, char *argv[])
 {
 
-#ifdef HAVE_GUSI_H
-  GUSISetup(GUSIwithSIOUXSockets);
-  GUSISetup(GUSIwithInternetSockets);
-#endif
-
   const char *opt_ifname = NULL;
   const char *opt_ofname = NULL;
 
   E_FileReadMode opt_readMode = ERM_autoDetect;
-  E_FileWriteMode opt_writeMode = EWM_fileformat;
+  E_FileWriteMode opt_writeMode = EWM_createNewMeta;
   E_TransferSyntax opt_oxfer = EXS_LittleEndianExplicit;
   E_GrpLenEncoding opt_oglenc = EGL_recalcGL;
   E_EncodingType opt_oenctype = EET_ExplicitLength;
@@ -87,6 +66,8 @@ int main(int argc, char *argv[])
   E_UIDCreation opt_uidcreation = EUC_default;
   E_PlanarConfiguration opt_planarconfig = EPC_default;
   OFBool opt_predictor6WorkaroundEnable = OFFalse;
+  OFBool opt_cornellWorkaroundEnable = OFFalse;
+  OFBool opt_forceSingleFragmentPerFrame = OFFalse;
 
   OFConsoleApplication app(OFFIS_CONSOLE_APPLICATION, "Decode JPEG-compressed DICOM file", rcsid);
   OFCommandLine cmd;
@@ -114,7 +95,7 @@ int main(int argc, char *argv[])
       cmd.addOption("--conv-guess",          "+cg",    "convert to RGB if YCbCr is guessed by library");
       cmd.addOption("--conv-guess-lossy",    "+cgl",   "convert to RGB if lossy JPEG and YCbCr is\nguessed by the underlying JPEG library");
       cmd.addOption("--conv-always",         "+ca",    "always convert YCbCr to RGB");
-      cmd.addOption("--conv-never",          "+cn",    "never convert color space");
+      cmd.addOption("--conv-never",          "+cn",    "never convert YCbCr to RGB");
 
     cmd.addSubGroup("planar configuration:");
       cmd.addOption("--planar-auto",         "+pa",    "automatically determine planar configuration\nfrom SOP class and color space (default)");
@@ -127,6 +108,8 @@ int main(int argc, char *argv[])
 
     cmd.addSubGroup("workaround options for incorrect JPEG encodings:");
       cmd.addOption("--workaround-pred6",    "+w6",    "enable workaround for JPEG lossless images\nwith overflow in predictor 6");
+      cmd.addOption("--workaround-incpl",    "+wi",    "enable workaround for incomplete JPEG data");
+      cmd.addOption("--workaround-cornell",  "+wc",    "enable workaround for 16-bit JPEG lossless\nCornell images with Huffman table overflow");
 
   cmd.addGroup("output options:");
     cmd.addSubGroup("output file format:");
@@ -154,7 +137,7 @@ int main(int argc, char *argv[])
 
     /* evaluate command line */
     prepareCmdLineArgs(argc, argv, OFFIS_CONSOLE_APPLICATION);
-    if (app.parseCommandLine(cmd, argc, argv, OFCommandLine::PF_ExpandWildcards))
+    if (app.parseCommandLine(cmd, argc, argv))
     {
       /* check exclusive options first */
       if (cmd.hasExclusiveOption())
@@ -201,6 +184,8 @@ int main(int argc, char *argv[])
       cmd.endOptionBlock();
 
       if (cmd.findOption("--workaround-pred6")) opt_predictor6WorkaroundEnable = OFTrue;
+      if (cmd.findOption("--workaround-incpl")) opt_forceSingleFragmentPerFrame = OFTrue;
+      if (cmd.findOption("--workaround-cornell")) opt_cornellWorkaroundEnable = OFTrue;
 
       cmd.beginOptionBlock();
       if (cmd.findOption("--read-file"))
@@ -222,12 +207,12 @@ int main(int argc, char *argv[])
         // some kind of JPEG bitstream supported by the underlying library, the
         // decompression will work. So we simply choose one of the lossless
         // transfer syntaxes, because these support all bit depths up to 16.
-        opt_ixfer = EXS_JPEGProcess14TransferSyntax;
+        opt_ixfer = EXS_JPEGProcess14;
       }
       cmd.endOptionBlock();
 
       cmd.beginOptionBlock();
-      if (cmd.findOption("--write-file")) opt_writeMode = EWM_fileformat;
+      if (cmd.findOption("--write-file")) opt_writeMode = EWM_createNewMeta;
       if (cmd.findOption("--write-dataset")) opt_writeMode = EWM_dataset;
       cmd.endOptionBlock();
 
@@ -238,16 +223,8 @@ int main(int argc, char *argv[])
       cmd.endOptionBlock();
 
       cmd.beginOptionBlock();
-      if (cmd.findOption("--enable-new-vr"))
-      {
-        dcmEnableUnknownVRGeneration.set(OFTrue);
-        dcmEnableUnlimitedTextVRGeneration.set(OFTrue);
-      }
-      if (cmd.findOption("--disable-new-vr"))
-      {
-        dcmEnableUnknownVRGeneration.set(OFFalse);
-        dcmEnableUnlimitedTextVRGeneration.set(OFFalse);
-      }
+      if (cmd.findOption("--enable-new-vr")) dcmEnableGenerationOfNewVRs();
+      if (cmd.findOption("--disable-new-vr")) dcmDisableGenerationOfNewVRs();
       cmd.endOptionBlock();
 
       cmd.beginOptionBlock();
@@ -287,7 +264,9 @@ int main(int argc, char *argv[])
       opt_decompCSconversion,
       opt_uidcreation,
       opt_planarconfig,
-      opt_predictor6WorkaroundEnable);
+      opt_predictor6WorkaroundEnable,
+      opt_cornellWorkaroundEnable,
+      opt_forceSingleFragmentPerFrame);
 
     /* make sure data dictionary is loaded */
     if (!dcmDataDict.isDictionaryLoaded())
@@ -342,13 +321,9 @@ int main(int argc, char *argv[])
 
     OFLOG_INFO(dcmdjpegLogger, "creating output file " << opt_ofname);
 
-    // update file meta information with new SOP Instance UID
-    if ((opt_uidcreation == EUC_always) && (opt_writeMode == EWM_fileformat))
-        opt_writeMode = EWM_updateMeta;
-
     fileformat.loadAllDataIntoMemory();
     error = fileformat.saveFile(opt_ofname, opt_oxfer, opt_oenctype, opt_oglenc,
-        opt_opadenc, (Uint32) opt_filepad, (Uint32) opt_itempad, opt_writeMode);
+        opt_opadenc, OFstatic_cast(Uint32, opt_filepad), OFstatic_cast(Uint32, opt_itempad), opt_writeMode);
     if (error != EC_Normal)
     {
         OFLOG_FATAL(dcmdjpegLogger, error.text() << ": writing file: " <<  opt_ofname);
@@ -362,109 +337,3 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
-
-/*
- * CVS/RCS Log:
- * $Log: dcmdjpeg.cc,v $
- * Revision 1.26  2010-10-14 13:13:38  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.25  2010-03-24 15:05:32  joergr
- * Added new options for the color space conversion during decompression based
- * on the color model that is "guessed" by the underlying JPEG library (IJG).
- *
- * Revision 1.24  2009-10-07 12:44:33  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.23  2009-08-21 09:37:16  joergr
- * Only update file meta information if required (use new file write mode).
- *
- * Revision 1.22  2009-08-21 09:33:03  joergr
- * Added parameter 'writeMode' to save/write methods which allows for specifying
- * whether to write a dataset or fileformat as well as whether to update the
- * file meta information or to create a new file meta information header.
- * Use helper function checkDependence() and checkConflict() where appropriate.
- *
- * Revision 1.21  2009-08-05 10:30:00  joergr
- * Fixed various issues with syntax usage (e.g. layout and formatting).
- *
- * Revision 1.20  2009-04-21 14:07:14  joergr
- * Fixed minor inconsistencies in manpage / syntax usage.
- *
- * Revision 1.19  2009-03-19 12:11:24  joergr
- * Added more explicit message in case input transfer syntax is not supported.
- *
- * Revision 1.18  2008-09-25 14:49:45  joergr
- * Moved output of resource identifier in order to avoid printing the same
- * information twice.
- *
- * Revision 1.17  2008-09-25 13:58:28  joergr
- * Added support for printing the expanded command line arguments.
- * Always output the resource identifier of the command line tool in debug mode.
- *
- * Revision 1.16  2006/08/16 16:30:20  meichel
- * Updated all code in module dcmjpeg to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.15  2006/07/27 14:05:02  joergr
- * Changed parameter "exclusive" of method addOption() from type OFBool into an
- * integer parameter "flags". Prepended prefix "PF_" to parseLine() flags.
- * Option "--help" is no longer an exclusive option by default.
- *
- * Revision 1.14  2006/03/29 15:58:52  meichel
- * Added support for decompressing images with 16 bits/pixel compressed with
- *   a faulty lossless JPEG encoder that produces integer overflows in predictor 6.
- *
- * Revision 1.13  2005/12/08 15:43:21  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.12  2005/12/02 09:41:40  joergr
- * Added new command line option that checks whether a given file starts with a
- * valid DICOM meta header.
- *
- * Revision 1.11  2005/11/30 14:10:43  onken
- * Added hint concerning --convert-never option when color conversion fails
- *
- * Revision 1.10  2005/11/07 17:10:21  meichel
- * All tools that both read and write a DICOM file now call loadAllDataIntoMemory()
- *   to make sure they do not destroy a file when output = input.
- *
- * Revision 1.9  2005/05/26 14:35:07  meichel
- * Added option --read-dataset to dcmdjpeg that allows to decompress JPEG
- *   compressed DICOM objects that have been stored as dataset without meta-header.
- *   Such a thing should not exist since the transfer syntax cannot be reliably
- *   determined without meta-header, but unfortunately it does.
- *
- * Revision 1.8  2004/01/16 14:28:01  joergr
- * Updated copyright header.
- *
- * Revision 1.7  2002/11/27 15:39:56  meichel
- * Adapted module dcmjpeg to use of new header file ofstdinc.h
- *
- * Revision 1.6  2002/11/26 08:44:41  meichel
- * Replaced all includes for "zlib.h" with <zlib.h>
- *   to avoid inclusion of zlib.h in the makefile dependencies.
- *
- * Revision 1.5  2002/09/23 18:14:07  joergr
- * Added new command line option "--version" which prints the name and version
- * number of external libraries used (incl. preparation for future support of
- * 'config.guess' host identifiers).
- *
- * Revision 1.4  2002/08/20 12:20:58  meichel
- * Adapted code to new loadFile and saveFile methods, thus removing direct
- *   use of the DICOM stream classes.
- *
- * Revision 1.3  2002/07/10 12:26:02  meichel
- * Fixed memory leak in command line applications
- *
- * Revision 1.2  2001/11/19 15:13:22  meichel
- * Introduced verbose mode in module dcmjpeg. If enabled, warning
- *   messages from the IJG library are printed on ofConsole, otherwise
- *   the library remains quiet.
- *
- * Revision 1.1  2001/11/13 15:56:10  meichel
- * Initial release of module dcmjpeg
- *
- *
- */

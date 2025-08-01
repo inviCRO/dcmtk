@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2010, OFFIS e.V.
+ *  Copyright (C) 2002-2016, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: class DcmQuantColorTable
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:29 $
- *  CVS/RCS Revision: $Revision: 1.7 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -31,11 +24,11 @@
 #define DIQTCTAB_H
 
 #include "dcmtk/config/osconfig.h"
-#include "dcmtk/ofstd/oftypes.h"   /* for OFBool */
-#include "dcmtk/ofstd/ofcond.h"    /* for OFCondition */
+#include "dcmtk/ofstd/oftypes.h"      /* for OFBool */
+#include "dcmtk/ofstd/ofcond.h"       /* for OFCondition */
 #include "dcmtk/dcmimage/diqtpix.h"   /* for DcmQuantPixel */
 #include "dcmtk/dcmimage/diqthash.h"  /* for DcmQuantHistogramItem */
-#include "dcmtk/ofstd/ofstring.h"  /* for class OFString */
+#include "dcmtk/ofstd/ofstring.h"     /* for class OFString */
 
 
 class DicomImage;
@@ -45,7 +38,7 @@ class DcmItem;
 /** this class implements a color table that can either be
  *  a look-up table or an image color histogram.
  */
-class DcmQuantColorTable
+class DCMTK_DCMIMAGE_EXPORT DcmQuantColorTable
 {
 public:
 
@@ -169,13 +162,13 @@ public:
    */
   inline int computeIndex(const DcmQuantPixel& px) const
   {
-	int result = -1;
-    register int r2, g2, b2;
-    register long newdist;
-    register int r1 = OFstatic_cast(int, px.getRed());
-    register int g1 = OFstatic_cast(int, px.getGreen());
-    register int b1 = OFstatic_cast(int, px.getBlue());
-    register long dist = 2000000000;
+    int result = -1;
+    int r2, g2, b2;
+    long newdist;
+    int r1 = OFstatic_cast(int, px.getRed());
+    int g1 = OFstatic_cast(int, px.getGreen());
+    int b1 = OFstatic_cast(int, px.getBlue());
+    long dist = 2000000000;
     for (unsigned long i = 0; i < numColors; ++i)
     {
         r2 = r1 - OFstatic_cast(int, array[i]->getRed());
@@ -237,34 +230,3 @@ private:
 };
 
 #endif
-
-
-/*
- * CVS/RCS Log:
- * $Log: diqtctab.h,v $
- * Revision 1.7  2010-10-14 13:16:29  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.6  2005/12/08 16:01:45  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.5  2003/12/23 12:15:40  joergr
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- * Updated copyright header.
- *
- * Revision 1.4  2003/07/04 13:25:40  meichel
- * Replaced forward declarations for OFString with explicit includes,
- *   needed when compiling with HAVE_STD_STRING
- *
- * Revision 1.3  2003/06/12 15:09:41  joergr
- * Fixed inconsistent API documentation reported by Doxygen.
- *
- * Revision 1.2  2002/05/15 09:53:29  meichel
- * Minor corrections to avoid warnings on Sun CC 2.0.1
- *
- * Revision 1.1  2002/01/25 13:32:04  meichel
- * Initial release of new color quantization classes and
- *   the dcmquant tool in module dcmimage.
- *
- *
- */

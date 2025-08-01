@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2010, OFFIS e.V.
+ *  Copyright (C) 1997-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose:
  *          Defines a template list class with interfaces similar to the C++ Standard
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:50 $
- *  CVS/RCS Revision: $Revision: 1.26 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -48,12 +41,13 @@
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 #include "dcmtk/ofstd/oftypes.h"
 #include "dcmtk/ofstd/ofcast.h"
+#include "dcmtk/ofstd/ofdefine.h"
 
 #ifndef HAVE_CLASS_TEMPLATE
 #error Your C++ compiler cannot handle class templates:
 #endif
 
-#if defined(HAVE_STL) || defined(HAVE_STL_LIST)
+#ifdef HAVE_STL_LIST
 // It is possible to use the standard template library list class since the
 // interface is nearly identical.
 // Important: If you want to use the standard template library (STL), no
@@ -79,9 +73,14 @@
 
 #else
 
-#define INCLUDE_CASSERT
-#define INCLUDE_CSTDDEF
-#include "dcmtk/ofstd/ofstdinc.h"
+#ifdef HAVE_ITERATOR_HEADER
+#include <iterator>
+#endif
+
+// #define INCLUDE_CASSERT
+// #define INCLUDE_CSTDDEF
+// #include "dcmtk/ofstd/ofstdinc.h"
+#include <cassert>
 
 #define OFLIST_TYPENAME
 
@@ -95,7 +94,7 @@ END_EXTERN_C
 // OFListLinkBase, OFListLink and OFListBase are classes for internal
 // use only and shall not be used.
 
-/* non-template double linked list. Base class fo OFListLink.
+/* non-template double linked list. Base class of OFListLink.
  * Implicitly used by OFList, should not be called by users.
  */
 struct OFListLinkBase
@@ -115,7 +114,7 @@ struct OFListLinkBase
 /* non-template list. Base class fo OFList.
  * Implicitly used by OFList, should not be called by users.
  */
-class OFListBase
+class DCMTK_OFSTD_EXPORT OFListBase
 {
 protected:
     OFListLinkBase * afterLast;
@@ -181,6 +180,20 @@ protected:
      */
     OFIterator(OFListLinkBase * x) : node(x) { }
 public:
+
+    /// member typedef for T
+    typedef T value_type;
+
+    /// member typedef for T*
+    typedef T* pointer;
+
+    /// member typedef for T&
+    typedef T& reference;
+
+#ifdef HAVE_BIDIRECTIONAL_ITERATOR_CATEGORY
+    /// member typedef declaring the category
+    typedef STD_NAMESPACE bidirectional_iterator_tag iterator_category;
+#endif
 
     /** default constructor. Creates an iterator referencing nothing.
      *  In general, iterators should always be copy-constructed
@@ -363,11 +376,23 @@ public:
      */
     T& front() { return *begin(); }
 
+    /** returns a constant reference to the first element in the list.
+     *  May only be called if list is non-empty.
+     *  @return first element in list, by constant reference
+     */
+    const T& front() const { return *begin(); }
+
     /** returns a reference to the last element in the list.
      *  May only be called if list is non-empty.
      *  @return last element in list, by reference
      */
     T& back() { return *(--end()); }
+
+    /** returns a constant reference to the last element in the list.
+     *  May only be called if list is non-empty.
+     *  @return last element in list, by constant reference
+     */
+    const T& back() const { return *(--end()); }
 
     /** inserts before the first element of the list.
      *  @param x value from which the new list entry is copy constructed
@@ -400,7 +425,11 @@ public:
      */
     void insert(OFIterator<T> position, size_t n, const T& x)
     {
-      while(n--) OFListBase::base_insert(position.node, new OFListLink<T>(x));
+      while(n)
+      {
+        --n;
+        OFListBase::base_insert(position.node, new OFListLink<T>(x));
+      }
     }
 
     /** removes the element at the given position from the list.
@@ -480,11 +509,16 @@ public:
       }
     }
 
-private:
-
-	/** private undefined copy assignment operator
-	 */
-	OFList<T>& operator=(const OFList<T>& arg);
+    /** copy assignment operator
+     * @param arg the list to copy from
+     * @return *this
+     */
+    OFList<T>& operator=(const OFList<T>& arg)
+    {
+        clear();
+        copy(arg);
+        return *this;
+    }
 };
 
 
@@ -557,103 +591,3 @@ void OF_ListRemoveIf(OFList<T>& c, Predicate pred)
 #endif
 
 #endif
-
-/*
-** CVS/RCS Log:
-** $Log: oflist.h,v $
-** Revision 1.26  2010-10-14 13:15:50  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.25  2010-05-07 11:13:42  uli
-** Use OFTypename for OFLIST_TYPENAME.
-**
-** Revision 1.24  2009-08-19 11:55:45  meichel
-** Added additional includes needed for Sun Studio 11 on Solaris.
-**
-** Revision 1.23  2009-08-19 10:44:36  joergr
-** Added missing dereference operator.
-**
-** Revision 1.22  2005/12/08 16:05:58  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.21  2004/04/14 11:44:48  joergr
-** Replaced non-Unix newline characters.
-**
-** Revision 1.20  2003/08/07 11:44:55  joergr
-** Slightly modified header comments to conform to doxygen syntax.
-**
-** Revision 1.19  2003/07/11 13:46:14  joergr
-** Added workaround to get rid of "implicit typename" warnings on gcc 3.x
-** (introduced macro OFLIST_TYPENAME).
-**
-** Revision 1.18  2003/07/09 13:57:43  meichel
-** Adapted type casts to new-style typecast operators defined in ofcast.h
-**
-** Revision 1.17  2003/06/12 15:20:30  joergr
-** Slightly modified macro definitions to avoid potential parser errors (added
-** space character after '<' and before '>').
-**
-** Revision 1.16  2003/06/12 13:21:54  joergr
-** Introduced macro OFListConstIterator() to support STL const_iterators.
-**
-** Revision 1.15  2003/06/03 10:20:00  meichel
-** OFList now explicitly defined as std::list if std namespace present
-**
-** Revision 1.14  2002/11/27 11:23:05  meichel
-** Adapted module ofstd to use of new header file ofstdinc.h
-**
-** Revision 1.13  2001/08/23 16:05:52  meichel
-** Added private undefined copy assignment operators to avoid gcc warnings
-**
-** Revision 1.12  2001/06/01 15:51:34  meichel
-** Updated copyright header
-**
-** Revision 1.11  2000/10/10 12:01:21  meichel
-** Created/updated doc++ comments
-**
-** Revision 1.10  2000/03/08 16:36:02  meichel
-** Updated copyright header.
-**
-** Revision 1.9  1998/11/27 12:42:51  joergr
-** Added copyright message to source files and changed CVS header.
-**
-** Revision 1.8  1998/07/02 07:47:02  meichel
-** Some code purifications to avoid gcc 2.8.1 -Weffc++ warnings.
-**
-** Revision 1.7  1998/06/29 12:09:23  meichel
-** Removed some name clashes (e.g. local variable with same
-**   name as class member) to improve maintainability.
-**   Applied some code purifications proposed by the gcc 2.8.1 -Weffc++ option.
-**
-** Revision 1.6  1998/02/06 15:07:38  meichel
-** Removed many minor problems (name clashes, unreached code)
-**   reported by Sun CC4 with "+w" or Sun CC2.
-**
-** Revision 1.5  1997/11/10 16:31:19  meichel
-** Corrected bug possibly causing a memory leak in OFList.
-**   Added virtual destructors to classes OFListLinkBase and OFListLink.
-**
-** Revision 1.4  1997/09/11 15:43:15  hewett
-** Minor changes to eliminate warnings when compiled under the
-** Signus GnuWin32 envionment.  Changed order of initialisers
-** for OFListLink and OFStackLink.  Make ~OFLisBase and ~OFStackBase
-** virtual destructors.
-**
-** Revision 1.3  1997/07/24 13:11:00  andreas
-** - Removed Warnings from SUN CC 2.0.1
-**
-** Revision 1.2  1997/07/07 07:34:18  andreas
-** - Corrected destructor for OFListBase, now the dummy element is
-**   deleted.
-**
-** Revision 1.1  1997/07/02 11:51:14  andreas
-** - Preliminary release of the OFFIS Standard Library.
-**   In the future this library shall contain a subset of the
-**   ANSI C++ Library (Version 3) that works on a lot of different
-**   compilers. Additionally this library shall include classes and
-**   functions that are often used. All classes and functions begin
-**   with OF... This library is independent of the DICOM development and
-**   shall contain no DICOM specific stuff.
-**
-**
-*/

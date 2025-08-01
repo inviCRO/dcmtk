@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose:
  *    classes: SiPrivateKey
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:38 $
- *  CVS/RCS Revision: $Revision: 1.8 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"
@@ -32,12 +25,8 @@
 #ifdef WITH_OPENSSL
 
 #include "dcmtk/dcmsign/siprivat.h"
-#include "dcmtk/dcmsign/sirsa.h"
-#include "dcmtk/dcmsign/sidsa.h"
+#include "dcmtk/dcmsign/sipkey.h"
 #include "dcmtk/dcmsign/sicert.h"
-
-#define INCLUDE_CSTRING
-#include "dcmtk/ofstd/ofstdinc.h"
 
 BEGIN_EXTERN_C
 #include <openssl/evp.h>
@@ -45,6 +34,9 @@ BEGIN_EXTERN_C
 #include <openssl/pem.h>
 END_EXTERN_C
 
+#ifndef HAVE_OPENSSL_PROTOTYPE_EVP_PKEY_ID
+#define EVP_PKEY_id(key) key->type
+#endif
 
 /* buf     : buffer to write password into
  * size    : length of buffer in bytes
@@ -58,7 +50,7 @@ int SiPrivateKey_passwordCallback(char *buf, int size, int /* rwflag */, void *u
 {
   if (userdata == NULL) return -1;
   OFString *password = (OFString *)userdata;
-  int passwordSize = password->length();
+  int passwordSize = OFstatic_cast(int, password->length());
   if (passwordSize > size) passwordSize = size;
   strncpy(buf, password->c_str(), passwordSize);
   return passwordSize;
@@ -98,12 +90,12 @@ void SiPrivateKey::setPrivateKeyPasswdFromConsole()
 
 OFCondition SiPrivateKey::loadPrivateKey(const char *filename, int filetype)
 {
-  OFCondition result = SI_EC_CannotRead;  
+  OFCondition result = SI_EC_CannotRead;
   if (pkey) EVP_PKEY_free(pkey);
   pkey = NULL;
   if (filename)
   {
-    BIO *in = BIO_new(BIO_s_file_internal());
+    BIO *in = BIO_new(BIO_s_file());
     if (in)
     {
       if (BIO_read_filename(in, filename) > 0)
@@ -132,7 +124,7 @@ E_KeyType SiPrivateKey::getKeyType() const
   E_KeyType result = EKT_none;
   if (pkey)
   {
-    switch(pkey->type)
+    switch(EVP_PKEY_type(EVP_PKEY_id(pkey)))
     {
       case EVP_PKEY_RSA:
         result = EKT_RSA;
@@ -142,6 +134,9 @@ E_KeyType SiPrivateKey::getKeyType() const
         break;
       case EVP_PKEY_DH:
         result = EKT_DH;
+        break;
+      case EVP_PKEY_EC:
+        result = EKT_EC;
         break;
       default:
         /* nothing */
@@ -154,22 +149,7 @@ E_KeyType SiPrivateKey::getKeyType() const
 
 SiAlgorithm *SiPrivateKey::createAlgorithmForPrivateKey()
 {
-  if (pkey)
-  {
-    switch(pkey->type)
-    {
-      case EVP_PKEY_RSA:
-        return new SiRSA(EVP_PKEY_get1_RSA(pkey));
-        /* break; */
-      case EVP_PKEY_DSA:
-        return new SiDSA(EVP_PKEY_get1_DSA(pkey));
-        /* break; */
-      case EVP_PKEY_DH:
-      default:
-        /* nothing */
-        break;
-    }
-  }    
+  if (pkey) return new SiPKEY(pkey, OFFalse);
   return NULL;
 }
 
@@ -182,40 +162,15 @@ OFBool SiPrivateKey::matchesCertificate(SiCertificate& cert)
   return OFFalse;
 }
 
+
+EVP_PKEY *SiPrivateKey::getRawPrivateKey()
+{
+  return pkey;
+}
+
+
 #else /* WITH_OPENSSL */
 
 int siprivat_cc_dummy_to_keep_linker_from_moaning = 0;
 
 #endif
-
-
-/*
- *  $Log: siprivat.cc,v $
- *  Revision 1.8  2010-10-14 13:14:38  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.7  2010-06-25 09:15:19  uli
- *  Fixed issues with compiling with HAVE_STD_STRING.
- *
- *  Revision 1.6  2005-12-08 15:47:27  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.5  2002/12/16 12:57:52  meichel
- *  Minor modification to shut up linker on MacOS X when compiling
- *    without OpenSSL support
- *
- *  Revision 1.4  2001/09/26 14:30:25  meichel
- *  Adapted dcmsign to class OFCondition
- *
- *  Revision 1.3  2001/06/01 15:50:54  meichel
- *  Updated copyright header
- *
- *  Revision 1.2  2000/11/14 13:54:20  meichel
- *  Renamed callback functions to avoid linker name clashes
- *
- *  Revision 1.1  2000/11/07 16:49:06  meichel
- *  Initial release of dcmsign module for DICOM Digital Signatures
- *
- *
- */
-

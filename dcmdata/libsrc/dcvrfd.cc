@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,29 +17,22 @@
  *
  *  Purpose: Implementation of class DcmFloatingPointDouble
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-20 16:44:17 $
- *  CVS/RCS Revision: $Revision: 1.34 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
-
+#include "dcmtk/dcmdata/dcvrfd.h"
 #include "dcmtk/ofstd/ofstream.h"
 #include "dcmtk/ofstd/ofstd.h"
-#include "dcmtk/dcmdata/dcvrfd.h"
-#include "dcmtk/dcmdata/dcvm.h"
-
-#define INCLUDE_CSTDIO
-#define INCLUDE_CSTRING
-#include "dcmtk/ofstd/ofstdinc.h"
-
+#include "dcmtk/ofstd/ofmath.h"
+#include "dcmtk/dcmdata/dcjson.h"
 
 // ********************************
+
+DcmFloatingPointDouble::DcmFloatingPointDouble(const DcmTag &tag)
+  : DcmElement(tag, 0)
+{
+}
 
 
 DcmFloatingPointDouble::DcmFloatingPointDouble(const DcmTag &tag,
@@ -67,14 +60,66 @@ DcmFloatingPointDouble &DcmFloatingPointDouble::operator=(const DcmFloatingPoint
 }
 
 
+int DcmFloatingPointDouble::compare(const DcmElement& rhs) const
+{
+    int result = DcmElement::compare(rhs);
+    if (result != 0)
+    {
+        return result;
+    }
+
+    /* cast away constness (dcmdata is not const correct...) */
+    DcmFloatingPointDouble* myThis = NULL;
+    DcmFloatingPointDouble* myRhs = NULL;
+    myThis = OFconst_cast(DcmFloatingPointDouble*, this);
+    myRhs = OFstatic_cast(DcmFloatingPointDouble*, OFconst_cast(DcmElement*, &rhs));
+
+    /* compare number of values */
+    unsigned long thisNumValues = myThis->getNumberOfValues();
+    unsigned long rhsNumValues = myRhs->getNumberOfValues();
+    if (thisNumValues < rhsNumValues)
+    {
+        return -1;
+    }
+    else if (thisNumValues > rhsNumValues)
+    {
+        return 1;
+    }
+
+    /* iterate over all components and test equality */
+    for (unsigned long count = 0; count < thisNumValues; count++)
+    {
+        Float64 val = 0;
+        if (myThis->getFloat64(val, count).good())
+        {
+            Float64 rhsVal = 0;
+            if (myRhs->getFloat64(rhsVal, count).good())
+            {
+                if (val > rhsVal)
+                {
+                    return 1;
+                }
+                else if (val < rhsVal)
+                {
+                    return -1;
+                }
+            }
+        }
+    }
+
+    /* all values as well as VM equal: objects are equal */
+    return 0;
+}
+
+
 OFCondition DcmFloatingPointDouble::copyFrom(const DcmObject& rhs)
 {
-  if (this != &rhs)
-  {
-    if (rhs.ident() != ident()) return EC_IllegalCall;
-    *this = OFstatic_cast(const DcmFloatingPointDouble &, rhs);
-  }
-  return EC_Normal;
+    if (this != &rhs)
+    {
+        if (rhs.ident() != ident()) return EC_IllegalCall;
+        *this = OFstatic_cast(const DcmFloatingPointDouble &, rhs);
+    }
+    return EC_Normal;
 }
 
 
@@ -97,14 +142,20 @@ OFCondition DcmFloatingPointDouble::checkValue(const OFString &vm,
 
 unsigned long DcmFloatingPointDouble::getVM()
 {
-    return getLengthField() / sizeof(Float64);
+    return getNumberOfValues();
+}
+
+
+unsigned long DcmFloatingPointDouble::getNumberOfValues()
+{
+    return OFstatic_cast(unsigned long, getLengthField() / sizeof(Float64));
 }
 
 
 // ********************************
 
 
-void DcmFloatingPointDouble::print(STD_NAMESPACE ostream&out,
+void DcmFloatingPointDouble::print(STD_NAMESPACE ostream &out,
                                    const size_t flags,
                                    const int level,
                                    const char * /*pixelFileName*/,
@@ -117,43 +168,51 @@ void DcmFloatingPointDouble::print(STD_NAMESPACE ostream&out,
         errorFlag = getFloat64Array(doubleVals);
         if (doubleVals != NULL)
         {
-            const unsigned long count = getVM();
-            const unsigned long maxLength = (flags & DCMTypes::PF_shortenLongTagValues) ?
-                DCM_OptPrintLineLength : OFstatic_cast(unsigned long, -1) /*unlimited*/;
-            unsigned long printedLength = 0;
-            unsigned long newLength = 0;
-            char buffer[64];
-            /* print line start with tag and VR */
-            printInfoLineStart(out, flags, level);
-            /* print multiple values */
-            for (unsigned int i = 0; i < count; i++, doubleVals++)
+            /* do not use getVM() because derived classes might always return 1 */
+            const unsigned long count = getNumberOfValues();
+            /* double-check length field for valid value */
+            if (count > 0)
             {
-                /* check whether first value is printed (omit delimiter) */
-                if (i == 0)
-                    OFStandard::ftoa(buffer, sizeof(buffer), *doubleVals, 0, 0, 17 /* DBL_DIG + 2 for DICOM FD */);
-                else
+                const unsigned long maxLength = (flags & DCMTypes::PF_shortenLongTagValues) ?
+                    DCM_OptPrintLineLength : OFstatic_cast(unsigned long, -1) /*unlimited*/;
+                unsigned long printedLength = 0;
+                unsigned long newLength = 0;
+                char buffer[64];
+                /* print line start with tag and VR */
+                printInfoLineStart(out, flags, level);
+                /* print multiple values */
+                for (unsigned int i = 0; i < count; i++, doubleVals++)
                 {
-                    buffer[0] = '\\';
-                    OFStandard::ftoa(buffer + 1, sizeof(buffer) - 1, *doubleVals, 0, 0, 17 /* DBL_DIG + 2 for DICOM FD */);
-                }
-                /* check whether current value sticks to the length limit */
-                newLength = printedLength + strlen(buffer);
-                if ((newLength <= maxLength) && ((i + 1 == count) || (newLength + 3 <= maxLength)))
-                {
-                    out << buffer;
-                    printedLength = newLength;
-                } else {
-                    /* check whether output has been truncated */
-                    if (i + 1 < count)
+                    /* check whether first value is printed (omit delimiter) */
+                    if (i == 0)
+                        OFStandard::ftoa(buffer, sizeof(buffer), *doubleVals, 0, 0, 17 /* DBL_DECIMAL_DIG for DICOM FD */);
+                    else
                     {
-                        out << "...";
-                        printedLength += 3;
+                        buffer[0] = '\\';
+                        OFStandard::ftoa(buffer + 1, sizeof(buffer) - 1, *doubleVals, 0, 0, 17 /* DBL_DECIMAL_DIG for DICOM FD */);
                     }
-                    break;
+                    /* check whether current value sticks to the length limit */
+                    newLength = printedLength + OFstatic_cast(unsigned long, strlen(buffer));
+                    if ((newLength <= maxLength) && ((i + 1 == count) || (newLength + 3 <= maxLength)))
+                    {
+                        out << buffer;
+                        printedLength = newLength;
+                    } else {
+                        /* check whether output has been truncated */
+                        if (i + 1 < count)
+                        {
+                            out << "...";
+                            printedLength += 3;
+                        }
+                        break;
+                    }
                 }
+                /* print line end with length, VM and tag name */
+                printInfoLineEnd(out, flags, printedLength);
+            } else {
+                /* count can be zero if we have an invalid element with less than eight bytes length */
+                printInfoLine(out, flags, level, "(invalid value)");
             }
-            /* print line end with length, VM and tag name */
-            printInfoLineEnd(out, flags, printedLength);
         } else
             printInfoLine(out, flags, level, "(no value available)" );
     } else
@@ -175,7 +234,8 @@ OFCondition DcmFloatingPointDouble::getFloat64(Float64 &doubleVal,
     {
         if (doubleValues == NULL)
             errorFlag = EC_IllegalCall;
-        else if (pos >= getVM())
+        /* do not use getVM() because derived classes might always return 1 */
+        else if (pos >= getNumberOfValues())
             errorFlag = EC_IllegalParameter;
         else
             doubleVal = doubleValues[pos];
@@ -208,7 +268,7 @@ OFCondition DcmFloatingPointDouble::getOFString(OFString &stringVal,
     {
         /* ... and convert it to a character string */
         char buffer[64];
-        OFStandard::ftoa(buffer, sizeof(buffer), doubleVal, 0, 0, 17 /* DBL_DIG + 2 for DICOM FD */);
+        OFStandard::ftoa(buffer, sizeof(buffer), doubleVal, 0, 0, 17 /* DBL_DECIMAL_DIG for DICOM FD */);
         /* assign result */
         stringVal = buffer;
     }
@@ -223,7 +283,7 @@ OFCondition DcmFloatingPointDouble::putFloat64(const Float64 doubleVal,
                                                const unsigned long pos)
 {
     Float64 val = doubleVal;
-    errorFlag = changeValue(&val, sizeof(Float64) * pos, sizeof(Float64));
+    errorFlag = changeValue(&val, OFstatic_cast(Uint32, sizeof(Float64) * pos), OFstatic_cast(Uint32, sizeof(Float64)));
     return errorFlag;
 }
 
@@ -236,7 +296,7 @@ OFCondition DcmFloatingPointDouble::putFloat64Array(const Float64 *doubleVals,
     {
         /* check for valid data */
         if (doubleVals != NULL)
-            errorFlag = putValue(doubleVals, sizeof(Float64) * OFstatic_cast(Uint32, numDoubles));
+            errorFlag = putValue(doubleVals, OFstatic_cast(Uint32, sizeof(Float64) * OFstatic_cast(size_t, numDoubles)));
         else
             errorFlag = EC_CorruptedData;
     } else
@@ -251,40 +311,45 @@ OFCondition DcmFloatingPointDouble::putFloat64Array(const Float64 *doubleVals,
 
 OFCondition DcmFloatingPointDouble::putString(const char *stringVal)
 {
+    /* determine length of the string value */
+    const size_t stringLen = (stringVal != NULL) ? strlen(stringVal) : 0;
+    /* call the real function */
+    return putString(stringVal, OFstatic_cast(Uint32, stringLen));
+}
+
+
+OFCondition DcmFloatingPointDouble::putString(const char *stringVal,
+                                              const Uint32 stringLen)
+{
     errorFlag = EC_Normal;
-    /* check input string */
-    if ((stringVal != NULL) && (strlen(stringVal) > 0))
+    /* determine VM of the string */
+    const unsigned long vm = DcmElement::determineVM(stringVal, stringLen);
+    if (vm > 0)
     {
-        const unsigned long vm = getVMFromString(stringVal);
-        if (vm > 0)
+        Float64 *field = new Float64[vm];
+        OFBool success = OFFalse;
+        OFString value;
+        size_t pos = 0;
+        /* retrieve double data from character string */
+        for (unsigned long i = 0; (i < vm) && errorFlag.good(); i++)
         {
-            Float64 *field = new Float64[vm];
-            const char *s = stringVal;
-            OFBool success = OFFalse;
-            char *value;
-            /* retrieve double data from character string */
-            for (unsigned long i = 0; (i < vm) && errorFlag.good(); i++)
+            /* get specified value from multi-valued string */
+            pos = DcmElement::getValueFromString(stringVal, pos, stringLen, value);
+            if (!value.empty())
             {
-                /* get first value stored in 's', set 's' to beginning of the next value */
-                value = getFirstValueFromString(s);
-                if (value != NULL)
-                {
-                    field[i] = OFStandard::atof(value, &success);
-                    if (!success)
-                        errorFlag = EC_CorruptedData;
-                    delete[] value;
-                } else
+                field[i] = OFStandard::atof(value.c_str(), &success);
+                if (!success)
                     errorFlag = EC_CorruptedData;
-            }
-            /* set binary data as the element value */
-            if (errorFlag == EC_Normal)
-                errorFlag = putFloat64Array(field, vm);
-            /* delete temporary buffer */
-            delete[] field;
-        } else
-            putValue(NULL, 0);
+            } else
+                errorFlag = EC_CorruptedData;
+        }
+        /* set binary data as the element value */
+        if (errorFlag == EC_Normal)
+            errorFlag = putFloat64Array(field, vm);
+        /* delete temporary buffer */
+        delete[] field;
     } else
-        putValue(NULL,0);
+        putValue(NULL, 0);
     return errorFlag;
 }
 
@@ -301,7 +366,7 @@ OFCondition DcmFloatingPointDouble::verify(const OFBool autocorrect)
         if (autocorrect)
         {
             /* strip to valid length */
-            setLengthField(getLengthField() - (getLengthField() % (sizeof(Float64))));
+            setLengthField(getLengthField() - (getLengthField() % OFstatic_cast(Uint32, sizeof(Float64))));
         }
     } else
         errorFlag = EC_Normal;
@@ -309,138 +374,75 @@ OFCondition DcmFloatingPointDouble::verify(const OFBool autocorrect)
 }
 
 
-/*
-** CVS/RCS Log:
-** $Log: dcvrfd.cc,v $
-** Revision 1.34  2010-10-20 16:44:17  joergr
-** Use type cast macros (e.g. OFstatic_cast) where appropriate.
-**
-** Revision 1.33  2010-10-14 13:14:10  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.32  2010-04-23 14:30:34  joergr
-** Added new method to all VR classes which checks whether the stored value
-** conforms to the VR definition and to the specified VM.
-**
-** Revision 1.31  2008-07-17 10:31:32  onken
-** Implemented copyFrom() method for complete DcmObject class hierarchy, which
-** permits setting an instance's value from an existing object. Implemented
-** assignment operator where necessary.
-**
-** Revision 1.30  2007-06-29 14:17:49  meichel
-** Code clean-up: Most member variables in module dcmdata are now private,
-**   not protected anymore.
-**
-** Revision 1.29  2007/02/21 09:26:19  meichel
-** Increased output precision to 17 (DBL_DIG+2) when converting an FD element to string.
-**
-** Revision 1.28  2006/08/15 15:49:54  meichel
-** Updated all code in module dcmdata to correctly compile when
-**   all standard C++ classes remain in namespace std.
-**
-** Revision 1.27  2005/12/08 15:41:52  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.26  2004/02/04 16:17:03  joergr
-** Adapted type casts to new-style typecast operators defined in ofcast.h.
-** Removed acknowledgements with e-mail addresses from CVS log.
-**
-** Revision 1.25  2002/12/06 13:12:40  joergr
-** Enhanced "print()" function by re-working the implementation and replacing
-** the boolean "showFullData" parameter by a more general integer flag.
-** Made source code formatting more consistent with other modules/files.
-**
-** Revision 1.24  2002/12/04 10:41:02  meichel
-** Changed toolkit to use OFStandard::ftoa instead of sprintf for all
-**   double to string conversions that are supposed to be locale independent
-**
-** Revision 1.23  2002/11/27 12:06:56  meichel
-** Adapted module dcmdata to use of new header file ofstdinc.h
-**
-** Revision 1.22  2002/06/20 12:06:17  meichel
-** Changed toolkit to use OFStandard::atof instead of atof, strtod or
-**   sscanf for all string to double conversions that are supposed to
-**   be locale independent
-**
-** Revision 1.21  2002/04/25 10:29:40  joergr
-** Added getOFString() implementation.
-**
-** Revision 1.20  2002/04/16 13:43:24  joergr
-** Added configurable support for C++ ANSI standard includes (e.g. streams).
-**
-** Revision 1.19  2001/09/25 17:19:56  meichel
-** Adapted dcmdata to class OFCondition
-**
-** Revision 1.18  2001/06/01 15:49:16  meichel
-** Updated copyright header
-**
-** Revision 1.17  2000/04/14 16:11:03  meichel
-** Dcmdata library code now consistently uses ofConsole for error output.
-**
-** Revision 1.16  2000/03/08 16:26:47  meichel
-** Updated copyright header.
-**
-** Revision 1.15  2000/03/03 14:05:38  meichel
-** Implemented library support for redirecting error messages into memory
-**   instead of printing them to stdout/stderr for GUI applications.
-**
-** Revision 1.14  2000/02/10 10:52:23  joergr
-** Added new feature to dcmdump (enhanced print method of dcmdata): write
-** pixel data/item value fields to raw files.
-**
-** Revision 1.13  2000/02/02 14:32:56  joergr
-** Replaced 'delete' statements by 'delete[]' for objects created with 'new[]'.
-**
-** Revision 1.12  1999/03/31 09:25:51  meichel
-** Updated copyright header in module dcmdata
-**
-** Revision 1.11  1997/07/21 08:25:32  andreas
-** - Replace all boolean types (BOOLEAN, CTNBOOLEAN, DICOM_BOOL, BOOL)
-**   with one unique boolean type OFBool.
-**
-** Revision 1.10  1997/07/03 15:10:12  andreas
-** - removed debugging functions Bdebug() and Edebug() since
-**   they write a static array and are not very useful at all.
-**   Cdebug and Vdebug are merged since they have the same semantics.
-**   The debugging functions in dcmdata changed their interfaces
-**   (see dcmdata/include/dcdebug.h)
-**
-** Revision 1.9  1997/04/18 08:10:50  andreas
-** - Corrected debugging code
-** - The put/get-methods for all VRs did not conform to the C++-Standard
-**   draft. Some Compilers (e.g. SUN-C++ Compiler, Metroworks
-**   CodeWarrier, etc.) create many warnings concerning the hiding of
-**   overloaded get methods in all derived classes of DcmElement.
-**   So the interface of all value representation classes in the
-**   library are changed rapidly, e.g.
-**   OFCondition get(Uint16 & value, const unsigned long pos);
-**   becomes
-**   OFCondition getUint16(Uint16 & value, const unsigned long pos);
-**   All (retired) "returntype get(...)" methods are deleted.
-**   For more information see dcmdata/include/dcelem.h
-**
-** Revision 1.8  1996/08/05 08:46:19  andreas
-** new print routine with additional parameters:
-**         - print into files
-**         - fix output length for elements
-** corrected error in search routine with parameter ESM_fromStackTop
-**
-** Revision 1.7  1996/05/20 13:27:51  andreas
-** correct minor bug in print routine
-**
-** Revision 1.6  1996/04/16 16:05:23  andreas
-** - better support und bug fixes for NULL element value
-**
-** Revision 1.5  1996/03/26 09:59:35  meichel
-** corrected bug (deletion of const char *) which prevented compilation on NeXT
-**
-** Revision 1.4  1996/01/29 13:38:32  andreas
-** - new put method for every VR to put value as a string
-** - better and unique print methods
-**
-** Revision 1.3  1996/01/05 13:27:48  andreas
-** - changed to support new streaming facilities
-** - unique read/write methods for file and block transfer
-** - more cleanups
-**
-*/
+OFBool DcmFloatingPointDouble::matches(const DcmElement& candidate,
+                                       const OFBool enableWildCardMatching) const
+{
+  OFstatic_cast(void,enableWildCardMatching);
+  if (ident() == candidate.ident())
+  {
+    // some const casts to call the getter functions, I do not modify the values, I promise!
+    DcmFloatingPointDouble& key = OFconst_cast(DcmFloatingPointDouble&,*this);
+    DcmElement& can = OFconst_cast(DcmElement&,candidate);
+    Float64 a, b;
+    for( unsigned long ui = 0; ui < key.getVM(); ++ui )
+      for( unsigned long uj = 0; uj < can.getVM(); ++uj )
+        if( key.getFloat64( a, ui ).good() && can.getFloat64( b, uj ).good() && a == b )
+          return OFTrue;
+    return key.getVM() == 0;
+  }
+  return OFFalse;
+}
+
+// ********************************
+
+OFCondition DcmFloatingPointDouble::writeJson(STD_NAMESPACE ostream &out,
+                                              DcmJsonFormat &format)
+{
+    /* always write JSON Opener */
+    writeJsonOpener(out, format);
+    /* write element value (if non-empty) */
+    if (!isEmpty())
+    {
+        OFCondition status;
+        const unsigned long vm = getVM();
+
+        if (! format.getJsonExtensionEnabled())
+        {
+          // check if any values is 'inf' or 'nan', and return an error in this case
+          // since the JSON extension that would allow us to write these is not enabled
+          Float64 f = 0.0;
+          for (unsigned long valNo = 1; valNo < vm; ++valNo)
+          {
+            status = getFloat64(f, valNo);
+            if (status.bad()) return status;
+            if ((OFMath::isinf)(f) || (OFMath::isnan)(f)) return EC_CannotWriteJsonNumber;
+          }
+        }
+
+        OFString value;
+        if (format.asBulkDataURI(getTag(), value))
+        {
+            format.printBulkDataURIPrefix(out);
+            DcmJsonFormat::printString(out, value);
+        }
+        else
+        {
+            status = getOFString(value, 0L);
+            if (status.bad()) return status;
+            format.printValuePrefix(out);
+            DcmJsonFormat::printNumberDecimal(out, value);
+            for (unsigned long valNo = 1; valNo < vm; ++valNo)
+            {
+                status = getOFString(value, valNo);
+                if (status.bad()) return status;
+                format.printNextArrayElementPrefix(out);
+                DcmJsonFormat::printNumberDecimal(out, value);
+            }
+            format.printValueSuffix(out);
+        }
+    }
+    /* write JSON Closer  */
+    writeJsonCloser(out, format);
+    /* always report success */
+    return EC_Normal;
+}

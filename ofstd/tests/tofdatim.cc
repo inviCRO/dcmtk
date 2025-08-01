@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2010, OFFIS e.V.
+ *  Copyright (C) 2002-2020, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: test program for classes OFDate, OFTime and OFDateTime
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:15 $
- *  CVS/RCS Revision: $Revision: 1.11 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -32,88 +25,147 @@
 #include "dcmtk/ofstd/ofdate.h"
 #include "dcmtk/ofstd/oftime.h"
 #include "dcmtk/ofstd/ofdatime.h"
-#include "dcmtk/ofstd/ofconsol.h"
+
+#define OFTEST_OFSTD_ONLY
+#include "dcmtk/ofstd/oftest.h"
 
 
-void outputTestResult(const int number,
-                      const OFBool result)
+OFTEST(ofstd_OFDate)
 {
-    COUT << "test #" << number << " ";
-    if (result)
-        COUT << "passed";
-    else
-        COUT << "failed!";
-    COUT << OFendl;
+    OFDate date1, date2;
+
+    /* test OFDate */
+    OFCHECK(!date1.isValid());
+    OFCHECK(!date1.setDate(2000, 13, 1));
+    OFCHECK(date1.setDate(2000, 12, 31));
+    OFCHECK_EQUAL(date1.getYear(), 2000);
+    OFCHECK_EQUAL(date1.getMonth(), 12);
+    OFCHECK_EQUAL(date1.getDay(), 31);
+    OFCHECK_EQUAL(date1, OFDate(2000, 12, 31));
+    date2 = date1;
+    OFCHECK_EQUAL(date1, date2);
+    OFCHECK(!(date1 != date2));
+    date2.clear();
+    OFCHECK(!date2.isValid());
+    OFCHECK(date1 < OFDate(2001, 1, 1));
+    OFCHECK(date1.setISOFormattedDate("20001231"));
+    OFCHECK(date2.setISOFormattedDate("2000-12-31"));
+    OFCHECK_EQUAL(date1, date2);
+    OFCHECK(date2.setISOFormattedDate("2000.12.31"));
 }
 
 
-int main()
+OFTEST(ofstd_OFTime)
 {
-    OFDate date1, date2;
     OFTime time1, time2;
-    OFDateTime dateTime1, dateTime2;
-    OFString tmpString, tmpString2;
-
-    /* test OFDate */
-    outputTestResult(1, !date1.isValid());
-    outputTestResult(2, !date1.setDate(2000, 13, 1));
-    outputTestResult(3, date1.setDate(2000, 12, 31));
-    outputTestResult(4, date1.getYear() == 2000);
-    outputTestResult(5, date1.getMonth() == 12);
-    outputTestResult(6, date1.getDay() == 31);
-    outputTestResult(7, date1 == OFDate(2000, 12, 31));
-    date2 = date1;
-    outputTestResult(8, date1 == date2);
-    outputTestResult(9, !(date1 != date2));
-    date2.clear();
-    outputTestResult(10, !date2.isValid());
-    outputTestResult(11, date1 < OFDate(2001, 1, 1));
 
     /* test OFTime */
-    outputTestResult(12, time1.isValid());
-    outputTestResult(13, !time1.setTime(24, 0, 0));
-    outputTestResult(14, time1.setTime(12, 15, 30));
-    outputTestResult(15, time1.getHour() == 12);
-    outputTestResult(16, time1.getMinute() == 15);
-    outputTestResult(17, time1.getSecond() == 30);
-    outputTestResult(18, time1 == OFTime(12, 15, 30));
+    OFCHECK(time1.isValid());
+    OFCHECK(!time1.setTime(24, 0, 0));
+    OFCHECK(time1.setTime(12, 15, 30));
+    OFCHECK_EQUAL(time1.getHour(), 12);
+    OFCHECK_EQUAL(time1.getMinute(), 15);
+    OFCHECK_EQUAL(time1.getSecond(), 30);
+    OFCHECK_EQUAL(time1, OFTime(12, 15, 30));
     time2 = time1;
-    outputTestResult(19, time1 == time2);
-    outputTestResult(20, !(time1 != time2));
+    OFCHECK_EQUAL(time1, time2);
+    OFCHECK(!(time1 != time2));
     time2.clear();
-    outputTestResult(21, time2.isValid());
-    time1.setTime(12, 15, 30, -1);
-    outputTestResult(22, time1 > OFTime(10, 0, 0, -1));
-    time1.setTimeZone(2);
-    outputTestResult(23, time1 < OFTime(10, 0, 0, -1));
-    outputTestResult(24, time1 == OFTime(9, 15, 30, -1));
-    outputTestResult(25, time1.getTimeZone() == 2);
-    time2.setTime(12, 15, 00);
-    outputTestResult(26, time2.getTimeInHours() == 12.25);
-    outputTestResult(27, time1.getCoordinatedUniversalTime() == OFTime(10, 15, 30));
-    time2.setSecond(30.1234);
-    outputTestResult(28, time2.getSecond() == 30.1234);
-    outputTestResult(29, time2.getIntSecond() == 30);
+    OFCHECK(time2.isValid());
+    OFCHECK(time1.setTime(12, 15, 30, -1));
+    OFCHECK(time1 > OFTime(10, 0, 0, -1));
+    OFCHECK(time1.setTimeZone(2));
+    OFCHECK(!time1.setTimeZone(-20));
+    OFCHECK(time1 < OFTime(10, 0, 0, -1));
+    OFCHECK_EQUAL(time1, OFTime(9, 15, 30, -1));
+    OFCHECK_EQUAL(time1.getTimeZone(), 2);
+    OFCHECK(time2.setTime(12, 15, 00));
+    OFCHECK_EQUAL(time2.getTimeInHours(), 12.25);
+    OFCHECK_EQUAL(time1.getCoordinatedUniversalTime(), OFTime(10, 15, 30));
+    OFCHECK(time2.setSecond(30.1234));
+    OFCHECK_EQUAL(time2.getSecond(), 30.1234);
+    OFCHECK_EQUAL(time2.getIntSecond(), 30);
+    OFCHECK(time1.setISOFormattedTime("1215"));
+    OFCHECK(time1.setISOFormattedTime("12:15"));
+    OFCHECK(time1.setISOFormattedTime("121530"));
+    OFCHECK(time1.setISOFormattedTime("12:15:30"));
+    OFCHECK(time1.setISOFormattedTime("121530+0100"));
+    OFCHECK_EQUAL(time1.getTimeZone(), 1.0);
+    OFCHECK(time1.setISOFormattedTime("12:15:30 -02:30"));
+    OFCHECK_EQUAL(time1.getTimeZone(), -2.5);
+    OFCHECK(time1.setISOFormattedTime("12:15:30 -09:45"));
+    OFCHECK_EQUAL(time1.getTimeZone(), -9.75);
+    OFCHECK(time1.setISOFormattedTime("12:15:30 +09:15"));
+    OFCHECK_EQUAL(time1.getTimeZone(), +9.25);
+    /* check support for leap second */
+    OFCHECK(time1.setTime(23, 59, 59));
+    OFCHECK(time1.setTime(23, 59, 60));
+    OFCHECK(!time1.setTime(23, 59, 61));
+    /* the "seconds" part is mandatory if time zone is present */
+    OFCHECK(!time2.setISOFormattedTime("10:15 -02:30"));
+    OFCHECK(!time2.setISOFormattedTime("1015+0100"));
+    /* check setting normalized time values */
+    OFCHECK(time1.setTimeInSeconds(99999, 0, OFTrue /*normalized*/));
+    OFCHECK_EQUAL(time1.getTimeInSeconds(OFTrue /*useTimeZone*/, OFFalse /*normalize*/), 13599);
+    OFCHECK(time1.setTimeInHours(99, 0, OFTrue /*normalized*/));
+    OFCHECK_EQUAL(time1.getTimeInHours(OFTrue /*useTimeZone*/, OFFalse /*normalize*/), 3);
+}
+
+
+OFTEST(ofstd_OFDateTime)
+{
+    const OFDate date1(2000, 12, 31);
+    const OFDate date2;
+    const OFTime time1(12, 15, 30, 2);
+    const OFTime time2(12, 15, 30.1234);
+    OFDateTime dateTime1, dateTime2;
+    OFString tmpString;
 
     /* test OFDateTime */
-    outputTestResult(30, !dateTime1.isValid());
-    dateTime1.setDateTime(date1, time1);
-    outputTestResult(31, dateTime1.isValid());
-    outputTestResult(32, !dateTime1.setDateTime(2000, 13, 1, 24, 0, 0));
-    outputTestResult(33, !dateTime1.setDateTime(date2, time2));
-    dateTime1.setDateTime(date1, time1);
-    outputTestResult(34, dateTime1.getDate() == date1);
-    outputTestResult(35, !(dateTime1.getTime() != time1));
+    OFCHECK(!dateTime1.isValid());
+    OFCHECK(dateTime1.setDateTime(date1, time1));
+    OFCHECK(dateTime1.isValid());
+    OFCHECK(!dateTime1.setDateTime(2000, 13, 1, 24, 0, 0));
+    OFCHECK(!dateTime1.setDateTime(date2, time2));
+    OFCHECK(dateTime1.setDateTime(date1, time1));
+    OFCHECK_EQUAL(dateTime1.getDate(), date1);
+    OFCHECK(!(dateTime1.getTime() != time1));
     dateTime2 = dateTime1;
-    outputTestResult(36, dateTime1 == dateTime2);
+    OFCHECK_EQUAL(dateTime1, dateTime2);
     /* "overflow" from one day to another is currently not handled by OFDateTime */
-    outputTestResult(37, dateTime1 != OFDateTime(2001, 1, 1, 0, 15, 30, 12) /* should be equal */);
-    dateTime1.getISOFormattedDateTime(tmpString);
-    outputTestResult(38, tmpString == "2000-12-31 12:15:30");
-    dateTime1.getISOFormattedDateTime(tmpString, OFTrue /*showSeconds*/, OFTrue /*showFraction*/, OFTrue /*showTimeZone*/, OFFalse /*showDelimiter*/, "" /*dateTimeSeparator*/);
-    outputTestResult(39, tmpString == "20001231121530.000000+0200");
-    dateTime2.setISOFormattedDateTime("2000-12-31 10:15:30" /*timeZone: 0*/);
-    outputTestResult(40, dateTime1 == dateTime2);
+    OFCHECK(dateTime1 != OFDateTime(2001, 1, 1, 0, 15, 30, 12) /* should be equal */);
+    OFCHECK(dateTime1 < OFDateTime(2001, 1, 1, 0, 15, 30, 2) /* should be less */);
+    OFCHECK(dateTime1 <= OFDateTime(2001, 1, 1, 0, 15, 30, 12) /* should be less or equal */);
+    OFCHECK(OFDateTime(2000, 12, 31, 12, 15, 30, -.5) > dateTime1 /* should be greater */);
+    OFCHECK(OFDateTime(2000, 12, 31, 12, 15, 30, -.5) >= dateTime1 /* should be greater or equal */);
+    OFCHECK(dateTime1 >= dateTime1 /* should be greater or equal */);
+    OFCHECK(dateTime1.getISOFormattedDateTime(tmpString));
+    OFCHECK_EQUAL(tmpString, "2000-12-31 12:15:30");
+    OFCHECK(dateTime1.getISOFormattedDateTime(tmpString, OFTrue /*showSeconds*/, OFTrue /*showFraction*/,
+        OFTrue /*showTimeZone*/, OFFalse /*showDelimiter*/, "" /*dateTimeSeparator*/, "" /*timeZoneSeparator*/));
+    OFCHECK_EQUAL(tmpString, "20001231121530.000000+0200");
+    OFCHECK(dateTime2.setISOFormattedDateTime("2000-12-31 10:15:30" /*timeZone: 0*/));
+    OFCHECK_EQUAL(dateTime1, dateTime2);
+    OFCHECK(dateTime2.setISOFormattedDateTime("2000.12.31  10-15-30" /*timeZone: 0*/));
+    OFCHECK_EQUAL(dateTime1, dateTime2);
+    OFCHECK(dateTime2.setISOFormattedDateTime("2000-12-31 10:15:30 +01:00"));
+    OFCHECK(dateTime2.setISOFormattedDateTime("2000-12-31 10:15:30 -02:30"));
+    OFCHECK(dateTime1.setISOFormattedDateTime("2000-12-31T10:15:30+01:00"));
+    OFCHECK(dateTime2.setISOFormattedDateTime("20001231101530+0100"));
+    OFCHECK_EQUAL(dateTime1, dateTime2);
+    /* the "seconds" part is mandatory if time zone is present */
+    OFCHECK(!dateTime2.setISOFormattedDateTime("2000-12-31 10:15 -02:30"));
+    OFCHECK(!dateTime2.setISOFormattedDateTime("200012311015+0100"));
+}
+
+
+// These tests check that getting the current date and time works.
+// The results for this cannot(?) be verified automatically.
+#if 0
+    OFDate date1;
+    OFTime time1;
+    OFDateTime dateTime1;
+    OFString tmpString;
 
     /* output current date */
     COUT << OFendl;
@@ -158,47 +210,4 @@ int main()
     COUT << "current date/time (YYYY-MM-DD HH:MM:SS&ZZ:ZZ): " << tmpString << OFendl;
     dateTime1.getISOFormattedDateTime(tmpString, OFTrue /*showSeconds*/, OFTrue /*showFraction*/, OFTrue /*showTimeZone*/, OFFalse /*showDelimiter*/, "" /*dateTimeSeparator*/);
     COUT << "current date/time (YYYYMMDDHHMMSS.FFFFFF&ZZZZ): " << tmpString << OFendl;
-
-    return 0;
-}
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: tofdatim.cc,v $
- * Revision 1.11  2010-10-14 13:15:15  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.10  2008-05-21 16:32:42  joergr
- * Reimplemented tests for OFDate, OFTime and OFDateTime classes.
- *
- * Revision 1.9  2006/08/14 16:42:48  meichel
- * Updated all code in module ofstd to correctly compile if the standard
- *   namespace has not included into the global one with a "using" directive.
- *
- * Revision 1.8  2005/12/08 15:49:05  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.7  2004/01/16 10:37:09  joergr
- * Added setISOFormattedXXX() methods for Date, Time and DateTime.
- * Removed acknowledgements with e-mail addresses from CVS log.
- *
- * Revision 1.6  2003/12/17 15:24:57  joergr
- * Added test cases for comparing both time and date/time values.
- *
- * Revision 1.5  2003/09/17 17:01:44  joergr
- * Renamed variable "string" to avoid name clash with STL class.
- *
- * Revision 1.4  2002/05/24 09:45:13  joergr
- * Renamed some parameters/variables to avoid ambiguities.
- *
- * Revision 1.3  2002/04/19 10:42:58  joergr
- * Added new helper routines to get the milli and micro seconds part as well as
- * the integral value of seconds.
- *
- * Revision 1.2  2002/04/16 13:37:00  joergr
- * Added configurable support for C++ ANSI standard includes (e.g. streams).
- *
- *
- */
+#endif

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 2003-2013, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -15,15 +15,8 @@
  *
  *  Author:  Marco Eichelberg
  *
- *  Purpose: 
+ *  Purpose:
  *    class DcmAssociationConfigurationFile
- * 
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:21 $
- *  CVS/RCS Revision: $Revision: 1.3 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -31,15 +24,16 @@
 #define DCASCCFF_H
 
 #include "dcmtk/config/osconfig.h"
-#include "dcmtk/ofstd/ofcond.h"   /* for class OFCondition */
+#include "dcmtk/ofstd/ofcond.h"    /* for class OFCondition */
+#include "dcmtk/dcmnet/dndefine.h"
 
 class DcmAssociationConfiguration;
 class OFConfigFile;
 
-/** helper class that encapsulated methods for filling 
+/** helper class that encapsulated methods for filling
  *  a DcmAssociationConfiguration object from a config file
  */
-class DcmAssociationConfigurationFile
+class DCMTK_DCMNET_EXPORT DcmAssociationConfigurationFile
 {
 public:
 
@@ -57,7 +51,7 @@ private:
 
   /** parses the transfer syntax lists in the config file.
    *  @param cfg association configuration object to initialize
-   *  @param filename name of config file
+   *  @param config filename name of config file
    *  @return EC_Normal if successful, an error code otherwise
    */
   static OFCondition parseTransferSyntaxes(
@@ -66,7 +60,7 @@ private:
 
   /** parses the presentation context lists in the config file.
    *  @param cfg association configuration object to initialize
-   *  @param filename name of config file
+   *  @param config filename name of config file
    *  @return EC_Normal if successful, an error code otherwise
    */
   static OFCondition parsePresentationContexts(
@@ -75,7 +69,7 @@ private:
 
   /** parses the role selection lists in the config file.
    *  @param cfg association configuration object to initialize
-   *  @param filename name of config file
+   *  @param config filename name of config file
    *  @return EC_Normal if successful, an error code otherwise
    */
   static OFCondition parseRoleSelectionItems(
@@ -84,7 +78,7 @@ private:
 
   /** parses the extended negotiation lists in the config file.
    *  @param cfg association configuration object to initialize
-   *  @param filename name of config file
+   *  @param config filename name of config file
    *  @return EC_Normal if successful, an error code otherwise
    */
   static OFCondition parseExtendedNegotiationItems(
@@ -93,7 +87,7 @@ private:
 
   /** parses the association configuration profile lists in the config file.
    *  @param cfg association configuration object to initialize
-   *  @param filename name of config file
+   *  @param config filename name of config file
    *  @return EC_Normal if successful, an error code otherwise
    */
   static OFCondition parseProfiles(
@@ -103,21 +97,3 @@ private:
 };
 
 #endif
-
-/*
- * CVS/RCS Log
- * $Log: dcasccff.h,v $
- * Revision 1.3  2010-10-14 13:17:21  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.2  2005/12/08 16:02:08  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.1  2003/06/10 14:27:33  meichel
- * Initial release of class DcmAssociationConfiguration and support
- *   classes. This class maintains a list of association negotiation
- *   profiles that can be addressed by symbolic keys. The profiles may
- *   be read from a configuration file.
- *
- *
- */

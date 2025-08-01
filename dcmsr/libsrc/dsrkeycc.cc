@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2003-2010, OFFIS e.V.
+ *  Copyright (C) 2003-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -11,19 +11,12 @@
  *    D-26121 Oldenburg, Germany
  *
  *
- *  Module:  dcmsr
+ *  Module: dcmsr
  *
- *  Author:  Joerg Riesmeier
+ *  Author: Joerg Riesmeier
  *
  *  Purpose:
  *    classes: DSRKeyObjectSelectionDocumentConstraintChecker
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:41 $
- *  CVS/RCS Revision: $Revision: 1.5 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -56,9 +49,12 @@ OFBool DSRKeyObjectSelectionDocumentConstraintChecker::isTemplateSupportRequired
 }
 
 
-const char *DSRKeyObjectSelectionDocumentConstraintChecker::getRootTemplateIdentifier() const
+OFCondition DSRKeyObjectSelectionDocumentConstraintChecker::getRootTemplateIdentification(OFString &templateIdentifier,
+                                                                                          OFString &mappingResource) const
 {
-    return "2010";
+    templateIdentifier = "2010";
+    mappingResource = "DCMR";
+    return EC_Normal;
 }
 
 
@@ -81,14 +77,14 @@ OFBool DSRKeyObjectSelectionDocumentConstraintChecker::checkContentRelationship(
         /* row 1 of the table */
         if ((relationshipType == RT_contains) && (sourceValueType == VT_Container))
         {
-            result = (targetValueType == VT_Text) || (targetValueType == VT_Image) ||
-                     (targetValueType == VT_Waveform) || (targetValueType == VT_Composite);
+            result = (targetValueType == VT_Text) || (targetValueType == VT_Image) || (targetValueType == VT_Waveform) ||
+                     (targetValueType == VT_Composite);
         }
         /* row 2 of the table */
         else if ((relationshipType == RT_hasObsContext) && (sourceValueType == VT_Container))
         {
-            result = (targetValueType == VT_Text) || (targetValueType == VT_Code) ||
-                     (targetValueType == VT_UIDRef) || (targetValueType == VT_PName);
+            result = (targetValueType == VT_Text)  || (targetValueType == VT_Code) || (targetValueType == VT_UIDRef) ||
+                     (targetValueType == VT_PName) || (targetValueType == VT_Container) /* see CP-2084 */;
         }
         /* row 3 of the table */
         else if ((relationshipType == RT_hasConceptMod) && (sourceValueType == VT_Container))
@@ -98,25 +94,3 @@ OFBool DSRKeyObjectSelectionDocumentConstraintChecker::checkContentRelationship(
     }
     return result;
 }
-
-
-/*
- *  CVS/RCS Log:
- *  $Log: dsrkeycc.cc,v $
- *  Revision 1.5  2010-10-14 13:14:41  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.4  2010-09-30 08:57:45  joergr
- *  Renamed class and enumeration related to the Key Object Selection Document.
- *
- *  Revision 1.3  2005-12-08 15:47:57  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.2  2003/10/09 13:00:41  joergr
- *  Added check for root template identifier when reading an SR document.
- *
- *  Revision 1.1  2003/09/15 14:16:50  joergr
- *  Introduced new class to facilitate checking of SR IOD relationship content
- *  constraints. Replaced old implementation distributed over numerous classes.
- *
- */

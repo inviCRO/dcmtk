@@ -1,5 +1,7 @@
 # declare project
-PROJECT(dcmjpls)
+project(dcmjpls)
 
 # recurse into subdirectories
-SUBDIRS(libsrc libcharls apps include/dcmtk/dcmjpls)
+foreach(SUBDIR libsrc libcharls apps include)
+  add_subdirectory(${SUBDIR})
+endforeach()

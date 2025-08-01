@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2007-2010, OFFIS e.V.
+ *  Copyright (C) 2007-2022, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,25 +17,9 @@
  *
  *  Purpose: Compress DICOM file with JPEG-LS transfer syntax
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:13:40 $
- *  CVS/RCS Revision: $Revision: 1.11 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
-
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CSTDIO
-#define INCLUDE_CSTRING
-#include "dcmtk/ofstd/ofstdinc.h"
-
-#ifdef HAVE_GUSI_H
-#include <GUSI.h>
-#endif
 
 #include "dcmtk/dcmdata/dctk.h"
 #include "dcmtk/dcmdata/cmdlnarg.h"
@@ -72,11 +56,6 @@ static char rcsid[] = "$dcmtk: " OFFIS_CONSOLE_APPLICATION " v"
 int main(int argc, char *argv[])
 {
 
-#ifdef HAVE_GUSI_H
-  GUSISetup(GUSIwithSIOUXSockets);
-  GUSISetup(GUSIwithInternetSockets);
-#endif
-
   const char *opt_ifname = NULL;
   const char *opt_ofname = NULL;
 
@@ -87,15 +66,12 @@ int main(int argc, char *argv[])
   // JPEG-LS encoding options
   E_TransferSyntax opt_oxfer = EXS_JPEGLSLossless;
   OFBool opt_useLosslessProcess = OFTrue;
+  OFBool opt_useFFpadding = OFTrue;
 
-  OFCmdUnsignedInt opt_t1 = 3;
-  OFCmdUnsignedInt opt_t2 = 7;
-  OFCmdUnsignedInt opt_t3 = 21;
-
-  OFCmdUnsignedInt opt_reset = 64;
-  OFCmdUnsignedInt opt_limit = 0;
-
-  OFBool opt_use_custom_options = OFFalse;
+  OFCmdUnsignedInt opt_t1 = 0;
+  OFCmdUnsignedInt opt_t2 = 0;
+  OFCmdUnsignedInt opt_t3 = 0;
+  OFCmdUnsignedInt opt_reset = 0;
 
   // JPEG-LS options
   OFCmdUnsignedInt opt_nearlossless_deviation = 2;
@@ -168,13 +144,16 @@ LICENSE_FILE_DECLARE_COMMAND_LINE_OPTIONS
                                                           "set JPEG-LS encoding parameter threshold 3");
       cmd.addOption("--reset",                  "+rs", 1, "[r]eset: integer (default: 64)",
                                                           "set JPEG-LS encoding parameter reset");
-      cmd.addOption("--limit",                  "+lm", 1, "[l]imit: integer (default: 0)",
-                                                          "set JPEG-LS encoding parameter limit");
     cmd.addSubGroup("JPEG-LS interleave:");
       cmd.addOption("--interleave-line",        "+il",    "force line-interleaved JPEG-LS images (default)");
       cmd.addOption("--interleave-sample",      "+is",    "force sample-interleaved JPEG-LS images");
+#ifdef ENABLE_DCMJPLS_INTERLEAVE_NONE
       cmd.addOption("--interleave-none",        "+in",    "force uninterleaved JPEG-LS images");
+#endif
       cmd.addOption("--interleave-default",     "+iv",    "use the fastest possible interleave mode");
+    cmd.addSubGroup("JPEG-LS padding of odd-length bitstreams:");
+      cmd.addOption("--padding-standard",       "+ps",    "pad with extended EOI marker (default)");
+      cmd.addOption("--padding-zero",           "+pz",    "pad with zero byte (non-standard)");
 
   cmd.addGroup("encapsulated pixel data encoding options:");
     cmd.addSubGroup("pixel data fragmentation:");
@@ -210,7 +189,7 @@ LICENSE_FILE_DECLARE_COMMAND_LINE_OPTIONS
                                                           "align file on multiple of f bytes\nand items on multiple of i byte");
     /* evaluate command line */
     prepareCmdLineArgs(argc, argv, OFFIS_CONSOLE_APPLICATION);
-    if (app.parseCommandLine(cmd, argc, argv, OFCommandLine::PF_ExpandWildcards))
+    if (app.parseCommandLine(cmd, argc, argv))
     {
       /* check exclusive options first */
       if (cmd.hasExclusiveOption())
@@ -222,7 +201,7 @@ LICENSE_FILE_DECLARE_COMMAND_LINE_OPTIONS
 #ifdef WITH_ZLIB
           COUT << "- ZLIB, Version " << zlibVersion() << OFendl;
 #endif
-          COUT << "- " << "CharLS, Revision 55020 (modified)" << OFendl;
+          COUT << "- " << DJLSEncoderRegistration::getLibraryVersionString() << OFendl;
           return 0;
         }
       }
@@ -310,27 +289,18 @@ LICENSE_FILE_EVALUATE_COMMAND_LINE_OPTIONS
       if (cmd.findOption("--threshold1"))
       {
         app.checkValue(cmd.getValueAndCheckMin(opt_t1, OFstatic_cast(OFCmdUnsignedInt, 1)));
-        opt_use_custom_options = OFTrue;
       }
       if (cmd.findOption("--threshold2"))
       {
         app.checkValue(cmd.getValueAndCheckMin(opt_t2, OFstatic_cast(OFCmdUnsignedInt, 1)));
-        opt_use_custom_options = OFTrue;
       }
       if (cmd.findOption("--threshold3"))
       {
         app.checkValue(cmd.getValueAndCheckMin(opt_t3, OFstatic_cast(OFCmdUnsignedInt, 1)));
-        opt_use_custom_options = OFTrue;
       }
       if (cmd.findOption("--reset"))
       {
         app.checkValue(cmd.getValueAndCheckMin(opt_reset, OFstatic_cast(OFCmdUnsignedInt, 1)));
-        opt_use_custom_options = OFTrue;
-      }
-      if (cmd.findOption("--limit"))
-      {
-        app.checkValue(cmd.getValue(opt_limit));
-        opt_use_custom_options = OFTrue;
       }
       cmd.endOptionBlock();
 
@@ -348,9 +318,23 @@ LICENSE_FILE_EVALUATE_COMMAND_LINE_OPTIONS
       {
         opt_interleaveMode = DJLSCodecParameter::interleaveLine;
       }
+#ifdef ENABLE_DCMJPLS_INTERLEAVE_NONE
       if (cmd.findOption("--interleave-none"))
       {
         opt_interleaveMode = DJLSCodecParameter::interleaveNone;
+      }
+#endif
+      cmd.endOptionBlock();
+
+      // padding
+      cmd.beginOptionBlock();
+      if (cmd.findOption("--padding-standard"))
+      {
+        opt_useFFpadding = OFTrue;
+      }
+      if (cmd.findOption("--padding-zero"))
+      {
+        opt_useFFpadding = OFFalse;
       }
       cmd.endOptionBlock();
 
@@ -386,16 +370,8 @@ LICENSE_FILE_EVALUATE_COMMAND_LINE_OPTIONS
       // output options
       // post-1993 value representations
       cmd.beginOptionBlock();
-      if (cmd.findOption("--enable-new-vr"))
-      {
-        dcmEnableUnknownVRGeneration.set(OFTrue);
-        dcmEnableUnlimitedTextVRGeneration.set(OFTrue);
-      }
-      if (cmd.findOption("--disable-new-vr"))
-      {
-        dcmEnableUnknownVRGeneration.set(OFFalse);
-        dcmEnableUnlimitedTextVRGeneration.set(OFFalse);
-      }
+      if (cmd.findOption("--enable-new-vr")) dcmEnableGenerationOfNewVRs();
+      if (cmd.findOption("--disable-new-vr")) dcmDisableGenerationOfNewVRs();
       cmd.endOptionBlock();
 
       // group length encoding
@@ -428,11 +404,11 @@ LICENSE_FILE_EVALUATE_COMMAND_LINE_OPTIONS
     OFLOG_DEBUG(dcmcjplsLogger, rcsid << OFendl);
 
     // register global compression codecs
-    DJLSEncoderRegistration::registerCodecs(opt_use_custom_options,
+    DJLSEncoderRegistration::registerCodecs(
       OFstatic_cast(Uint16, opt_t1), OFstatic_cast(Uint16, opt_t2), OFstatic_cast(Uint16, opt_t3),
-      OFstatic_cast(Uint16, opt_reset), OFstatic_cast(Uint16, opt_limit),
+      OFstatic_cast(Uint16, opt_reset),
       opt_prefer_cooked, opt_fragmentSize, opt_createOffsetTable,
-      opt_uidcreation, opt_secondarycapture, opt_interleaveMode);
+      opt_uidcreation, opt_secondarycapture, opt_interleaveMode, opt_useFFpadding);
 
     /* make sure data dictionary is loaded */
     if (!dcmDataDict.isDictionaryLoaded())
@@ -466,7 +442,7 @@ LICENSE_FILE_EVALUATE_COMMAND_LINE_OPTIONS
       OFLOG_INFO(dcmcjplsLogger, "DICOM file is already compressed, converting to uncompressed transfer syntax first");
       if (EC_Normal != dataset->chooseRepresentation(EXS_LittleEndianExplicit, NULL))
       {
-        OFLOG_FATAL(dcmcjplsLogger, "No conversion from compressed original to uncompressed transfer syntax possible!");
+        OFLOG_FATAL(dcmcjplsLogger, "no conversion from compressed original to uncompressed transfer syntax possible");
         return 1;
       }
     }
@@ -482,7 +458,7 @@ LICENSE_FILE_EVALUATE_COMMAND_LINE_OPTIONS
         }
     }
 
-    OFLOG_INFO(dcmcjplsLogger, "Convert DICOM file to compressed transfer syntax");
+    OFLOG_INFO(dcmcjplsLogger, "converting DICOM file to compressed transfer syntax");
 
     //create representation parameter
     DJLSRepresentationParameter rp(OFstatic_cast(Uint16, opt_nearlossless_deviation), opt_useLosslessProcess);
@@ -497,9 +473,9 @@ LICENSE_FILE_EVALUATE_COMMAND_LINE_OPTIONS
     }
     if (dataset->canWriteXfer(opt_oxfer))
     {
-      OFLOG_INFO(dcmcjplsLogger, "Output transfer syntax " << opt_oxferSyn.getXferName() << " can be written");
+      OFLOG_INFO(dcmcjplsLogger, "output transfer syntax " << opt_oxferSyn.getXferName() << " can be written");
     } else {
-      OFLOG_FATAL(dcmcjplsLogger, "No conversion to transfer syntax " << opt_oxferSyn.getXferName() << " possible!");
+      OFLOG_FATAL(dcmcjplsLogger, "no conversion to transfer syntax " << opt_oxferSyn.getXferName() << " possible");
       return 1;
     }
 
@@ -522,83 +498,3 @@ LICENSE_FILE_EVALUATE_COMMAND_LINE_OPTIONS
 
     return 0;
 }
-
-
-/*
- * CVS/RCS Log:
- * $Log: dcmcjpls.cc,v $
- * Revision 1.11  2010-10-14 13:13:40  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.10  2010-10-05 08:25:40  uli
- * Update dcmjpls to newest CharLS snapshot.
- *
- * Revision 1.9  2009-10-07 13:16:47  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.8  2009-09-04 13:37:00  meichel
- * Updated libcharls in module dcmjpls to CharLS revision 27770.
- *
- * Revision 1.7  2009-08-21 12:07:27  joergr
- * Added type cast to integer variable in order to avoid compiler warnings
- * reported by MSVC.
- *
- * Revision 1.6  2009-08-21 10:05:10  joergr
- * Added parameter 'writeMode' to save/write methods which allows for specifying
- * whether to write a dataset or fileformat as well as whether to update the
- * file meta information or to create a new file meta information header.
- * Added check making sure that a DICOMDIR file is never compressed.
- * Made error messages more consistent with other compression tools.
- *
- * Revision 1.5  2009-08-20 14:45:06  meichel
- * Updated libcharls in module dcmjpls to CharLS revision 26807.
- *
- * Revision 1.4  2009-08-05 10:24:54  joergr
- * Made syntax usage more consistent with other DCMTK compression tools.
- * Fixed wrong reference to JPEG-LS implementation and added revision number.
- *
- * Revision 1.3  2009-07-31 10:18:37  meichel
- * Line interleaved JPEG-LS mode now default. This mode works correctly
- *   when decompressing images with the LOCO-I reference implementation.
- *
- * Revision 1.2  2009-07-31 09:14:52  meichel
- * Added codec parameter and command line options that allow to control
- *   the interleave mode used in the JPEG-LS bitstream when compressing
- *   color images.
- *
- * Revision 1.1  2009-07-29 14:46:45  meichel
- * Initial release of module dcmjpls, a JPEG-LS codec for DCMTK based on CharLS
- *
- * Revision 1.10  2009-03-19 12:14:49  joergr
- * Made error message more consistent with other DCMTK compression tools.
- * Replaced '\n' by OFendl where appropriate.
- *
- * Revision 1.9  2008-09-25 15:38:27  joergr
- * Fixed outdated comment.
- *
- * Revision 1.8  2008-09-25 14:23:11  joergr
- * Moved output of resource identifier in order to avoid printing the same
- * information twice.
- *
- * Revision 1.7  2008-09-25 13:47:29  joergr
- * Added support for printing the expanded command line arguments.
- * Always output the resource identifier of the command line tool in debug mode.
- *
- * Revision 1.6  2007/06/20 12:37:37  meichel
- * Completed implementation of encoder, which now supports lossless
- *   "raw" and "cooked" and near-lossless "cooked" modes.
- *
- * Revision 1.5  2007/06/15 14:35:45  meichel
- * Renamed CMake project and include directory from dcmjpgls to dcmjpls
- *
- * Revision 1.4  2007/06/14 12:36:14  meichel
- * Further code clean-up. Updated doxygen comments.
- *
- * Revision 1.3  2007/06/13 16:41:07  meichel
- * Code clean-up and removal of dead code
- *
- * Revision 1.2  2007/06/13 16:22:53  joergr
- * Fixed a couple of inconsistencies.
- *
- *
- */

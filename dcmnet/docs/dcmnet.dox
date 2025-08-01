@@ -9,28 +9,36 @@ Control Service Element (ACSE) and the DICOM Message Service Element (DIMSE).
 The main interfaces are the structs and functions declared in file assoc.h and
 dimse.h.
 
-The are also two experimental classes for implementing a DICOM Service Class
+There are also two experimental classes for implementing a DICOM Service Class
 User and Provider:
 \li \b DcmSCU
 \li \b DcmSCP
 
-\section Tools
+The following classes are derived from the above experimental classes and
+provide a particular DICOM Service:
+\li \b DcmStorageSCU
+\li \b DcmStorageSCP
+
+\section dcmnet_tools Tools
 
 This module contains the following command line tools:
+\li \ref dcmrecv
+\li \ref dcmsend
 \li \ref echoscu
 \li \ref findscu
+\li \ref getscu
 \li \ref movescu
 \li \ref storescp
 \li \ref storescu
 \li \ref termscu
 
-\section Files
+\section dcmnet_files Files
 
 The following files provide further documentation:
 \li \ref file_asconfig
 \li \ref file_testing
 
-\section Examples
+\section dcmnet_examples Examples
 
 The following example shows a very simple Echo SCU (Verification Service Class
 SCU). Most error handling code has been omitted for brevity, also OS specific

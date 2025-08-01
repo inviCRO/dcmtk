@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -20,21 +20,10 @@
  *    The LUT has a gamma curve shape or can be imported from an external
  *    file.
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-12-15 17:03:38 $
- *  CVS/RCS Revision: $Revision: 1.47 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
-
-#ifdef HAVE_GUSI_H
-#include <GUSI.h>
-#endif
 
 #include "dcmtk/ofstd/ofstream.h"
 #include "dcmtk/dcmdata/dctk.h"
@@ -47,12 +36,7 @@
 #include "dcmtk/dcmimgle/diutils.h"
 #include "dcmtk/ofstd/ofstream.h"
 #include "dcmtk/ofstd/ofstd.h"
-
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CSTDIO
-#define INCLUDE_CMATH
-#define INCLUDE_CCTYPE
-#include "dcmtk/ofstd/ofstdinc.h"
+#include "dcmtk/ofstd/ofrand.h"
 
 #ifdef WITH_ZLIB
 #include <zlib.h>        /* for zlibVersion() */
@@ -76,12 +60,12 @@ enum LUT_Type
 };
 
 
-OFCondition readMapFile(const char *filename,
-                        double *&inputXData,
-                        double *&inputYData,
-                        unsigned long &inputEntries,
-                        double &inputXMax,
-                        double &inputYMax)
+static OFCondition readMapFile(const char *filename,
+                               double *&inputXData,
+                               double *&inputYData,
+                               unsigned long &inputEntries,
+                               double &inputXMax,
+                               double &inputYMax)
 {
     OFCondition result = EC_IllegalCall;
     if ((filename != NULL) && (strlen(filename) > 0))
@@ -125,21 +109,17 @@ OFCondition readMapFile(const char *filename,
 }
 
 
-OFCondition readTextFile(const char *filename,
-                         double *&inputXData,
-                         double *&inputYData,
-                         unsigned long &inputEntries,
-                         double &inputXMax,
-                         double &inputYMax)
+static OFCondition readTextFile(const char *filename,
+                                double *&inputXData,
+                                double *&inputYData,
+                                unsigned long &inputEntries,
+                                double &inputXMax,
+                                double &inputYMax)
 {
     if ((filename != NULL) && (strlen(filename) > 0))
     {
         OFLOG_INFO(dcmmklutLogger, "reading text file ...");
-#ifdef HAVE_IOS_NOCREATE
-        STD_NAMESPACE ifstream file(filename, STD_NAMESPACE ios::in | STD_NAMESPACE ios::nocreate);
-#else
-        STD_NAMESPACE ifstream file(filename, STD_NAMESPACE ios::in);
-#endif
+        STD_NAMESPACE ifstream file(filename, OFopenmode_in_nocreate);
         if (file)
         {
             inputEntries = 0;
@@ -267,11 +247,11 @@ OFCondition readTextFile(const char *filename,
 }
 
 
-OFCondition writeTextOutput(const char *filename,
-                            const unsigned long numberOfEntries,
-                            const signed long firstMapped,
-                            const Uint16 *outputData,
-                            const OFString &header)
+static OFCondition writeTextOutput(const char *filename,
+                                   const unsigned long numberOfEntries,
+                                   const signed long firstMapped,
+                                   const Uint16 *outputData,
+                                   const OFString &header)
 {
     OFCondition result = EC_IllegalCall;
     if ((filename != NULL) && (strlen(filename) > 0))
@@ -293,18 +273,18 @@ OFCondition writeTextOutput(const char *filename,
 }
 
 
-OFCondition convertInputLUT(const unsigned int numberOfBits,
-                            const unsigned long numberOfEntries,
-                            const signed long firstMapped,
-                            double *inputXData,
-                            double *inputYData,
-                            const unsigned long inputEntries,
-                            const double inputXMax,
-                            const double inputYMax,
-                            const unsigned int order,
-                            Uint16 *outputData,
-                            OFString &header,
-                            char *explanation)
+static OFCondition convertInputLUT(const unsigned int numberOfBits,
+                                   const unsigned long numberOfEntries,
+                                   const signed long firstMapped,
+                                   double *inputXData,
+                                   double *inputYData,
+                                   const unsigned long inputEntries,
+                                   const double inputXMax,
+                                   const double inputYMax,
+                                   const unsigned int order,
+                                   Uint16 *outputData,
+                                   OFString &header,
+                                   char *explanation)
 {
     OFCondition result = EC_IllegalCall;
     if ((inputXData != NULL) && (inputYData != NULL) && (inputEntries > 0) && (inputYMax > 0) && (outputData != NULL))
@@ -377,14 +357,14 @@ OFCondition convertInputLUT(const unsigned int numberOfBits,
 }
 
 
-void gammaLUT(const unsigned int numberOfBits,
-              const unsigned long numberOfEntries,
-              const signed long firstMapped,
-              const OFBool byteAlign,
-              const double gammaValue,
-              Uint16 *outputData,
-              OFString &header,
-              char *explanation)
+static void gammaLUT(const unsigned int numberOfBits,
+                     const unsigned long numberOfEntries,
+                     const signed long firstMapped,
+                     const OFBool byteAlign,
+                     const double gammaValue,
+                     Uint16 *outputData,
+                     OFString &header,
+                     char *explanation)
 {
     if (outputData != NULL)
     {
@@ -432,23 +412,24 @@ void gammaLUT(const unsigned int numberOfBits,
 }
 
 
-void applyInverseGSDF(const unsigned int numberOfBits,
-                      const unsigned long numberOfEntries,
-                      const OFBool byteAlign,
-                      const unsigned int minDensity,
-                      const unsigned int maxDensity,
-                      const unsigned int illumination,
-                      const unsigned int reflection,
-                      Uint16 *outputData,
-                      OFString &header,
-                      char *explanation)
+static void applyInverseGSDF(const unsigned int numberOfBits,
+                             const unsigned long numberOfEntries,
+                             const OFBool byteAlign,
+                             const unsigned int minDensity,
+                             const unsigned int maxDensity,
+                             const unsigned int illumination,
+                             const unsigned int reflection,
+                             Uint16 *outputData,
+                             OFString &header,
+                             char *explanation,
+                             size_t explanationSize)
 {
     if (outputData != NULL)
     {
         OFLOG_INFO(dcmmklutLogger, "applying inverse GSDF ...");
         OFOStringStream oss;
         if ((explanation != NULL) && (strlen(explanation) > 0))
-            strcat(explanation, ", inverse GSDF");
+            OFStandard::strlcat(explanation, ", inverse GSDF", explanationSize);
         const double l0 = (double)illumination;
         const double la = (double)reflection;
         const double dmin = (double)minDensity / 100;
@@ -478,37 +459,31 @@ void applyInverseGSDF(const unsigned int numberOfBits,
     }
 }
 
-#ifndef RAND_MAX
-/* some brain-dead systems such as SunOS 4.1.3 do not define any constant
- * for the upper limit of rand() calls. We hope that such systems at least
- * keep within the SysV specs and return values up to 2^15-1.
- */
-#define RAND_MAX 32767
-#endif
-
-void mixingUpLUT(const unsigned long numberOfEntries,
-                 const OFBool byteAlign,
-                 const unsigned long randomCount,
-                 const unsigned int randomSeed,
-                 Uint16 *outputData,
-                 char *explanation)
+static void mixingUpLUT(const unsigned long numberOfEntries,
+                        const OFBool byteAlign,
+                        const unsigned long randomCount,
+                        const Uint32 randomSeed,
+                        Uint16 *outputData,
+                        char *explanation,
+                        size_t explanationSize)
 {
+    OFRandom rnd;
     if (outputData != NULL)
     {
         OFLOG_INFO(dcmmklutLogger, "mixing up LUT entries ...");
         if ((explanation != NULL) && (strlen(explanation) > 0))
-            strcat(explanation, ", mixed-up entries");
-        srand(randomSeed);
+            OFStandard::strlcat(explanation, ", mixed-up entries", explanationSize);
+        rnd.seed(randomSeed);
         unsigned long i, i1, i2;
-        const double factor = (double)(numberOfEntries - 1) / RAND_MAX;
+        const double factor = (double)(numberOfEntries - 1) / OFstatic_cast(Uint32, -1);
         if (byteAlign)
         {
             Uint8 temp;
             Uint8 *data8 = (Uint8 *)outputData;
             for (i = 0; i < randomCount; i++)
             {
-                i1 = (unsigned long)(rand() * factor);
-                i2 = (unsigned long)(rand() * factor);
+                i1 = (unsigned long)(rnd.getRND32() * factor);
+                i2 = (unsigned long)(rnd.getRND32() * factor);
                 if (i1 != i2)
                 {
                     temp = data8[i1];
@@ -520,8 +495,8 @@ void mixingUpLUT(const unsigned long numberOfEntries,
             Uint16 temp;
             for (i = 0; i < randomCount; i++)
             {
-                i1 = (unsigned long)(rand() * factor);
-                i2 = (unsigned long)(rand() * factor);
+                i1 = (unsigned long)(rnd.getRND32() * factor);
+                i2 = (unsigned long)(rnd.getRND32() * factor);
                 if (i1 != i2)
                 {
                     temp = outputData[i1];
@@ -534,14 +509,14 @@ void mixingUpLUT(const unsigned long numberOfEntries,
 }
 
 
-OFCondition createLUT(const unsigned int numberOfBits,
-                      const unsigned long numberOfEntries,
-                      const signed long firstMapped,
-                      const OFBool byteAlign,
-                      DcmEVR lutVR,
-                      DcmItem &item,
-                      Uint16 *data,
-                      const char *explanation = NULL)
+static OFCondition createLUT(const unsigned int numberOfBits,
+                             const unsigned long numberOfEntries,
+                             const signed long firstMapped,
+                             const OFBool byteAlign,
+                             DcmEVR lutVR,
+                             DcmItem &item,
+                             Uint16 *data,
+                             const char *explanation = NULL)
 {
     OFCondition result = EC_Normal;
     Uint16 numEntries16 = 0;
@@ -590,8 +565,8 @@ OFCondition createLUT(const unsigned int numberOfBits,
         if (descriptor)
         {
             if (EC_Normal==result) result = descriptor->putUint16(numEntries16, 0);
-            if (EC_Normal==result) result = descriptor->putUint16((Uint16)firstMapped, 1);
-            if (EC_Normal==result) result = descriptor->putUint16(numberOfBits, 2);
+            if (EC_Normal==result) result = descriptor->putUint16(OFstatic_cast(Uint16, firstMapped), 1);
+            if (EC_Normal==result) result = descriptor->putUint16(OFstatic_cast(Uint16, numberOfBits), 2);
             if (EC_Normal==result) result = item.insert(descriptor, OFTrue /*replaceOld*/);
         } else
             return EC_MemoryExhausted;
@@ -761,7 +736,7 @@ int main(int argc, char *argv[])
 
     /* evaluate command line */
     prepareCmdLineArgs(argc, argv, OFFIS_CONSOLE_APPLICATION);
-    if (app.parseCommandLine(cmd, argc, argv, OFCommandLine::PF_ExpandWildcards))
+    if (app.parseCommandLine(cmd, argc, argv))
     {
         /* check exclusive options first */
         if (cmd.hasExclusiveOption())
@@ -918,7 +893,7 @@ int main(int argc, char *argv[])
         {
             char explStr[1024];
             if (opt_explanation != NULL)
-                strcpy(explStr, opt_explanation);
+                OFStandard::strlcpy(explStr, opt_explanation, 1024);
             else
                 explStr[0] = 0;
             OFString headerStr;
@@ -943,9 +918,9 @@ int main(int argc, char *argv[])
             {
                 if (opt_inverseGSDF)
                     applyInverseGSDF((unsigned int)opt_bits, opt_entries, opt_byteAlign, (unsigned int)opt_minDensity, (unsigned int)opt_maxDensity,
-                        (unsigned int)opt_illumination, (unsigned int)opt_reflection, outputData, headerStr, explStr);
+                        (unsigned int)opt_illumination, (unsigned int)opt_reflection, outputData, headerStr, explStr, 1024);
                 if (opt_randomCount > 0)
-                    mixingUpLUT(opt_entries, opt_byteAlign, opt_randomCount, (unsigned int)opt_randomSeed, outputData, explStr);
+                    mixingUpLUT(opt_entries, opt_byteAlign, opt_randomCount, (Uint32)opt_randomSeed, outputData, explStr, 1024);
                 result = createLUT((unsigned int)opt_bits, opt_entries, opt_firstMapped, opt_byteAlign, opt_lutVR, *ditem,
                     outputData, explStr);
             }
@@ -1058,175 +1033,3 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
-
-/*
- * CVS/RCS Log:
- * $Log: dcmmklut.cc,v $
- * Revision 1.47  2010-12-15 17:03:38  joergr
- * Added missing prefix "ios::" to I/O manipulator "fixed" (reported on HP-UX).
- *
- * Revision 1.46  2010-10-20 07:41:36  uli
- * Made sure isalpha() & friends are only called with valid arguments.
- *
- * Revision 1.45  2010-10-14 13:13:44  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.44  2009-11-24 14:12:56  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.43  2009-02-27 11:46:11  joergr
- * Added new command line option --word-align which was previously the default
- * for all bit values.
- * Changed behavior of option --byte-align which previously implied --bits 8.
- * Instead, --bits 8 now implies --byte-align (if not specified manually).
- *
- * Revision 1.42  2008-09-25 16:30:24  joergr
- * Added support for printing the expanded command line arguments.
- * Always output the resource identifier of the command line tool in debug mode.
- *
- * Revision 1.41  2006/08/15 16:57:01  meichel
- * Updated the code in module dcmpstat to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.40  2006/07/27 14:34:40  joergr
- * Changed parameter "exclusive" of method addOption() from type OFBool into an
- * integer parameter "flags". Prepended prefix "PF_" to parseLine() flags.
- * Option "--help" is no longer an exclusive option by default.
- *
- * Revision 1.39  2005/12/08 15:46:03  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.38  2005/11/28 15:29:05  meichel
- * File dcdebug.h is not included by any other header file in the toolkit
- *   anymore, to minimize the risk of name clashes of macro debug().
- *
- * Revision 1.37  2004/02/04 15:44:38  joergr
- * Removed acknowledgements with e-mail addresses from CVS log.
- *
- * Revision 1.36  2003/09/03 16:01:01  meichel
- * Fixed bug in command line evaluation
- *
- * Revision 1.35  2003/04/14 14:28:02  meichel
- * Added explicit typecasts in calls to pow(). Needed by Visual C++ .NET 2003.
- *
- * Revision 1.34  2002/12/04 10:41:33  meichel
- * Changed toolkit to use OFStandard::ftoa instead of sprintf for all
- *   double to string conversions that are supposed to be locale independent
- *
- * Revision 1.33  2002/11/27 15:47:48  meichel
- * Adapted module dcmpstat to use of new header file ofstdinc.h
- *
- * Revision 1.32  2002/11/26 08:44:25  meichel
- * Replaced all includes for "zlib.h" with <zlib.h>
- *   to avoid inclusion of zlib.h in the makefile dependencies.
- *
- * Revision 1.31  2002/09/23 18:26:05  joergr
- * Added new command line option "--version" which prints the name and version
- * number of external libraries used (incl. preparation for future support of
- * 'config.guess' host identifiers).
- *
- * Revision 1.30  2002/08/20 12:21:52  meichel
- * Adapted code to new loadFile and saveFile methods, thus removing direct
- *   use of the DICOM stream classes.
- *
- * Revision 1.29  2002/05/02 14:10:03  joergr
- * Added support for standard and non-standard string streams (which one is
- * supported is detected automatically via the configure mechanism).
- *
- * Revision 1.28  2002/04/16 14:01:25  joergr
- * Added configurable support for C++ ANSI standard includes (e.g. streams).
- *
- * Revision 1.27  2001/11/28 13:58:42  joergr
- * Check return value of DcmItem::insert() statements where appropriate to
- * avoid memory leaks when insert procedure fails.
- *
- * Revision 1.26  2001/11/09 16:06:03  joergr
- * Renamed some of the getValue/getParam methods to avoid ambiguities reported
- * by certain compilers.
- *
- * Revision 1.25  2001/09/28 13:47:36  joergr
- * Added check whether ios::nocreate exists.
- *
- * Revision 1.24  2001/09/26 15:36:00  meichel
- * Adapted dcmpstat to class OFCondition
- *
- * Revision 1.23  2001/06/07 14:34:08  joergr
- * Removed comment.
- *
- * Revision 1.21  2001/06/01 15:50:06  meichel
- * Updated copyright header
- *
- * Revision 1.20  2000/12/12 16:45:35  meichel
- * Minor changes to keep gcc 2.7.x on SunOS 4.1.3 happy
- *
- * Revision 1.19  2000/12/11 18:18:09  joergr
- * Added explicit typecast to keep SunCC 2.0.1 quiet.
- *
- * Revision 1.18  2000/10/16 12:26:05  joergr
- * Added new feature: create inverse GSDF (useful for printer output).
- *
- * Revision 1.17  2000/07/04 16:09:22  joergr
- * Added new option to command line tool allowing to specify the 'seed' value
- * for the random-number generator.
- *
- * Revision 1.16  2000/06/09 10:22:25  joergr
- * Added new commandline option allowing to mix-up the LUT entries based on
- * a random-number generator (useful to test correct implementation of LUTs).
- *
- * Revision 1.15  2000/05/30 14:02:43  joergr
- * Corrected typo/formatting.
- *
- * Revision 1.14  2000/03/08 16:28:41  meichel
- * Updated copyright header.
- *
- * Revision 1.13  2000/03/07 16:17:11  joergr
- * Added explicit type casts to make Sun CC 2.0.1 happy.
- *
- * Revision 1.12  2000/03/06 18:21:44  joergr
- * Avoid empty statement in the body of if-statements (MSVC6 reports warnings).
- *
- * Revision 1.11  2000/03/03 14:13:24  meichel
- * Implemented library support for redirecting error messages into memory
- *   instead of printing them to stdout/stderr for GUI applications.
- *
- * Revision 1.10  2000/02/02 14:38:24  joergr
- * Removed space characters before preprocessor directives.
- *
- * Revision 1.9  1999/10/18 10:21:31  joergr
- * Enlarged string buffer for output text file header.
- *
- * Revision 1.8  1999/10/15 09:35:05  joergr
- * Enhanced checking mechanism for input text files.
- *
- * Revision 1.7  1999/10/14 20:21:29  joergr
- * Fixed problems with MSVC.
- *
- * Revision 1.6  1999/10/14 19:08:48  joergr
- * Merged command line tool 'dconvmap' into 'dcmmklut' and enhanced its
- * facilities (e.g. integrated new polynomial curve fitting algorithm).
- *
- * Revision 1.5  1999/07/28 11:21:07  meichel
- * New options in dcmmklut:
- * - creation of LUTs with 65536 entries
- * - creation of LUT data with VR=OW, US or SS
- * - creation of LUT descriptor with VR=US or SS
- *
- * Revision 1.4  1999/05/04 15:27:22  meichel
- * Minor code purifications to keep gcc on OSF1 quiet.
- *
- * Revision 1.3  1999/05/03 14:16:37  joergr
- * Minor code purifications to keep Sun CC 2.0.1 quiet.
- *
- * Revision 1.2  1999/04/28 15:45:05  meichel
- * Cleaned up module dcmpstat apps, adapted to new command line class
- *   and added short documentation.
- *
- * Revision 1.1  1998/12/14 16:05:48  meichel
- * Added sample application that creates Modality and VOI LUTs
- *   with gamma curve characteristics.
- *
- * Revision 1.1  1998/11/27 14:50:19  meichel
- * Initial Release.
- *
- */

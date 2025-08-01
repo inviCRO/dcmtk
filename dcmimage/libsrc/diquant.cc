@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2010, OFFIS e.V.
+ *  Copyright (C) 2002-2016, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Marco Eichelberg
  *
  *  Purpose: DcmQuant
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:15 $
- *  CVS/RCS Revision: $Revision: 1.9 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -100,7 +93,7 @@ OFCondition DcmQuant::createPaletteColorImage(
     }
     DcmQuantIdent id(cols);
 
-    register OFBool isByteData = (numberOfColors <= 256);
+    OFBool isByteData = (numberOfColors <= 256);
 
     // compute size requirement for palette color pixel data in bytes
     unsigned long totalSize = cols * rows * frames;
@@ -109,7 +102,7 @@ OFCondition DcmQuant::createPaletteColorImage(
 
     Uint16 *imageData16 = NULL;
     Uint8  *imageData8  = NULL;
-    DcmPolymorphOBOW *pixelData = new DcmPolymorphOBOW(DCM_PixelData);
+    DcmPixelData *pixelData = new DcmPixelData(DCM_PixelData);
     if (pixelData)
     {
        result = pixelData->createUint16Array(totalSize/sizeof(Uint16), imageData16);
@@ -226,41 +219,3 @@ OFCondition DcmQuant::updateDerivationDescription(DcmItem *dataset, const char *
 
   return dataset->putAndInsertString(DCM_DerivationDescription, derivationDescription.c_str());
 }
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: diquant.cc,v $
- * Revision 1.9  2010-10-14 13:14:15  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.8  2010-10-05 14:55:26  joergr
- * Also remove PixelPaddingRangeLimit element from the dataset (if required).
- *
- * Revision 1.7  2009-11-25 14:44:03  joergr
- * Added new source and header file for the module logger.
- * Removed inclusion of header file "ofconsol.h".
- *
- * Revision 1.6  2009-10-13 14:08:33  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.5  2006-08-15 16:35:01  meichel
- * Updated the code in module dcmimage to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.4  2005/12/08 15:42:33  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.3  2004/08/24 14:55:28  meichel
- * Removed duplicate code
- *
- * Revision 1.2  2003/12/17 16:34:57  joergr
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- *
- * Revision 1.1  2002/01/25 13:32:12  meichel
- * Initial release of new color quantization classes and
- *   the dcmquant tool in module dcmimage.
- *
- *
- */

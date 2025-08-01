@@ -22,7 +22,7 @@ This module contains the following command line tool:
 \section Files
 
 The following file provides further documentation:
-\li \ref file_wwwapp
+\li \ref file_wlmsetup
 
 \section Examples
 
@@ -34,6 +34,6 @@ activities a corresponding SCP has to manage).
 */
 
 /*!
-    \page file_wwwapp wwwapp.txt file
-    \verbinclude wwwapp.txt
+    \page file_wlmsetup wlmsetup.txt file
+    \verbinclude wlmsetup.txt
 */

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2010, OFFIS e.V.
+ *  Copyright (C) 2010-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -11,19 +11,12 @@
  *    D-26121 Oldenburg, Germany
  *
  *
- *  Module:  dcmsr
+ *  Module: dcmsr
  *
- *  Author:  Joerg Riesmeier
+ *  Author: Joerg Riesmeier
  *
  *  Purpose:
  *    classes: DSRSCoord3DTreeNode
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:41 $
- *  CVS/RCS Revision: $Revision: 1.2 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -36,14 +29,53 @@
 
 
 DSRSCoord3DTreeNode::DSRSCoord3DTreeNode(const E_RelationshipType relationshipType)
- : DSRDocumentTreeNode(relationshipType, VT_SCoord3D),
-   DSRSpatialCoordinates3DValue()
+  : DSRDocumentTreeNode(relationshipType, VT_SCoord3D),
+    DSRSpatialCoordinates3DValue()
+{
+}
+
+
+DSRSCoord3DTreeNode::DSRSCoord3DTreeNode(const DSRSCoord3DTreeNode &node)
+  : DSRDocumentTreeNode(node),
+    DSRSpatialCoordinates3DValue(node)
 {
 }
 
 
 DSRSCoord3DTreeNode::~DSRSCoord3DTreeNode()
 {
+}
+
+
+OFBool DSRSCoord3DTreeNode::operator==(const DSRDocumentTreeNode &node) const
+{
+    /* call comparison operator of base class (includes check of value type) */
+    OFBool result = DSRDocumentTreeNode::operator==(node);
+    if (result)
+    {
+        /* it's safe to cast the type since the value type has already been checked */
+        result = DSRSpatialCoordinates3DValue::operator==(OFstatic_cast(const DSRSCoord3DTreeNode &, node).getValue());
+    }
+    return result;
+}
+
+
+OFBool DSRSCoord3DTreeNode::operator!=(const DSRDocumentTreeNode &node) const
+{
+    /* call comparison operator of base class (includes check of value type) */
+    OFBool result = DSRDocumentTreeNode::operator!=(node);
+    if (!result)
+    {
+        /* it's safe to cast the type since the value type has already been checked */
+        result = DSRSpatialCoordinates3DValue::operator!=(OFstatic_cast(const DSRSCoord3DTreeNode &, node).getValue());
+    }
+    return result;
+}
+
+
+DSRSCoord3DTreeNode *DSRSCoord3DTreeNode::clone() const
+{
+    return new DSRSCoord3DTreeNode(*this);
 }
 
 
@@ -56,7 +88,13 @@ void DSRSCoord3DTreeNode::clear()
 
 OFBool DSRSCoord3DTreeNode::isValid() const
 {
-    return DSRDocumentTreeNode::isValid() && DSRSpatialCoordinates3DValue::isValid();
+    return DSRDocumentTreeNode::isValid() && hasValidValue();
+}
+
+
+OFBool DSRSCoord3DTreeNode::hasValidValue() const
+{
+    return DSRSpatialCoordinates3DValue::isValid();
 }
 
 
@@ -72,7 +110,9 @@ OFCondition DSRSCoord3DTreeNode::print(STD_NAMESPACE ostream &stream,
     OFCondition result = DSRDocumentTreeNode::print(stream, flags);
     if (result.good())
     {
+        DCMSR_PRINT_ANSI_ESCAPE_CODE(DCMSR_ANSI_ESCAPE_CODE_DELIMITER)
         stream << "=";
+        DCMSR_PRINT_ANSI_ESCAPE_CODE(DCMSR_ANSI_ESCAPE_CODE_ITEM_VALUE)
         result = DSRSpatialCoordinates3DValue::print(stream, flags);
     }
     return result;
@@ -93,10 +133,11 @@ OFCondition DSRSCoord3DTreeNode::writeXML(STD_NAMESPACE ostream &stream,
 }
 
 
-OFCondition DSRSCoord3DTreeNode::readContentItem(DcmItem &dataset)
+OFCondition DSRSCoord3DTreeNode::readContentItem(DcmItem &dataset,
+                                                 const size_t flags)
 {
     /* read SpatialCoordinates */
-    return DSRSpatialCoordinates3DValue::read(dataset);
+    return DSRSpatialCoordinates3DValue::read(dataset, flags);
 }
 
 
@@ -108,7 +149,8 @@ OFCondition DSRSCoord3DTreeNode::writeContentItem(DcmItem &dataset) const
 
 
 OFCondition DSRSCoord3DTreeNode::readXMLContentItem(const DSRXMLDocument &doc,
-                                                    DSRXMLCursor cursor)
+                                                    DSRXMLCursor cursor,
+                                                    const size_t flags)
 {
     OFCondition result = SR_EC_CorruptedXMLStructure;
     if (cursor.valid())
@@ -119,7 +161,7 @@ OFCondition DSRSCoord3DTreeNode::readXMLContentItem(const DSRXMLDocument &doc,
         if (result.good())
         {
             /* proceed reading the spatial coordinates */
-            result = DSRSpatialCoordinates3DValue::readXML(doc, cursor);
+            result = DSRSpatialCoordinates3DValue::readXML(doc, cursor, flags);
         } else
             printUnknownValueWarningMessage("SCOORD3D type", tmpString.c_str());
     }
@@ -143,16 +185,3 @@ OFCondition DSRSCoord3DTreeNode::renderHTMLContentItem(STD_NAMESPACE ostream &do
     }
     return result;
 }
-
-
-/*
- *  CVS/RCS Log:
- *  $Log: dsrsc3tn.cc,v $
- *  Revision 1.2  2010-10-14 13:14:41  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.1  2010-09-28 14:07:29  joergr
- *  Added support for Colon CAD SR which requires a new value type (SCOORD3D).
- *
- *
- */

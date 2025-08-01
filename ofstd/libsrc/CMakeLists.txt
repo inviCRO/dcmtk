@@ -1,5 +1,31 @@
 # create library from source files
-ADD_LIBRARY(ofstd ofcmdln ofconapp ofcond ofconfig ofconsol ofcrc32 ofdate ofdatime offname oflist ofstd ofstring ofthread oftime)
+DCMTK_ADD_LIBRARY(ofstd 
+  ofchrenc.cc
+  ofcmdln.cc
+  ofconapp.cc
+  ofcond.cc
+  ofconfig.cc
+  ofconsol.cc
+  ofcrc32.cc
+  ofdate.cc
+  ofdatime.cc
+  oferror.cc
+  offile.cc
+  offilsys.cc
+  offname.cc
+  oflist.cc
+  ofstd.cc
+  ofstring.cc
+  ofstrutl.cc
+  ofthread.cc
+  oftime.cc
+  oftimer.cc
+  oftempf.cc
+  ofxml.cc
+  ofuuid.cc
+  ofmath.cc
+  ofsockad.cc
+  ofrand.cc
+)
 
-# declare installation files
-INSTALL_TARGETS(${INSTALL_LIBDIR} ofstd)
+DCMTK_TARGET_LINK_LIBRARIES(ofstd config ${CHARSET_CONVERSION_LIBS} ${SOCKET_LIBS} ${THREAD_LIBS} ${WIN32_STD_LIBRARIES})

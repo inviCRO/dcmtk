@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1993-2010, OFFIS e.V.
+ *  Copyright (C) 1993-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: class DcmQueryRetrieveMoveContext
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:41 $
- *  CVS/RCS Revision: $Revision: 1.8 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCMQRCBM_H
@@ -31,6 +24,8 @@
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 #include "dcmtk/dcmnet/dimse.h"
+#include "dcmtk/dcmnet/dcasccfg.h"
+#include "dcmtk/dcmqrdb/qrdefine.h"
 
 class DcmQueryRetrieveDatabaseHandle;
 class DcmQueryRetrieveOptions;
@@ -40,7 +35,7 @@ class DcmQueryRetrieveDatabaseStatus;
 /** this class maintains the context information that is passed to the
  *  callback function called by DIMSE_moveProvider.
  */
-class DcmQueryRetrieveMoveContext
+class DCMTK_DCMQRDB_EXPORT DcmQueryRetrieveMoveContext
 {
 public:
     /** constructor
@@ -55,6 +50,7 @@ public:
     DcmQueryRetrieveMoveContext(
       DcmQueryRetrieveDatabaseHandle& handle,
       const DcmQueryRetrieveOptions& options,
+      const DcmAssociationConfiguration& associationConfiguration,
       const DcmQueryRetrieveConfig *cfg,
       DIC_US priorstatus,
       T_ASC_Association *assoc,
@@ -62,6 +58,7 @@ public:
       T_DIMSE_Priority pr)
     : dbHandle(handle)
     , options_(options)
+    , associationConfiguration_(associationConfiguration)
     , priorStatus(priorstatus)
     , origAssoc(assoc)
     , subAssoc(NULL)
@@ -111,6 +108,12 @@ public:
 
 private:
 
+    /// private undefined copy constructor
+    DcmQueryRetrieveMoveContext(const DcmQueryRetrieveMoveContext& other);
+
+    /// private undefined assignment operator
+    DcmQueryRetrieveMoveContext& operator=(const DcmQueryRetrieveMoveContext& other);
+
     void addFailedUIDInstance(const char *sopInstance);
     OFCondition performMoveSubOp(DIC_UI sopClass, DIC_UI sopInstance, char *fname);
     OFCondition buildSubAssociation(T_DIMSE_C_MoveRQ *request);
@@ -120,7 +123,7 @@ private:
     void buildFailedInstanceList(DcmDataset ** rspIds);
     OFBool mapMoveDestination(
       const char *origPeer, const char *origAE,
-      const char *dstAE, char *dstPeer, int *dstPort);
+      const char *dstAE, char *dstPeer, size_t dstPeerLen, int *dstPort);
     OFCondition addAllStoragePresentationContexts(T_ASC_Parameters *params);
 
     /// reference to database handle
@@ -128,6 +131,9 @@ private:
 
     /// reference to Q/R service options
     const DcmQueryRetrieveOptions& options_;
+
+    /// reference to association configuration
+    const DcmAssociationConfiguration& associationConfiguration_;
 
     /// prior DIMSE status
     DIC_US  priorStatus;
@@ -180,37 +186,3 @@ private:
 };
 
 #endif
-
-/*
- * CVS Log
- * $Log: dcmqrcbm.h,v $
- * Revision 1.8  2010-10-14 13:16:41  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.7  2009-11-24 10:10:42  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.6  2009-08-21 09:50:07  joergr
- * Replaced tabs by spaces and updated copyright date.
- *
- * Revision 1.5  2006/04/05 08:22:24  joergr
- * Fixed issue with initialization of OFString member variables.
- *
- * Revision 1.4  2005/12/20 11:21:30  meichel
- * Removed duplicate parameter
- *
- * Revision 1.3  2005/12/15 08:32:49  joergr
- * Fixed issue with initialization of array member variables, reported by egcs
- * on Solaris. Fixed missing/wrong initialization of member variables.
- *
- * Revision 1.2  2005/12/08 16:04:18  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.1  2005/03/30 13:34:50  meichel
- * Initial release of module dcmqrdb that will replace module imagectn.
- *   It provides a clear interface between the Q/R DICOM front-end and the
- *   database back-end. The imagectn code has been re-factored into a minimal
- *   class structure.
- *
- *
- */

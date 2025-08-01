@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1993-2010, OFFIS e.V.
+ *  Copyright (C) 1993-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,31 +17,122 @@
  *
  *  Purpose: class DcmQueryRetrieveConfig
  *
- *  Last Update:      $Author: uli $
- *  Update Date:      $Date: 2010-12-15 13:59:58 $
- *  CVS/RCS Revision: $Revision: 1.14 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 #include "dcmtk/dcmqrdb/dcmqrcnf.h"
 
-/* includes */
-#define INCLUDE_CSTDIO
-#define INCLUDE_CCTYPE
-#define INCLUDE_CSTDARG
-#define INCLUDE_CSTRING
-#include "dcmtk/ofstd/ofstdinc.h"
 #include "dcmtk/ofstd/ofcmdln.h"
+#include "dcmtk/ofstd/ofmap.h"
+#include "dcmtk/ofstd/ofchrenc.h"
 
-OFLogger DCM_dcmqrdbGetLogger()
+#include <climits>
+
+OFLogger DCM_dcmqrdbLogger = OFLog::getLogger("dcmtk.dcmqrdb");
+
+static void freePeer(OFMap<const void *, OFBool> &pointersToFree, struct DcmQueryRetrieveConfigPeer *entry)
 {
-    static OFLogger DCM_dcmqrdbLogger = OFLog::getLogger("dcmtk.dcmqrdb");
-    return DCM_dcmqrdbLogger;
+    // Hack to make sure we don't double-free
+    pointersToFree[entry->ApplicationTitle] = OFTrue;
+    pointersToFree[entry->HostName] = OFTrue;
+}
+
+static void freeConfigAEEntry(OFMap<const void *, OFBool> &pointersToFree, struct DcmQueryRetrieveConfigAEEntry *entry)
+{
+    for (int i = 0; i < entry->noOfPeers; i++) {
+        freePeer(pointersToFree, &entry->Peers[i]);
+    }
+    free(OFconst_cast(char *, entry->ApplicationTitle));
+    free(OFconst_cast(char *, entry->StorageArea));
+    free(OFconst_cast(char *, entry->Access));
+    free(entry->StorageQuota);
+    free(entry->Peers);
+}
+
+static void freeConfigHostEntry(OFMap<const void *, OFBool> &pointersToFree, struct DcmQueryRetrieveConfigHostEntry *entry)
+{
+    for (int i = 0; i< entry->noOfPeers; i++) {
+        freePeer(pointersToFree, &entry->Peers[i]);
+    }
+    free(OFconst_cast(char *, entry->SymbolicName));
+    free(entry->Peers);
+}
+
+DcmQueryRetrieveCharacterSetOptions::DcmQueryRetrieveCharacterSetOptions()
+: characterSet()
+, flags(0)
+, conversionFlags(0)
+{
+
+}
+
+OFBool DcmQueryRetrieveCharacterSetOptions::parseOptions(const char* mnemonic, char* valueptr)
+{
+    struct RAIIFree
+    {
+        RAIIFree(char* p) : ptr(p) {}
+        ~RAIIFree() {free(ptr);}
+        char* ptr;
+    };
+    if (strcmp(mnemonic,"SpecificCharacterSet") != 0)
+        return OFFalse;
+    characterSet.clear();
+    flags = Configured;
+    conversionFlags = 0;
+    for (char* c = DcmQueryRetrieveConfig::parsevalues(&valueptr); c;
+         c = DcmQueryRetrieveConfig::parsevalues(&valueptr)) {
+        // ensure free is called when this scope is left
+        RAIIFree cleanup(c);
+        if (!strcmp(c, "override")) {
+            flags |= Override;
+        } else if(!strcmp(c, "fallback")) {
+            flags |= Fallback;
+        } else if(!strcmp(c, "abort")) {
+            conversionFlags |= OFCharacterEncoding::AbortTranscodingOnIllegalSequence;
+        } else if(!strcmp(c, "discard")) {
+            conversionFlags |= OFCharacterEncoding::DiscardIllegalSequences;
+        } else if(!strcmp(c, "transliterate")) {
+            conversionFlags |= OFCharacterEncoding::TransliterateIllegalSequences;
+        } else {
+            characterSet = c;
+        }
+    }
+    return OFTrue;
+}
+
+DcmQueryRetrieveConfig::~DcmQueryRetrieveConfig()
+{
+    // There can be more than one DcmQueryRetrieveConfigPeer which points to the
+    // same strings. To make sure that we don't free them more than once, we use
+    // a std::set<void*> which contains the pointers which we have to free.
+    // This happens in DcmQueryRetrieveConfig::readPeerList() while handling
+    // symbolic names (DcmQueryRetrieveConfigPeer gets copied via memcpy()).
+    //
+    // TODO: Since OFSet and std::set have nothing in common, we have to fake a
+    // set via a map.
+    OFMap<const void *, OFBool> pointersToFree;
+    OFMap<const void *, OFBool>::const_iterator it;
+    int i;
+
+    for (i = 0; i < CNF_Config.noOfAEEntries; i++) {
+        freeConfigAEEntry(pointersToFree, &CNF_Config.AEEntries[i]);
+    }
+    free(CNF_Config.AEEntries);
+
+    for (i = 0; i < CNF_HETable.noOfHostEntries; i++) {
+        freeConfigHostEntry(pointersToFree, &CNF_HETable.HostEntries[i]);
+    }
+    free(CNF_HETable.HostEntries);
+
+    for (i = 0; i < CNF_VendorTable.noOfHostEntries; i++) {
+        freeConfigHostEntry(pointersToFree, &CNF_VendorTable.HostEntries[i]);
+    }
+    free(CNF_VendorTable.HostEntries);
+
+    for (it = pointersToFree.begin(); it != pointersToFree.end(); ++it) {
+        free(OFconst_cast(void *, it->first));
+    }
 }
 
 int DcmQueryRetrieveConfig::aeTitlesForPeer(const char *hostName, const char *** aeTitleList) const
@@ -233,15 +324,14 @@ int DcmQueryRetrieveConfig::readConfigLines(FILE *cnffp)
    int  lineno = 0,       /* line counter */
         error = 0;        /* error flag */
    char rcline[512],      /* line in configuration file */
-        mnemonic[64],     /* mnemonic in line */
-        value[256],       /* parameter value */
+        mnemonic[512],    /* mnemonic in line */
+        value[512],       /* parameter value */
         *valueptr;        /* pointer to value list */
    char *c;
 
-   while (!feof(cnffp)) {
-      fgets(rcline, sizeof(rcline), cnffp); /* read line in configuration file */
+   // read all lines from configuration file
+   while (fgets(rcline, sizeof(rcline), cnffp)) {
       lineno++;
-      if (feof(cnffp)) continue;
       if (rcline[0] == '#' || rcline[0] == 10 || rcline[0] == 13)
          continue;        /* comment or blank line */
 
@@ -294,6 +384,10 @@ int DcmQueryRetrieveConfig::readConfigLines(FILE *cnffp)
       {
         // ignore this entry which was needed for ctndisp
       }
+      else if (characterSetOptions_.parseOptions(mnemonic, valueptr))
+      {
+        // already handled by parseOptions(), nothing else to do
+      }
       else if (!strcmp("HostTable", mnemonic)) {
          sscanf(valueptr, "%s", value);
          if (!strcmp("BEGIN", value)) {
@@ -305,7 +399,7 @@ int DcmQueryRetrieveConfig::readConfigLines(FILE *cnffp)
             error = 1;
          }
          else {
-            panic("Unknown HostTable status \"%s\" in configuartion file, line %d", value, lineno);
+            panic("Unknown HostTable status \"%s\" in configuration file, line %d", value, lineno);
             error = 1;
          }
       }
@@ -320,7 +414,7 @@ int DcmQueryRetrieveConfig::readConfigLines(FILE *cnffp)
             error = 1;
          }
          else {
-            panic("Unknown VendorTable status \"%s\" in configuartion file, line %d", value, lineno);
+            panic("Unknown VendorTable status \"%s\" in configuration file, line %d", value, lineno);
             error = 1;
          }
       }
@@ -335,7 +429,7 @@ int DcmQueryRetrieveConfig::readConfigLines(FILE *cnffp)
             error = 1;
          }
          else {
-            panic("Unknown AETable status \"%s\" in configuartion file, line %d", value, lineno);
+            panic("Unknown AETable status \"%s\" in configuration file, line %d", value, lineno);
             error = 1;
          }
       }
@@ -355,15 +449,14 @@ int DcmQueryRetrieveConfig::readHostTable(FILE *cnffp, int *lineno)
         end = 0,          /* end flag */
         noOfPeers;        /* number of peers for entry */
    char rcline[512],      /* line in configuration file */
-        mnemonic[64],     /* mnemonic in line */
-        value[256],       /* parameter value */
+        mnemonic[512],    /* mnemonic in line */
+        value[512],       /* parameter value */
         *lineptr;         /* pointer to line */
    DcmQueryRetrieveConfigHostEntry *helpentry;
 
-   while (!feof(cnffp)) {
-      fgets(rcline, sizeof(rcline), cnffp); /* read line in configuration file */
+   // read certain lines from configuration file
+   while (fgets(rcline, sizeof(rcline), cnffp)) {
       (*lineno)++;
-      if (feof(cnffp)) continue;
       if (rcline[0] == '#' || rcline[0] == 10 || rcline[0] == 13)
          continue;        /* comment or blank line */
 
@@ -411,15 +504,14 @@ int DcmQueryRetrieveConfig::readVendorTable(FILE *cnffp, int *lineno)
         end = 0,          /* end flag */
         noOfPeers;        /* number of peers for entry */
    char rcline[512],      /* line in configuration file */
-        mnemonic[64],     /* mnemonic in line */
-        value[256],       /* parameter value */
+        mnemonic[512],     /* mnemonic in line */
+        value[512],       /* parameter value */
         *lineptr;         /* pointer to line */
    DcmQueryRetrieveConfigHostEntry *helpentry;
 
-   while (!feof(cnffp)) {
-      fgets(rcline, sizeof(rcline), cnffp); /* read line in configuration file */
+   // read certain lines from configuration file
+   while (fgets(rcline, sizeof(rcline), cnffp)) {
       (*lineno)++;
-      if (feof(cnffp)) continue;
       if (rcline[0] == '#' || rcline[0] == 10 || rcline[0] == 13)
          continue;        /* comment or blank line */
 
@@ -467,15 +559,14 @@ int DcmQueryRetrieveConfig::readAETable(FILE *cnffp, int *lineno)
         end = 0,            /* end flag */
         noOfAEEntries = 0;  /* number of AE entries */
    char rcline[512],        /* line in configuration file */
-        mnemonic[64],       /* mnemonic in line */
-        value[256],         /* parameter value */
+        mnemonic[512],      /* mnemonic in line */
+        value[512],         /* parameter value */
         *lineptr;           /* pointer to line */
    DcmQueryRetrieveConfigAEEntry *helpentry;
 
-   while (!feof(cnffp)) {
-      fgets(rcline, sizeof(rcline), cnffp); /* read line in configuration file */
+   // read certain lines from configuration file
+   while (fgets(rcline, sizeof(rcline), cnffp)) {
       (*lineno)++;
-      if (feof(cnffp)) continue;
       if (rcline[0] == '#' || rcline[0] == 10 || rcline[0] == 13)
          continue;        /* comment or blank line */
 
@@ -507,8 +598,13 @@ int DcmQueryRetrieveConfig::readAETable(FILE *cnffp, int *lineno)
       CNF_Config.AEEntries[noOfAEEntries - 1].Access = parsevalues(&lineptr);
       CNF_Config.AEEntries[noOfAEEntries - 1].StorageQuota = parseQuota(&lineptr);
       CNF_Config.AEEntries[noOfAEEntries - 1].Peers = parsePeers(&lineptr, &CNF_Config.AEEntries[noOfAEEntries - 1].noOfPeers);
-      if (!CNF_Config.AEEntries[noOfAEEntries - 1].noOfPeers)
-         error = 1;
+
+      // check the validity of the storage quota and peers values before continuing
+      if (CNF_Config.AEEntries[noOfAEEntries - 1].StorageQuota->maxStudies == 0 ||
+         CNF_Config.AEEntries[noOfAEEntries - 1].StorageQuota->maxBytesPerStudy == 0 || 
+         CNF_Config.AEEntries[noOfAEEntries - 1].noOfPeers == 0) {
+          error = 1;
+      }
    }
 
    if (!end) {
@@ -524,15 +620,21 @@ DcmQueryRetrieveConfigQuota *DcmQueryRetrieveConfig::parseQuota(char **valuehand
 {
    int  studies;
    char *helpvalue,
-        helpval[20];
+        helpval[512];
    DcmQueryRetrieveConfigQuota *helpquota;
 
    if ((helpquota = (DcmQueryRetrieveConfigQuota *)malloc(sizeof(DcmQueryRetrieveConfigQuota))) == NULL)
       panic("Memory allocation 4");
    helpvalue = parsevalues(valuehandle);
-   sscanf(helpvalue, "%d , %s", &studies, helpval);
-   helpquota->maxStudies = studies;
-   helpquota->maxBytesPerStudy = quota(helpval);
+   if (helpvalue)
+   {
+     sscanf(helpvalue, "%d , %s", &studies, helpval);
+     helpquota->maxStudies = studies;
+     helpquota->maxBytesPerStudy = quota(helpval);
+   } else {
+     helpquota->maxStudies = 0;
+     helpquota->maxBytesPerStudy = 0;
+   }
    free(helpvalue);
 
    return(helpquota);
@@ -545,7 +647,13 @@ DcmQueryRetrieveConfigPeer *DcmQueryRetrieveConfig::parsePeers(char **valuehandl
    char *valueptr = *valuehandle;
 
    helpvalue = parsevalues(valuehandle);
-   if (!strcmp("ANY", helpvalue)) {     /* keywork ANY used */
+
+   if (!helpvalue) {
+      *peers = 0; // indicates error to caller
+      return NULL;
+   }
+
+   if (!strcmp("ANY", helpvalue)) {     /* keyword ANY used */
       free(helpvalue);
       *peers = -1;
       return((DcmQueryRetrieveConfigPeer *) 0);
@@ -748,6 +856,11 @@ long DcmQueryRetrieveConfig::quota (const char *value)
    else return(-1L);
 
    number = atoi(value);
+
+   // check for overflow
+   if (number > 0 && factor > LONG_MAX / number)
+     return LONG_MAX;
+
    return(number * factor);
 }
 
@@ -1005,55 +1118,12 @@ const char *DcmQueryRetrieveConfig::getGroupName() const
    return GroupName_.c_str();
 }
 
-/*
- * CVS Log
- * $Log: dcmqrcnf.cc,v $
- * Revision 1.14  2010-12-15 13:59:58  uli
- * Fixed a problem with a missing prototype for vsnprintf on HP-UX.
- *
- * Revision 1.13  2010-10-20 07:41:36  uli
- * Made sure isalpha() & friends are only called with valid arguments.
- *
- * Revision 1.12  2010-10-14 13:14:35  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.11  2010-09-09 17:20:42  joergr
- * Removed unused (or never used?) configuration entries.
- *
- * Revision 1.10  2010-09-09 16:54:32  joergr
- * Further code clean-up and minor changes to log messages.
- *
- * Revision 1.9  2010-06-25 09:15:19  uli
- * Fixed issues with compiling with HAVE_STD_STRING.
- *
- * Revision 1.8  2009-11-24 10:10:42  uli
- * Switched to logging mechanism provided by the "new" oflog module.
- *
- * Revision 1.7  2009-08-21 09:54:11  joergr
- * Replaced tabs by spaces and updated copyright date.
- *
- * Revision 1.6  2005/12/16 13:10:24  meichel
- * Added type safety code for 64bit platforms
- *
- * Revision 1.5  2005/12/14 14:29:42  joergr
- * Including ctype if present, needed for Solaris.
- *
- * Revision 1.4  2005/12/08 15:47:08  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.3  2005/04/07 14:38:22  joergr
- * Initialize member variables for user and group name.
- *
- * Revision 1.2  2005/04/04 13:15:13  meichel
- * Added username/groupname configuration option that allows to start the
- *   image database as root and let it call setuid/setgid to execute under an
- *   unprivileged account once the listen socket has been opened.
- *
- * Revision 1.1  2005/03/30 13:34:53  meichel
- * Initial release of module dcmqrdb that will replace module imagectn.
- *   It provides a clear interface between the Q/R DICOM front-end and the
- *   database back-end. The imagectn code has been re-factored into a minimal
- *   class structure.
- *
- *
- */
+const DcmQueryRetrieveCharacterSetOptions& DcmQueryRetrieveConfig::getCharacterSetOptions() const
+{
+   return characterSetOptions_;
+}
+
+DcmQueryRetrieveCharacterSetOptions& DcmQueryRetrieveConfig::getCharacterSetOptions()
+{
+   return characterSetOptions_;
+}

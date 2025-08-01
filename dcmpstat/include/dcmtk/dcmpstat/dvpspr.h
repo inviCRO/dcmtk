@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2012, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,25 +18,19 @@
  *  Purpose:
  *    classes: DVPSPrintMessageHandler
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:36 $
- *  CVS/RCS Revision: $Revision: 1.17 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DVPSPR_H
 #define DVPSPR_H
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
+#include "dcmtk/dcmpstat/dpdefine.h"
 #include "dcmtk/dcmnet/dimse.h"
 
 /** pure abstract event handler class for N-EVENT-REPORT.
  */
 
-class DVPSPrintEventHandler
+class DCMTK_DCMPSTAT_EXPORT DVPSPrintEventHandler
 {
 public:
 
@@ -63,7 +57,7 @@ public:
 /** representation of an association used for DICOM Basic Grayscale Print.
  */
 
-class DVPSPrintMessageHandler
+class DCMTK_DCMPSTAT_EXPORT DVPSPrintMessageHandler
 {
 public:
   /// default constructor
@@ -216,8 +210,8 @@ public:
   void setEventHandler(DVPSPrintEventHandler *handler) { eventHandler = handler; }
 
   /** sets the blocking and timeout mode for receive operations.
-   *  @param blockMode blocking mode
-   *  @param timeout
+   *  @param blocking blocking mode
+   *  @param timeOut
    */
   void setTimeout(T_DIMSE_BlockingMode blocking, int timeOut) { blockMode=blocking; timeout=timeOut; }
 
@@ -295,63 +289,3 @@ private:
 };
 
 #endif
-
-/*
- *  $Log: dvpspr.h,v $
- *  Revision 1.17  2010-10-14 13:16:36  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.16  2010-10-07 14:31:36  joergr
- *  Removed leading underscore characters from preprocessor symbols (reserved).
- *
- *  Revision 1.15  2009-11-24 14:12:57  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.14  2009-09-30 10:42:38  uli
- *  Make dcmpstat's include headers self-sufficient by including all
- *  needed headers directly and stop using dctk.h
- *
- *  Revision 1.13  2006-08-15 16:57:01  meichel
- *  Updated the code in module dcmpstat to correctly compile when
- *    all standard C++ classes remain in namespace std.
- *
- *  Revision 1.12  2005/12/09 14:48:35  meichel
- *  Added missing virtual destructors
- *
- *  Revision 1.11  2005/12/08 16:03:57  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.10  2003/09/05 14:31:33  meichel
- *  Print SCU now supports TLS connections.
- *
- *  Revision 1.9  2001/10/12 13:46:52  meichel
- *  Adapted dcmpstat to OFCondition based dcmnet module (supports strict mode).
- *
- *  Revision 1.8  2001/06/01 15:50:19  meichel
- *  Updated copyright header
- *
- *  Revision 1.7  2000/06/02 16:00:50  meichel
- *  Adapted all dcmpstat classes to use OFConsole for log and error output
- *
- *  Revision 1.6  2000/03/08 16:28:55  meichel
- *  Updated copyright header.
- *
- *  Revision 1.5  1999/10/28 08:18:56  meichel
- *  Print client does not attempt any more to negotiate Presentation LUT or
- *    Annotation Box if config file says that the printer does not support them.
- *
- *  Revision 1.4  1999/10/13 14:10:47  meichel
- *  Now negotiation Basic Annotation Box SOP Class
- *
- *  Revision 1.3  1999/09/24 15:23:47  meichel
- *  Print spooler (dcmprtsv) now logs diagnostic messages in log files
- *    when operating in spool mode.
- *
- *  Revision 1.2  1999/09/17 14:33:58  meichel
- *  Completed print spool functionality including Supplement 22 support
- *
- *  Revision 1.1  1999/07/30 13:34:49  meichel
- *  Added new classes managing Stored Print objects
- *
- *
- */

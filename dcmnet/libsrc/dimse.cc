@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were partly developed by
@@ -72,13 +72,6 @@
 **      for DICOM V.3 applications.
 **
 ** Module Prefix: DIMSE_
-**
-** Last Update:         $Author: joergr $
-** Update Date:         $Date: 2010-12-01 08:26:36 $
-** CVS/RCS Revision:    $Revision: 1.62 $
-** Status:              $State: Exp $
-**
-** CVS/RCS Log at end of file
 */
 
 /*
@@ -86,14 +79,6 @@
 */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
-
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CSTDIO
-#define INCLUDE_CSTRING
-#define INCLUDE_CSTDARG
-#define INCLUDE_CERRNO
-#define INCLUDE_UNISTD
-#include "dcmtk/ofstd/ofstdinc.h"
 
 #ifdef HAVE_UNIX_H
 #if defined(macintosh) && defined (HAVE_WINSOCK_H)
@@ -121,8 +106,8 @@
 #include "dcmtk/dcmdata/dcvrul.h"      /* for class DcmUnsignedLong */
 #include "dcmtk/dcmdata/dcvrobow.h"    /* for class DcmOtherByteOtherWord */
 #include "dcmtk/dcmdata/dcvrsh.h"      /* for class DcmShortString */
-#include "dcmtk/dcmdata/dcvrae.h"      /* for class Dcm */
-#include "dcmtk/dcmdata/dcdicent.h"    /* for DcmDictEntry, needed for MSVC5 */
+#include "dcmtk/dcmdata/dcvrae.h"      /* for class DcmApplicationEntity */
+#include "dcmtk/dcmdata/dcdicent.h"    /* for class DcmDictEntry, needed for MSVC5 */
 #include "dcmtk/dcmdata/dcwcache.h"    /* for class DcmWriteCache */
 #include "dcmtk/dcmdata/dcvrui.h"      /* for class DcmUniqueIdentifier */
 
@@ -272,7 +257,7 @@ DIMSE_readNextPDV(
         /* try to receive new PDVs on the incoming socket stream (in detail, try to receive one PDU) */
         cond = DUL_ReadPDVs(&assoc->DULassociation, NULL, blk, timeout);
 
-        /* check return value, if it is different from DUL_PDATAPDUARRIVED, an error occured */
+        /* check return value, if it is different from DUL_PDATAPDUARRIVED, an error occurred */
         if (cond != DUL_PDATAPDUARRIVED)
         {
             if (cond == DUL_NULLKEY || cond == DUL_ILLEGALKEY) return DIMSE_ILLEGALASSOCIATION;
@@ -311,7 +296,7 @@ getTransferSyntax(
      * Parameters:
      *   assoc      - [in] The association (network connection to another DICOM application).
      *   pid        - [in] The id of the presentation context which shall be checked regarding validity.
-     *   xferSyntax - [out] If pid refers to a valuid presentation context, this variable contains in the
+     *   xferSyntax - [out] If pid refers to a valid presentation context, this variable contains in the
      *                     end the transfer syntax which is specified in the presentation context.
      */
 {
@@ -338,33 +323,40 @@ getTransferSyntax(
         case EXS_LittleEndianImplicit:
         case EXS_LittleEndianExplicit:
         case EXS_BigEndianExplicit:
-        case EXS_JPEGProcess1TransferSyntax:
-        case EXS_JPEGProcess2_4TransferSyntax:
-        case EXS_JPEGProcess3_5TransferSyntax:
-        case EXS_JPEGProcess6_8TransferSyntax:
-        case EXS_JPEGProcess7_9TransferSyntax:
-        case EXS_JPEGProcess10_12TransferSyntax:
-        case EXS_JPEGProcess11_13TransferSyntax:
-        case EXS_JPEGProcess14TransferSyntax:
-        case EXS_JPEGProcess15TransferSyntax:
-        case EXS_JPEGProcess16_18TransferSyntax:
-        case EXS_JPEGProcess17_19TransferSyntax:
-        case EXS_JPEGProcess20_22TransferSyntax:
-        case EXS_JPEGProcess21_23TransferSyntax:
-        case EXS_JPEGProcess24_26TransferSyntax:
-        case EXS_JPEGProcess25_27TransferSyntax:
-        case EXS_JPEGProcess28TransferSyntax:
-        case EXS_JPEGProcess29TransferSyntax:
-        case EXS_JPEGProcess14SV1TransferSyntax:
+        case EXS_JPEGProcess1:
+        case EXS_JPEGProcess2_4:
+        case EXS_JPEGProcess3_5:
+        case EXS_JPEGProcess6_8:
+        case EXS_JPEGProcess7_9:
+        case EXS_JPEGProcess10_12:
+        case EXS_JPEGProcess11_13:
+        case EXS_JPEGProcess14:
+        case EXS_JPEGProcess15:
+        case EXS_JPEGProcess16_18:
+        case EXS_JPEGProcess17_19:
+        case EXS_JPEGProcess20_22:
+        case EXS_JPEGProcess21_23:
+        case EXS_JPEGProcess24_26:
+        case EXS_JPEGProcess25_27:
+        case EXS_JPEGProcess28:
+        case EXS_JPEGProcess29:
+        case EXS_JPEGProcess14SV1:
         case EXS_RLELossless:
         case EXS_JPEGLSLossless:
         case EXS_JPEGLSLossy:
         case EXS_JPEG2000LosslessOnly:
         case EXS_JPEG2000:
-        case EXS_MPEG2MainProfileAtMainLevel:
-        case EXS_MPEG2MainProfileAtHighLevel:
         case EXS_JPEG2000MulticomponentLosslessOnly:
         case EXS_JPEG2000Multicomponent:
+        case EXS_MPEG2MainProfileAtMainLevel:
+        case EXS_MPEG2MainProfileAtHighLevel:
+        case EXS_MPEG4HighProfileLevel4_1:
+        case EXS_MPEG4BDcompatibleHighProfileLevel4_1:
+        case EXS_MPEG4HighProfileLevel4_2_For2DVideo:
+        case EXS_MPEG4HighProfileLevel4_2_For3DVideo:
+        case EXS_MPEG4StereoHighProfileLevel4_2:
+        case EXS_HEVCMainProfileLevel5_1:
+        case EXS_HEVCMain10ProfileLevel5_1:
 #ifdef WITH_ZLIB
         case EXS_DeflatedLittleEndianExplicit:
 #endif
@@ -604,6 +596,7 @@ sendStraightFileData(
     OFCondition dulCond = EC_Normal;
     DUL_PDVLIST pdvList;
     DUL_PDV pdv;
+    /* the following variable is currently unused, leave it for future use */
     unsigned long pdvCount = 0;
 
     buf = assoc->sendPDVBuffer;
@@ -688,7 +681,11 @@ sendDcmDataset(
     Uint32 bytesTransmitted = 0;
     DUL_PDVLIST pdvList;
     DUL_PDV pdv;
+
+#if 0
+    /* the following variable is currently unused, leave it for future use */
     unsigned long pdvCount = 0;
+#endif
     DcmWriteCache wcache;
 
     /* initialize some local variables (we want to use the association's send buffer */
@@ -806,7 +803,9 @@ sendDcmDataset(
 
             /* count the bytes and the amount of PDVs which were transmitted */
             bytesTransmitted += OFstatic_cast(Uint32, rtnLength);
+#if 0
             pdvCount += pdvList.count;
+#endif
 
             /* execute callback function to indicate progress */
             if (callback) {
@@ -917,9 +916,8 @@ DIMSE_sendMessage(
       {
         if (! dcmff.loadFile(dataFileName, EXS_Unknown).good())
         {
-          char buf[256];
           DCMNET_WARN(DIMSE_warn_str(assoc) << "sendMessage: cannot open DICOM file ("
-            << dataFileName << "): " << OFStandard::strerror(errno, buf, sizeof(buf)));
+            << dataFileName << "): " << OFStandard::getLastSystemErrorCode().message());
           cond = DIMSE_SENDFAILED;
         } else {
           dataObject = dcmff.getDataset();
@@ -1010,25 +1008,6 @@ DIMSE_sendMessageUsingFileData(
         DIMSE_ProgressCallback callback,
         void *callbackContext,
         DcmDataset **commandSet)
-    /*
-     * This function sends a DIMSE command and possibly also instance data from a file via network to another
-     * DICOM application.
-     *
-     * Parameters:
-     *   assoc           - [in] The association (network connection to another DICOM application).
-     *   presId          - [in] The ID of the presentation context which shall be used
-     *   msg             - [in] Structure that represents a certain DIMSE command which shall be sent.
-     *   statusDetail    - [in] Detailed information with regard to the status information which is captured
-     *                          in the status element (0000,0900). Note that the value for element (0000,0900)
-     *                          is contained in this variable.
-     *   dataFileName    - [in] The name of the file that contains the instance data which shall be sent to
-     *                          the other DICOM application, NULL; if there is none.
-     *   callback        - [in] Pointer to a function which shall be called to indicate progress.
-     *   callbackContext - []
-     *   commandSet      - [out] [optional parameter, default = NULL] If this parameter is not NULL
-     *                           it will return a copy of the DIMSE command which is sent to the other
-     *                           DICOM application.
-     */
 {
     /* simply call DIMSE_sendMessage to accomplish this task */
     return DIMSE_sendMessage(assoc, presID, msg, statusDetail, NULL, dataFileName, callback, callbackContext, commandSet);
@@ -1044,25 +1023,6 @@ DIMSE_sendMessageUsingMemoryData(
         DIMSE_ProgressCallback callback,
         void *callbackContext,
         DcmDataset **commandSet)
-    /*
-     * This function sends a DIMSE command and possibly also instance data from a data object via network
-     * to another DICOM application.
-     *
-     * Parameters:
-     *   assoc           - [in] The association (network connection to another DICOM application).
-     *   presId          - [in] The ID of the presentation context which shall be used
-     *   msg             - [in] Structure that represents a certain DIMSE command which shall be sent.
-     *   statusDetail    - [in] Detailed information with regard to the status information which is captured
-     *                          in the status element (0000,0900). Note that the value for element (0000,0900)
-     *                          is contained in this variable.
-     *   dataObject      - [in] The instance data which shall be sent to the other DICOM application,
-     *                          NULL, if there is none
-     *   callback        - [in] Pointer to a function which shall be called to indicate progress.
-     *   callbackContext - []
-     *   commandSet      - [out] [optional parameter, default = NULL] If this parameter is not NULL
-     *                           it will return a copy of the DIMSE command which is sent to the other
-     *                           DICOM application.
-     */
 {
     /* simply call DIMSE_sendMessage to accomplish this task */
     return DIMSE_sendMessage(assoc, presID, msg, statusDetail, dataObject, NULL, callback, callbackContext, commandSet);
@@ -1109,27 +1069,6 @@ DIMSE_receiveCommand(
         T_DIMSE_Message *msg,
         DcmDataset **statusDetail,
         DcmDataset **commandSet)
-    /*
-     * This function revceives a DIMSE command via network from another DICOM application.
-     *
-     * Parameters:
-     *   assoc        - [in] The association (network connection to another DICOM application).
-     *   blocking     - [in] The blocking mode for reading data (either DIMSE_BLOCKING or DIMSE_NONBLOCKING)
-     *   timeout      - [in] Timeout interval for receiving data. If the blocking mode is DIMSE_NONBLOCKING
-     *                       and we are trying to read data from the incoming socket stream and no data has
-     *                       been received after timeout seconds, an error will be reported.
-     *   presId       - [out] Contains in the end the ID of the presentation context which was specified in the DIMSE command.
-     *   msg          - [out] Contains in the end information which represents a certain DIMSE command which was received.
-     *   statusDetail - [out] If a non-NULL value is passed this variable will in the end contain detailed
-     *                        information with regard to the status information which is captured in the status
-     *                        element (0000,0900). Note that the value for element (0000,0900) is not contained
-     *                        in this return value but in msg. For details on the structure of this object, see
-     *                        DICOM standard (year 2000) part 7, annex C) (or the corresponding section in a later
-     *                        version of the standard.)
-     *   commandSet   - [out] [optional parameter, default = NULL] If this parameter is not NULL
-     *                        it will return a copy of the DIMSE command which was received from the other
-     *                        DICOM application.
-     */
 {
     OFCondition cond = EC_Normal;
     unsigned long bytesRead;
@@ -1240,7 +1179,7 @@ DIMSE_receiveCommand(
         }
 
         /* update the counter that counts how many bytes were read from the incoming socket */
-        /* stream. This variable will only be used for dumpimg general information. */
+        /* stream. This variable will only be used for dumping general information. */
         bytesRead += pdv.fragmentLength;
 
         /* update the following variables which will be evaluated at the beginning of each loop iteration. */
@@ -1249,7 +1188,7 @@ DIMSE_receiveCommand(
 
         /* update the counter that counts how many PDVs were received on the incoming */
         /* socket stream. This variable will be used for determining the first */
-        /* loop iteration and dumpimg general information. */
+        /* loop iteration and dumping general information. */
         pdvCount++;
     }
 
@@ -1312,7 +1251,7 @@ DIMSE_receiveCommand(
             delete cmdSet;
         }
     }
-    /* if some error occured before, delete cmdSet */
+    /* if some error occurred before, delete cmdSet */
     else
         delete cmdSet;
 
@@ -1323,8 +1262,9 @@ DIMSE_receiveCommand(
     return cond;
 }
 
+
 OFCondition DIMSE_createFilestream(
-        const char *filename,
+        const OFFilename &filename,
         const T_DIMSE_C_StoreRQ *request,
         const T_ASC_Association *assoc,
         T_ASC_PresentationContextID presIdCmd,
@@ -1344,7 +1284,7 @@ OFCondition DIMSE_createFilestream(
   DcmTag sourceApplicationEntityTitle(DCM_SourceApplicationEntityTitle);
   T_ASC_PresentationContext presentationContext;
 
-  if ((filename == NULL) || (request==NULL) || (assoc==NULL) ||
+  if (filename.isEmpty() || (request==NULL) || (assoc==NULL) ||
       (assoc->params==NULL) || (filestream==NULL))
   {
     return DIMSE_NULLKEY;
@@ -1366,7 +1306,7 @@ OFCondition DIMSE_createFilestream(
     {
       metainfo->insert(elem, OFTrue);
       Uint8 version[2] = {0,1};
-      ((DcmOtherByteOtherWord*)elem)->putUint8Array( version, 2 );
+      ((DcmOtherByteOtherWord*)elem)->putUint8Array(version, 2);
     } else cond = EC_MemoryExhausted;
     if (NULL != (elem = new DcmUniqueIdentifier(mediaStorageSOPClassUID)))
     {
@@ -1394,6 +1334,11 @@ OFCondition DIMSE_createFilestream(
       metainfo->insert(elem, OFTrue);
       const char *version = OFFIS_DTK_IMPLEMENTATION_VERSION_NAME2;
       ((DcmShortString*)elem)->putString(version);
+
+      if (strlen(OFFIS_DTK_IMPLEMENTATION_VERSION_NAME2) > 16)
+      {
+        DCMNET_WARN("DICOM implementation version name too long: " << OFFIS_DTK_IMPLEMENTATION_VERSION_NAME2);
+      }
     } else cond = EC_MemoryExhausted;
     if (NULL != (elem = new DcmApplicationEntity(sourceApplicationEntityTitle)))
     {
@@ -1426,9 +1371,10 @@ OFCondition DIMSE_createFilestream(
        delete *filestream;
        *filestream = NULL;
      }
-     char buf[4096]; // file names could be long!
-     sprintf(buf, "DIMSE createFilestream: cannot create file '%s'", filename);
-     return makeDcmnetCondition(DIMSEC_OUTOFRESOURCES, OF_error, buf);
+     OFOStringStream stream;
+     stream << "DIMSE createFilestream: cannot create file '" << filename << "'" << OFStringStream_ends;
+     OFSTRINGSTREAM_GETOFSTRING(stream, msg)
+     return makeDcmnetCondition(DIMSEC_OUTOFRESOURCES, OF_error, msg.c_str());
   }
 
   if (metainfo)
@@ -1436,17 +1382,18 @@ OFCondition DIMSE_createFilestream(
     metainfo->transferInit();
     if (EC_Normal != metainfo->write(**filestream, META_HEADER_DEFAULT_TRANSFERSYNTAX, EET_ExplicitLength, NULL))
     {
-      char buf2[4096]; // file names could be long!
-      sprintf(buf2, "DIMSE createFilestream: cannot write metaheader to file '%s'", filename);
-      cond = makeDcmnetCondition(DIMSEC_OUTOFRESOURCES, OF_error, buf2);
+      OFOStringStream stream;
+      stream << "DIMSE createFilestream: cannot write metaheader to file '" << filename << "'" << OFStringStream_ends;
+      OFSTRINGSTREAM_GETOFSTRING(stream, msg)
+      cond = makeDcmnetCondition(DIMSEC_OUTOFRESOURCES, OF_error, msg.c_str());
     }
     metainfo->transferEnd();
     delete metainfo;
   }
 
   return cond;
-
 }
+
 
 OFCondition
 DIMSE_receiveDataSetInFile(
@@ -1560,28 +1507,13 @@ DIMSE_receiveDataSetInMemory(
         DcmDataset **dataObject,
         DIMSE_ProgressCallback callback,
         void *callbackData)
-    /*
-     * This function receives one data set (of instance data) via network from another DICOM application.
-     *
-     * Parameters:
-     *   assoc           - [in] The association (network connection to another DICOM application).
-     *   blocking        - [in] The blocking mode for receiving data (either DIMSE_BLOCKING or DIMSE_NONBLOCKING)
-     *   timeout         - [in] Timeout interval for receiving data (if the blocking mode is DIMSE_NONBLOCKING).
-     *   presID          - [out] Contains in the end the ID of the presentation context which was used in the PDVs
-     *                          that were received on the network. If the PDVs show different presentation context
-     *                          IDs, this function will return an error.
-     *   dataObject      - [out] Contains in the end the information which was received over the network.
-     *                          Note that this function assumes that either imageFileName or imageDataSet does not equal NULL.
-     *   callback        - [in] Pointer to a function which shall be called to indicate progress.
-     *   callbackData    - [in] Pointer to data which shall be passed to the progress indicating function
-     */
 {
     OFCondition cond = EC_Normal;
     OFCondition econd = EC_Normal;
     DcmDataset *dset = NULL;
     DUL_PDV pdv;
     T_ASC_PresentationContextID pid = 0;
-    E_TransferSyntax xferSyntax;
+    E_TransferSyntax xferSyntax = EXS_Unknown;
     OFBool last = OFFalse;
     DIC_UL pdvCount = 0;
     DIC_UL bytesRead = 0;
@@ -1716,12 +1648,12 @@ DIMSE_receiveDataSetInMemory(
         if (!last)
         {
             /* update the counter that counts how many bytes were read from the incoming socket */
-            /* stream. This variable will only be used for dumpimg general information. */
+            /* stream. This variable will only be used for dumping general information. */
             bytesRead += pdv.fragmentLength;
 
             /* update the counter that counts how many PDVs were received on the incoming */
             /* socket stream. This variable will be used for determining the first */
-            /* loop iteration and dumpimg general information. */
+            /* loop iteration and dumping general information. */
             pdvCount++;
 
             /* update the variable which will be evaluated at the beginning of each loop iteration. */
@@ -1776,256 +1708,3 @@ OFString DIMSE_warn_str(T_ASC_Association *assoc)
     return OFString("DIMSE Warning: (") + assoc->params->DULparams.callingAPTitle
         + "," + assoc->params->DULparams.calledAPTitle + "): ";
 }
-
-
-/*
-** CVS Log
-** $Log: dimse.cc,v $
-** Revision 1.62  2010-12-01 08:26:36  joergr
-** Added OFFIS copyright header (beginning with the year 1994).
-**
-** Revision 1.61  2010-10-29 13:36:00  joergr
-** Fixed issue when sending a message with an empty dataset. Now, a warning
-** message is reported to the log and an error code is returned in such cases.
-**
-** Revision 1.60  2010-09-02 12:12:54  joergr
-** Added support for "MPEG2 Main Profile @ High Level" transfer syntax.
-**
-** Revision 1.59  2010-06-09 15:52:48  joergr
-** Moved some annoying log messages from level DEBUG to TRACE (because the same
-** information is usually reported in a better way by some other means).
-**
-** Revision 1.58  2010-06-02 14:47:46  joergr
-** Replaced calls to strerror() by new helper function OFStandard::strerror()
-** which results in using the thread safe version of strerror() if available.
-**
-** Revision 1.57  2010-04-29 16:15:14  onken
-** Added debug message noting the presentation context a command set is sent on.
-**
-** Revision 1.56  2010-03-01 09:08:49  uli
-** Removed some unnecessary include directives in the headers.
-**
-** Revision 1.55  2010-02-04 14:01:33  joergr
-** Fixed minor issues with log output, e.g. redundant line breaks.
-**
-** Revision 1.54  2009-11-26 14:46:31  joergr
-** Moved some log messages from debug to trace level.
-**
-** Revision 1.53  2009-11-18 11:53:59  uli
-** Switched to logging mechanism provided by the "new" oflog module.
-**
-** Revision 1.52  2009-06-18 13:30:27  joergr
-** Fixed wrong output in debug mode (probably cut and paste error).
-**
-** Revision 1.51  2009-03-06 14:43:57  joergr
-** Output details on DIMSE fragments (PDUs) only if DEBUG is defined.
-** Minor cleanup of output messages.
-**
-** Revision 1.50  2009-02-06 17:12:41  joergr
-** Fixed type mismatches reported by MSVC introduced with OFFile class.
-**
-** Revision 1.49  2008-04-30 12:38:42  meichel
-** Fixed compile errors due to changes in attribute tag names
-**
-** Revision 1.48  2008-04-30 09:05:43  meichel
-** Fixed memory leak in DIMSE_receiveDataSetInMemory when parameter dataObject
-**   was passed as NULL and an error condition occured.
-**
-** Revision 1.47  2007/11/29 14:42:19  meichel
-** Write methods now handle large raw data elements (such as pixel data)
-**   without loading everything into memory. This allows very large images to
-**   be sent over a network connection, or to be copied without ever being
-**   fully in memory.
-**
-** Revision 1.46  2007/02/19 16:51:37  meichel
-** Class DcmOutputStream and related classes are now safe for use with
-**   large files (2 GBytes or more) if supported by compiler and operating system.
-**
-** Revision 1.45  2006/08/15 16:04:29  meichel
-** Updated the code in module dcmnet to correctly compile when
-**   all standard C++ classes remain in namespace std.
-**
-** Revision 1.44  2006/06/23 10:24:43  meichel
-** All Store SCPs in DCMTK now store the source application entity title in the
-**   metaheader, both in normal and in bit-preserving mode.
-**
-** Revision 1.43  2005/12/08 15:44:45  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.42  2005/10/25 08:55:46  meichel
-** Updated list of UIDs and added support for new transfer syntaxes
-**   and storage SOP classes.
-**
-** Revision 1.41  2005/03/17 16:25:44  meichel
-** Fixed bug in the network module, which refused transmission in JPEG-LS or
-**   JPEG 2000 transfer syntaxes even if an appropriate configuration file was
-**   used with storescu and storescp.
-**
-** Revision 1.40  2005/02/22 09:40:58  meichel
-** Fixed two bugs in "bit-preserving" Store SCP code. Errors while creating or
-**   writing the DICOM file (e.g. file system full) now result in a DIMSE error
-**   response (out of resources) being sent back to the SCU.
-**
-** Revision 1.39  2004/08/03 11:42:47  meichel
-** Headers libc.h and unistd.h are now included via ofstdinc.h
-**
-** Revision 1.38  2004/02/04 15:35:17  joergr
-** Removed acknowledgements with e-mail addresses from CVS log.
-**
-** Revision 1.37  2003/10/22 16:48:47  meichel
-** Fixed double deletion of command set if parsing of command set fails.
-**
-** Revision 1.36  2003/06/04 14:27:46  meichel
-** Cleaned up usage of boolean constants
-**
-** Revision 1.35  2003/06/02 16:44:11  meichel
-** Renamed local variables to avoid name clashes with STL
-**
-** Revision 1.34  2002/11/27 13:04:41  meichel
-** Adapted module dcmnet to use of new header file ofstdinc.h
-**
-** Revision 1.33  2002/09/10 15:57:44  meichel
-** Fixed bug causing dcmnet to timeout on an incoming message when
-**   a PDU containing both a command PDV and a dataset PDV was received
-**   and dcmnet was operating in nonblocking mode.
-**
-** Revision 1.32  2002/08/27 17:00:51  meichel
-** Initial release of new DICOM I/O stream classes that add support for stream
-**   compression (deflated little endian explicit VR transfer syntax)
-**
-** Revision 1.31  2002/08/21 10:18:30  meichel
-** Adapted code to new loadFile and saveFile methods, thus removing direct
-**   use of the DICOM stream classes.
-**
-** Revision 1.30  2002/08/20 12:21:24  meichel
-** Adapted code to new loadFile and saveFile methods, thus removing direct
-**   use of the DICOM stream classes.
-**
-** Revision 1.29  2002/06/14 10:55:34  meichel
-** Fixed minor bug in DIMSE debug output
-**
-** Revision 1.28  2001/12/19 09:43:46  meichel
-** Restructured functions DIMSE_receiveDataSetInMemory and
-**   DIMSE_receiveDataSetInFile to avoid warnings on Sun CC 2.0.1
-**
-** Revision 1.27  2001/11/01 13:49:03  wilkens
-** Added lots of comments.
-**
-** Revision 1.26  2001/10/12 10:18:35  meichel
-** Replaced the CONDITION types, constants and functions in the dcmnet module
-**   by an OFCondition based implementation which eliminates the global condition
-**   stack.  This is a major change, caveat emptor!
-**
-** Revision 1.25  2001/09/26 12:29:01  meichel
-** Implemented changes in dcmnet required by the adaptation of dcmdata
-**   to class OFCondition.  Removed some unused code.
-**
-** Revision 1.24  2001/03/28 15:46:08  meichel
-** Fixed memory leak: for each terminated connection, an empty
-**   DcmDataset remained in memory.
-**
-** Revision 1.23  2000/06/07 08:57:55  meichel
-** dcmnet DIMSE routines now allow to retrieve raw command sets as DcmDataset
-**   objects, e.g. for logging purposes. Added enhanced message dump functions.
-**
-** Revision 1.22  2000/04/14 16:28:35  meichel
-** Removed default value from output stream passed to print() method.
-**   Required for use in multi-thread environments.
-**
-** Revision 1.21  2000/03/03 14:11:22  meichel
-** Implemented library support for redirecting error messages into memory
-**   instead of printing them to stdout/stderr for GUI applications.
-**
-** Revision 1.20  2000/02/23 15:12:37  meichel
-** Corrected macro for Borland C++ Builder 4 workaround.
-**
-** Revision 1.19  2000/02/01 10:24:10  meichel
-** Avoiding to include <stdlib.h> as extern "C" on Borland C++ Builder 4,
-**   workaround for bug in compiler header files.
-**
-** Revision 1.18  2000/01/31 17:14:23  meichel
-** Introduced new flag g_dimse_save_dimse_data. If enabled, all DIMSE messages
-** and data sets sent or received are stored in files.
-** This facilitates debugging of DIMSE problems.
-**
-** Revision 1.17  1999/04/19 08:35:23  meichel
-** Added basic support for sending/receiving in encapsulated transfer syntaxes.
-**
-** Revision 1.16  1998/10/20 08:20:23  meichel
-** Closed some memory leaks in dcmdata and dcmnet libraries.
-**
-** Revision 1.15  1998/07/15 11:32:39  meichel
-** Fixed bug in DIMSE_sendMessage() that could result in an undefined
-**   error condition passed back to the caller when an attempt was made
-**   to send a DIMSE message without appropriate presentation context.
-**
-** Revision 1.14  1998/01/28 17:38:13  meichel
-** Removed minor bug from DICOM Upper Layer / DIMSE modules.
-**   For each PDV received, an error condition was pushed on the error stack
-**   and then again pulled from it. If a callback function was registered
-**   with the condition stack, it was flooded with error messages.
-**
-** Revision 1.13  1998/01/27 10:51:46  meichel
-** Removed some unused variables, meaningless const modifiers
-**   and unreached statements.
-**
-** Revision 1.12  1997/09/18 08:10:59  meichel
-** Many minor type conflicts (e.g. long passed as int) solved.
-**
-** Revision 1.11  1997/08/06 12:20:13  andreas
-** - Using Windows NT with Visual C++ 4.x the standard open mode for files
-**   is TEXT with conversions. For binary files (image files, imagectn database
-**   index) this must be changed (e.g. fopen(filename, "...b"); or
-**   open(filename, ..... |O_BINARY);)
-**
-** Revision 1.10  1997/07/21 08:47:19  andreas
-** - Replace all boolean types (BOOLEAN, CTNBOOLEAN, DICOM_BOOL, BOOL)
-**   with one unique boolean type OFBool.
-**
-** Revision 1.9  1997/05/28 12:04:46  meichel
-** DIMSE_sendMessage() now checks whether the dataset to be sent
-** can be converted to the requested transfer syntax prior to
-** transmitting the message and dataset. If the test fails,
-** DIMSE_SENDFAILED is returned.
-**
-** Revision 1.8  1997/05/23 10:45:28  meichel
-** Major rewrite of storescp application. See CHANGES for details.
-** Changes required to interfaces of some DIMSE functions.
-**
-** Revision 1.7  1997/05/22 13:30:30  hewett
-** Modified the test for presence of a data dictionary to use the
-** method DcmDataDictionary::isDictionaryLoaded().
-**
-** Revision 1.6  1997/05/16 08:31:37  andreas
-** - Revised handling of GroupLength elements and support of
-**   DataSetTrailingPadding elements. The enumeratio E_GrpLenEncoding
-**   got additional enumeration values (for a description see dctypes.h).
-**   addGroupLength and removeGroupLength methods are replaced by
-**   computeGroupLengthAndPadding. To support Padding, the parameters of
-**   element and sequence write functions changed.
-**
-** Revision 1.5  1997/02/06 12:21:14  hewett
-** Updated for Macintosh CodeWarrior 11.  Corrected for incompatibilities
-** in the timeval structure between unix.h and winsock.h
-**
-** Revision 1.4  1996/09/03 11:40:25  hewett
-** Added automatic tests in the DIMSE level network code to check
-** that a data dictionary is loaded.  Calls to DIMSE routines will
-** now fail if no data dictionary is loaded.  Previously, the lack of
-** a loaded data dictionary would cause obscure errors.
-**
-** Revision 1.3  1996/04/27 12:57:58  hewett
-** Corrected cause of warnings when compiling under "c++ -O -g -Wall"
-** under Solaris 2.4.  Mostly due to unintialized variables.
-**
-** Revision 1.2  1996/04/25 16:11:16  hewett
-** Added parameter casts to char* for bzero calls.  Replaced some declarations
-** of DIC_UL with unsigned long (reduces mismatch problems with 32 & 64 bit
-** architectures).  Added some protection to inclusion of sys/socket.h (due
-** to MIPS/Ultrix).
-**
-** Revision 1.1.1.1  1996/03/26 18:38:46  hewett
-** Initial Release.
-**
-**
-*/

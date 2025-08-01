@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2003-2010, OFFIS e.V.
+ *  Copyright (C) 2003-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose:
  *    classes: DSRCodingSchemeIdentificationList
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:32 $
- *  CVS/RCS Revision: $Revision: 1.12 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -46,56 +39,11 @@
  *  system registration, or to a private or local coding scheme.
  *  Implementation of Coding Scheme Identification Sequence.
  */
-class DSRCodingSchemeIdentificationList
+class DCMTK_DCMSR_EXPORT DSRCodingSchemeIdentificationList
   : public DSRTypes
 {
 
   public:
-
-    /** Internal structure defining the list items
-     */
-    struct ItemStruct
-    {
-        /** constructor
-         ** @param  codingSchemeDesignator  Coding Scheme Designator
-         */
-        ItemStruct(const OFString &codingSchemeDesignator)
-          : CodingSchemeDesignator(codingSchemeDesignator),
-            CodingSchemeRegistry(),
-            CodingSchemeUID(),
-            CodingSchemeExternalID(),
-            CodingSchemeName(),
-            CodingSchemeVersion(),
-            ResponsibleOrganization()
-        {}
-
-        /** clear additional information
-         */
-        void clear()
-        {
-            CodingSchemeRegistry.clear();
-            CodingSchemeUID.clear();
-            CodingSchemeExternalID.clear();
-            CodingSchemeName.clear();
-            CodingSchemeVersion.clear();
-            ResponsibleOrganization.clear();
-        }
-
-        /// Coding Scheme Designator  (VR=SH, VM=1, Type=1)
-        const OFString CodingSchemeDesignator;
-        /// Coding Scheme Registry    (VR=LO, VM=1, Type=1C)
-        OFString CodingSchemeRegistry;
-        /// Coding Scheme UID         (VR=UI, VM=1, Type=1C)
-        OFString CodingSchemeUID;
-        /// Coding Scheme External ID (VR=ST, VM=1, Type=2C)
-        OFString CodingSchemeExternalID;
-        /// Coding Scheme Name        (VR=ST, VM=1, Type=3)
-        OFString CodingSchemeName;
-        /// Coding Scheme Version     (VR=SH, VM=1, Type=3)
-        OFString CodingSchemeVersion;
-        /// Responsible Organization  (VR=ST, VM=1, Type=3)
-        OFString ResponsibleOrganization;
-    };
 
     /** constructor (default)
      */
@@ -112,7 +60,7 @@ class DSRCodingSchemeIdentificationList
     /** check whether list is empty
      ** @return OFTrue if list is empty, OFFalse otherwise
      */
-    OFBool empty() const;
+    OFBool isEmpty() const;
 
     /** get number of items stored in the list
      ** @return number of items
@@ -120,14 +68,16 @@ class DSRCodingSchemeIdentificationList
     size_t getNumberOfItems() const;
 
     /** read list of items from the coding scheme identification sequence
-     ** @param  dataset    DICOM dataset from which the data should be read
+     ** @param  dataset  DICOM dataset from which the data should be read
+     *  @param  flags    flag used to customize the reading process (see DSRTypes::RF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
-    OFCondition read(DcmItem &dataset);
+    OFCondition read(DcmItem &dataset,
+                     const size_t flags);
 
     /** write list of items to the coding scheme identification sequence.
      *  Does nothing if list is empty.
-     ** @param  dataset    DICOM dataset to which the data should be written
+     ** @param  dataset  DICOM dataset to which the data should be written
      ** @return status, EC_Normal if successful, an error code otherwise
      */
     OFCondition write(DcmItem &dataset) const;
@@ -135,7 +85,7 @@ class DSRCodingSchemeIdentificationList
     /** read list of items from XML document
      ** @param  doc     document containing the XML file content
      *  @param  cursor  cursor pointing to the starting node
-     *  @param  flags   optional flag used to customize the reading process (see DSRTypes::XF_xxx)
+     *  @param  flags   flag used to customize the reading process (see DSRTypes::XF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
     OFCondition readXML(const DSRXMLDocument &doc,
@@ -144,11 +94,21 @@ class DSRCodingSchemeIdentificationList
 
     /** write current list in XML format
      ** @param  stream  output stream to which the XML data is written
-     *  @param  flags   optional flag used to customize the output (see DSRTypes::XF_xxx)
+     *  @param  flags   flag used to customize the output (see DSRTypes::XF_xxx)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
     OFCondition writeXML(STD_NAMESPACE ostream &stream,
-                         const size_t flags = 0) const;
+                         const size_t flags) const;
+
+    /** set specific character set, which is used for checking the affected element values.
+     *  Please note that this method does not return an error if the given 'value' is not
+     *  defined by the DICOM standard or not supported by this implementation.
+     ** @param  value  value to be set (single or multiple values) or "" for no value
+     *  @param  check  check 'value' for conformance with VR (CS) and VM (1-n) if enabled
+     ** @return status, EC_Normal if successful, an error code otherwise
+     */
+    OFCondition setSpecificCharacterSet(const OFString &value,
+                                        const OFBool check = OFTrue);
 
     /** add private OFFIS DCMTK coding scheme entry to the list.
      *  Please note that any information previously stored under the defined coding scheme
@@ -159,23 +119,55 @@ class DSRCodingSchemeIdentificationList
 
     /** add the specified coding scheme to the list.
      *  Internally, the item is inserted into the list of coding scheme designators if
-     *  not already contained in the list.  In any case the specified item is selected as
-     *  the current one.  See definition of 'ItemStruct' above for VR, VM and Type.
+     *  not already contained in the list.  In any case, the specified item is selected as
+     *  the current one.  Additional information can be set using the below setXXX() methods.
      ** @param  codingSchemeDesignator  coding scheme designator of the item to be added.
      *                                  Designators beginning with "99" and the designator
      *                                  "L" are defined to be private or local coding schemes.
+     *  @param  check                   check 'codingSchemeDesignator' for conformance with
+     *                                  VR (SH) and VM (1) if enabled.  An empty value is
+     *                                  never accepted.
      ** @return status, EC_Normal if successful, an error code otherwise
      */
-    OFCondition addItem(const OFString &codingSchemeDesignator);
+    OFCondition addItem(const OFString &codingSchemeDesignator,
+                        const OFBool check = OFTrue);
+
+    /** add the specified coding scheme (with additional information) to the list.
+     *  Internally, the item is inserted into the list of coding scheme designators if not
+     *  already contained in the list, and the additional information is set.  In any case,
+     *  the specified item is selected as the current one.  Further information can be set
+     *  using the below setXXX() methods.
+     *  Please note that any information previously stored under the given coding scheme
+     *  designator is replaced!
+     ** @param  codingSchemeDesignator   coding scheme designator of the item to be added.
+     *                                   (VR=SH, mandatory).  Designators beginning with "99"
+     *                                   and the designator "L" are defined to be private or
+     *                                   local coding schemes.
+     *  @param  codingSchemeUID          coding scheme UID of the item to be added.  (VR=UI,
+     *                                   conditional)
+     *  @param  codingSchemeName         coding scheme name of the item to be added.  (VR=ST,
+     *                                   optional)
+     *  @param  responsibleOrganization  coding scheme responsible organization of the item to
+     *                                   be added.  (VR=ST, optional)
+     *  @param  check                    check given values for conformance with associated VR
+     *                                   and VM if enabled.  An empty 'codingSchemeDesignator'
+     *                                   is never accepted.
+     ** @return status, EC_Normal if successful, an error code otherwise
+     */
+    OFCondition addItem(const OFString &codingSchemeDesignator,
+                        const OFString &codingSchemeUID,
+                        const OFString &codingSchemeName,
+                        const OFString &responsibleOrganization = "",
+                        const OFBool check = OFTrue);
 
     /** remove the current item from the list.
-     *  After sucessful removal the cursor is set to the next valid position.
+     *  After successful removal the cursor is set to the next valid position.
      ** @return status, EC_Normal if successful, an error code otherwise
      */
     OFCondition removeItem();
 
     /** remove the specified item from the list.
-     *  After sucessful removal the cursor is set to the next valid position.
+     *  After successful removal the cursor is set to the next valid position.
      ** @param  codingSchemeDesignator  coding scheme designator of the item to be removed
      ** @return status, EC_Normal if successful, an error code otherwise
      */
@@ -203,7 +195,7 @@ class DSRCodingSchemeIdentificationList
      *  Designators beginning with "99" and the designator "L" are defined to be private
      *  or local coding schemes.
      ** @param  stringValue  reference to string variable in which the result is stored
-     ** @return reference to the resulting string (might be empty)
+     ** @return reference to the resulting string (might be empty if no item is selected)
      */
     const OFString &getCodingSchemeDesignator(OFString &stringValue) const;
 
@@ -237,60 +229,113 @@ class DSRCodingSchemeIdentificationList
      */
     const OFString &getCodingSchemeVersion(OFString &stringValue) const;
 
-    /** get the responsible organization of the currently selected item
+    /** get the coding scheme responsible organization of the currently selected item
      ** @param  stringValue  reference to string variable in which the result is stored
      ** @return reference to the resulting string (might be empty)
      */
-    const OFString &getResponsibleOrganization(OFString &stringValue) const;
+    const OFString &getCodingSchemeResponsibleOrganization(OFString &stringValue) const;
 
-    /** set the coding scheme registry of the currently selected entry.
-     *  See definition of 'ItemStruct' above for VR, VM and Type.
-     ** @param  value  string value to be set (use empty string to omit optional attribute)
+    /** set the coding scheme registry of the currently selected entry
+     ** @param  value  string value to be set (single value only) or "" for no value
+     *  @param  check  check 'value' for conformance with VR (LO) and VM (1) if enabled
      ** @return status, EC_Normal if successful, an error code otherwise
      */
-    OFCondition setCodingSchemeRegistry(const OFString &value);
+    OFCondition setCodingSchemeRegistry(const OFString &value,
+                                        const OFBool check = OFTrue);
 
-    /** set the coding scheme UID of the currently selected entry.
-     *  See definition of 'ItemStruct' above for VR, VM and Type.
-     ** @param  value  string value to be set (use empty string to omit optional attribute)
+    /** set the coding scheme UID of the currently selected entry
+     ** @param  value  string value to be set (single value only) or "" for no value
+     *  @param  check  check 'value' for conformance with VR (UI) and VM (1) if enabled
      ** @return status, EC_Normal if successful, an error code otherwise
      */
-    OFCondition setCodingSchemeUID(const OFString &value);
+    OFCondition setCodingSchemeUID(const OFString &value,
+                                   const OFBool check = OFTrue);
 
-    /** set the coding scheme external ID of the currently selected entry.
-     *  See definition of 'ItemStruct' above for VR, VM and Type.
-     ** @param  value  string value to be set (use empty string to omit optional attribute)
+    /** set the coding scheme external ID of the currently selected entry
+     ** @param  value  string value to be set (single value only) or "" for no value
+     *  @param  check  check 'value' for conformance with VR (ST) and VM (1) if enabled
      ** @return status, EC_Normal if successful, an error code otherwise
      */
-    OFCondition setCodingSchemeExternalID(const OFString &value);
+    OFCondition setCodingSchemeExternalID(const OFString &value,
+                                          const OFBool check = OFTrue);
 
-    /** set the coding scheme name of the currently selected entry.
-     *  See definition of 'ItemStruct' above for VR, VM and Type.
-     ** @param  value  string value to be set (use empty string to omit optional attribute)
+    /** set the coding scheme name of the currently selected entry
+     ** @param  value  string value to be set (single value only) or "" for no value
+     *  @param  check  check 'value' for conformance with VR (ST) and VM (1) if enabled
      ** @return status, EC_Normal if successful, an error code otherwise
      */
-    OFCondition setCodingSchemeName(const OFString &value);
+    OFCondition setCodingSchemeName(const OFString &value,
+                                    const OFBool check = OFTrue);
 
-    /** set the coding scheme version of the currently selected entry.
-     *  See definition of 'ItemStruct' above for VR, VM and Type.
-     ** @param  value  string value to be set (use empty string to omit optional attribute)
+    /** set the coding scheme version of the currently selected entry
+     ** @param  value  string value to be set (single value only) or "" for no value
+     *  @param  check  check 'value' for conformance with VR (SH) and VM (1) if enabled
      ** @return status, EC_Normal if successful, an error code otherwise
      */
-    OFCondition setCodingSchemeVersion(const OFString &value);
+    OFCondition setCodingSchemeVersion(const OFString &value,
+                                       const OFBool check = OFTrue);
 
-    /** set the responsible organization of the currently selected entry.
-     *  See definition of 'ItemStruct' above for VR, VM and Type.
-     ** @param  value  string value to be set (use empty string to omit optional attribute)
+    /** set the coding scheme responsible organization of the currently selected entry
+     ** @param  value  string value to be set (single value only) or "" for no value
+     *  @param  check  check 'value' for conformance with VR (ST) and VM (1) if enabled
      ** @return status, EC_Normal if successful, an error code otherwise
      */
-    OFCondition setResponsibleOrganization(const OFString &value);
+    OFCondition setCodingSchemeResponsibleOrganization(const OFString &value,
+                                                       const OFBool check = OFTrue);
 
 
   protected:
 
+    /** Internal structure defining the list items
+     */
+    struct DCMTK_DCMSR_EXPORT ItemStruct
+    {
+        /** constructor
+         ** @param  codingSchemeDesignator  Coding Scheme Designator
+         */
+        ItemStruct(const OFString &codingSchemeDesignator)
+          : CodingSchemeDesignator(codingSchemeDesignator),
+            CodingSchemeRegistry(),
+            CodingSchemeUID(),
+            CodingSchemeExternalID(),
+            CodingSchemeName(),
+            CodingSchemeVersion(),
+            CodingSchemeResponsibleOrganization()
+        {}
+
+        /** clear additional information
+         */
+        void clear()
+        {
+            CodingSchemeRegistry.clear();
+            CodingSchemeUID.clear();
+            CodingSchemeExternalID.clear();
+            CodingSchemeName.clear();
+            CodingSchemeVersion.clear();
+            CodingSchemeResponsibleOrganization.clear();
+        }
+
+        /// Coding Scheme Designator (VR=SH, type 1)
+        const OFString CodingSchemeDesignator;
+        /// Coding Scheme Registry (VR=LO, type 1C)
+        OFString CodingSchemeRegistry;
+        /// Coding Scheme UID (VR=UI, type 1C)
+        OFString CodingSchemeUID;
+        /// Coding Scheme External ID (VR=ST, type 2C)
+        OFString CodingSchemeExternalID;
+        /// Coding Scheme Name (VR=ST, type 3)
+        OFString CodingSchemeName;
+        /// Coding Scheme Version (VR=SH, type 3)
+        OFString CodingSchemeVersion;
+        /// Coding Scheme Responsible Organization (VR=ST, type 3)
+        OFString CodingSchemeResponsibleOrganization;
+        /// Coding Scheme Resources Sequence (VR=SQ, type 3)
+         // - tbd: optional attribute not yet supported
+    };
+
     /** add the specified coding scheme to the list (if not existent)
      ** @param  codingSchemeDesignator  coding scheme designator of the item to be added
-     *  @param  item       reference to item pointer (result variable)
+     *  @param  item                    reference to item pointer (result variable)
      ** @return status, EC_Normal if successful, an error code otherwise
      */
     OFCondition addItem(const OFString &codingSchemeDesignator,
@@ -308,6 +353,8 @@ class DSRCodingSchemeIdentificationList
     OFList<ItemStruct *> ItemList;
     /// internal cursor to current (selected) list item
     OFListIterator(ItemStruct *) Iterator;
+    /// specific character set used for checking purposes
+    OFString SpecificCharacterSet;
 
     // copy constructor - not implemented!
     DSRCodingSchemeIdentificationList(const DSRCodingSchemeIdentificationList &);
@@ -317,50 +364,3 @@ class DSRCodingSchemeIdentificationList
 
 
 #endif
-
-
-/*
- *  CVS/RCS Log:
- *  $Log: dsrcsidl.h,v $
- *  Revision 1.12  2010-10-14 13:16:32  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.11  2010-02-22 11:39:55  uli
- *  Remove some unneeded includes.
- *
- *  Revision 1.10  2009-10-13 14:57:50  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.9  2007-11-15 16:33:19  joergr
- *  Fixed coding style to be more consistent.
- *
- *  Revision 1.8  2006/08/15 16:40:03  meichel
- *  Updated the code in module dcmsr to correctly compile when
- *    all standard C++ classes remain in namespace std.
- *
- *  Revision 1.7  2006/05/11 09:18:21  joergr
- *  Moved containsExtendedCharacters() from dcmsr to dcmdata module.
- *
- *  Revision 1.6  2005/12/08 16:04:57  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.5  2004/11/22 16:39:09  meichel
- *  Added method that checks if the SR document contains non-ASCII characters
- *    in any of the strings affected by SpecificCharacterSet.
- *
- *  Revision 1.4  2004/04/07 12:02:53  joergr
- *  Added missing member variables to constructor's member initialization list
- *  to avoid warnings reported by gcc.
- *
- *  Revision 1.3  2004/01/16 09:57:33  joergr
- *  Added clear() method to struct ItemStruct.
- *
- *  Revision 1.2  2003/12/16 16:18:35  joergr
- *  Added note on coding scheme identfication and private coding schemes.
- *
- *  Revision 1.1  2003/09/10 13:16:13  joergr
- *  Replaced PrivateCodingSchemeUID by new CodingSchemeIdenticationSequence as
- *  required by CP 324.
- *
- *
- */

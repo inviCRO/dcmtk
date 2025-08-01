@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2002-2010, OFFIS e.V.
+ *  Copyright (C) 2002-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,30 +17,20 @@
  *
  *  Purpose: Class for date and time functions (Source)
  *
- *  Last Update:      $Author: uli $
- *  Update Date:      $Date: 2010-10-20 07:41:37 $
- *  CVS/RCS Revision: $Revision: 1.14 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
 #include "dcmtk/config/osconfig.h"
 
-#define INCLUDE_CTIME
-#define INCLUDE_CCTYPE
-#define INCLUDE_CSTRING
-#include "dcmtk/ofstd/ofstdinc.h"
-
-BEGIN_EXTERN_C
 #ifdef HAVE_SYS_TYPES_H
+BEGIN_EXTERN_C
 #include <sys/types.h>    /* for struct time_t */
-#endif
 END_EXTERN_C
+#endif
 
 #include "dcmtk/ofstd/ofdatime.h"
+#include "dcmtk/ofstd/ofstdinc.h"
+#include <ctime>
 
 
 /*------------------*
@@ -109,6 +99,32 @@ OFBool OFDateTime::operator!=(const OFDateTime &dateTime) const
 }
 
 
+OFBool OFDateTime::operator<(const OFDateTime &dateTime) const
+{
+    /* note that the "overflow" from one day to another is currently not handled */
+    return (Date < dateTime.Date) || ((Date == dateTime.Date) && (Time < dateTime.Time));
+}
+
+
+OFBool OFDateTime::operator<=(const OFDateTime &dateTime) const
+{
+    /* note that the "overflow" from one day to another is currently not handled */
+    return (Date < dateTime.Date) || ((Date == dateTime.Date) && (Time <= dateTime.Time));
+}
+
+
+OFBool OFDateTime::operator>(const OFDateTime &dateTime) const
+{
+    return (dateTime < *this);
+}
+
+
+OFBool OFDateTime::operator>=(const OFDateTime &dateTime) const
+{
+    return (dateTime <= *this);
+}
+
+
 void OFDateTime::clear()
 {
     Date.clear();
@@ -134,7 +150,7 @@ OFBool OFDateTime::setDateTime(const unsigned int year,
     OFBool result = OFFalse;
     /* check whether new date and time are valid */
     if (OFDate::isDateValid(year, month, day) && OFTime::isTimeValid(hour, minute, second, timeZone))
-       result = Date.setDate(year, month, day) && Time.setTime(hour, minute, second, timeZone);
+        result = Date.setDate(year, month, day) && Time.setTime(hour, minute, second, timeZone);
     return result;
 }
 
@@ -145,8 +161,8 @@ OFBool OFDateTime::setDate(const OFDate &dateVal)
     /* check whether new date is valid */
     if (dateVal.isValid())
     {
-       Date = dateVal;
-       result = OFTrue;
+        Date = dateVal;
+        result = OFTrue;
     }
     return result;
 }
@@ -158,8 +174,8 @@ OFBool OFDateTime::setTime(const OFTime &timeVal)
     /* check whether new time is valid */
     if (timeVal.isValid())
     {
-       Time = timeVal;
-       result = OFTrue;
+        Time = timeVal;
+        result = OFTrue;
     }
     return result;
 }
@@ -186,14 +202,17 @@ OFBool OFDateTime::setISOFormattedDateTime(const OFString &formattedDateTime)
 {
     OFBool result = OFFalse;
     const size_t length = formattedDateTime.length();
-    /* check for supported formats: YYYYMMDDHHMM[SS] */
-    if ((length == 12) || (length == 14))
+    const size_t firstSep = formattedDateTime.find_first_not_of("0123456789");
+    const OFBool separators = (firstSep != OFString_npos);
+    /* check for supported formats: "YYYYMMDDHHMM[SS]" or "YYYYMMDDHHMMSS&ZZZZ" */
+    if (((((length == 12) || (length == 14)) && !separators) ||
+        ((length == 19) && (firstSep == 14) && ((formattedDateTime[14] == '+') || (formattedDateTime[14] == '-')))))
     {
         if (Date.setISOFormattedDate(formattedDateTime.substr(0, 8)) && Time.setISOFormattedTime(formattedDateTime.substr(8)))
             result = OFTrue;
     }
-    /* YYYY-MM-DD HH:MM[:SS] */
-    else if (length >= 16)
+    /* "YYYY-MM-DD HH:MM[:SS]" or "YYYY-MM-DD HH:MM:SS &ZZ:ZZ" */
+    else if ((length >= 16) && separators)
     {
         if (Date.setISOFormattedDate(formattedDateTime.substr(0, 10)))
         {
@@ -225,19 +244,9 @@ OFBool OFDateTime::getISOFormattedDateTime(OFString &formattedDateTime,
                                            const OFBool showSeconds,
                                            const OFBool showFraction,
                                            const OFBool showTimeZone,
-                                           const OFBool showDelimiter) const
-{
-    /* call the real function, required to make Sun CC 2.0.1 happy (see header file) */
-    return getISOFormattedDateTime(formattedDateTime, showSeconds, showFraction, showTimeZone, showDelimiter, " " /*dateTimeSeparator*/);
-}
-
-
-OFBool OFDateTime::getISOFormattedDateTime(OFString &formattedDateTime,
-                                           const OFBool showSeconds,
-                                           const OFBool showFraction,
-                                           const OFBool showTimeZone,
                                            const OFBool showDelimiter,
-                                           const OFString &dateTimeSeparator) const
+                                           const OFString &dateTimeSeparator,
+                                           const OFString &timeZoneSeparator) const
 {
     /* get formatted date first component */
     OFBool result = Date.getISOFormattedDate(formattedDateTime, showDelimiter);
@@ -245,7 +254,7 @@ OFBool OFDateTime::getISOFormattedDateTime(OFString &formattedDateTime,
     {
         /* ... then get the formatted time component */
         OFString timeString;
-        if (Time.getISOFormattedTime(timeString, showSeconds, showFraction, showTimeZone, showDelimiter))
+        if (Time.getISOFormattedTime(timeString, showSeconds, showFraction, showTimeZone, showDelimiter, timeZoneSeparator))
         {
             if (showDelimiter)
                 formattedDateTime += dateTimeSeparator;
@@ -278,56 +287,3 @@ STD_NAMESPACE ostream& operator<<(STD_NAMESPACE ostream& stream, const OFDateTim
         stream << string;
     return stream;
 }
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: ofdatime.cc,v $
- * Revision 1.14  2010-10-20 07:41:37  uli
- * Made sure isalpha() & friends are only called with valid arguments.
- *
- * Revision 1.13  2010-10-14 13:14:53  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.12  2009-08-19 11:55:45  meichel
- * Added additional includes needed for Sun Studio 11 on Solaris.
- *
- * Revision 1.11  2008-05-21 16:29:45  joergr
- * Added new constructor and new setDateTime() method.
- *
- * Revision 1.10  2006/12/12 11:56:05  joergr
- * Fixed wrong default value for the "dateTimeSeparator" parameter.
- *
- * Revision 1.9  2006/08/14 16:42:46  meichel
- * Updated all code in module ofstd to correctly compile if the standard
- *   namespace has not included into the global one with a "using" directive.
- *
- * Revision 1.8  2005/12/08 15:48:56  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.7  2004/04/16 12:44:20  joergr
- * Restructured code to avoid default parameter values for "complex types" like
- * OFString. Required for Sun CC 2.0.1.
- *
- * Revision 1.6  2004/01/16 10:35:18  joergr
- * Added setISOFormattedXXX() methods for Date, Time and DateTime.
- *
- * Revision 1.5  2003/12/17 15:27:21  joergr
- * Added note to the comparison operators that the "day overflow" is not yet
- * handled correctly.
- *
- * Revision 1.4  2003/09/15 12:15:07  joergr
- * Made comparison operators const.
- *
- * Revision 1.3  2002/11/27 15:09:39  meichel
- * Adapted module ofstd to use of new header file ofstdinc.h
- *
- * Revision 1.2  2002/05/24 09:44:26  joergr
- * Renamed some parameters/variables to avoid ambiguities.
- *
- * Revision 1.1  2002/04/11 12:14:33  joergr
- * Introduced new standard classes providing date and time functions.
- *
- *
- */

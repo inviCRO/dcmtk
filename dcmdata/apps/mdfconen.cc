@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2003-2010, OFFIS e.V.
+ *  Copyright (C) 2003-2020, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -15,14 +15,7 @@
  *
  *  Author:  Michael Onken
  *
- *  Purpose: Class for modifying DICOM files from comandline
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:13:30 $
- *  CVS/RCS Revision: $Revision: 1.38 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
+ *  Purpose: Class for modifying DICOM files from commandline
  *
  */
 
@@ -31,6 +24,7 @@
 #include "mdfconen.h"
 #include "mdfdsman.h"
 #include "dcmtk/ofstd/ofstd.h"
+#include "dcmtk/ofstd/ofconapp.h"
 #include "dcmtk/dcmdata/dctk.h"
 #include "dcmtk/dcmdata/dcistrmz.h"    /* for dcmZlibExpectRFC1950Encoding */
 
@@ -45,10 +39,22 @@ END_EXTERN_C
 
 static OFLogger dcmodifyLogger = OFLog::getLogger("dcmtk.apps.dcmodify");
 
+MdfJob::MdfJob(const MdfJob& other)
+: option(other.option), path(other.path), value(other.value)
+{
+}
 
 OFBool MdfJob::operator==(const MdfJob &j) const
 {
     return (option == j.option) && (path == j.path) && (value == j.value);
+}
+
+MdfJob &MdfJob::operator=(const MdfJob &j)
+{
+    option = j.option;
+    path = j.path;
+    value = j.value;
+    return *this;
 }
 
 
@@ -62,7 +68,7 @@ MdfConsoleEngine::MdfConsoleEngine(int argc, char *argv[],
     padenc_option(EPD_withoutPadding), filepad_option(0),
     itempad_option(0), ignore_missing_tags_option(OFFalse),
     no_reservation_checks(OFFalse), ignore_un_modifies(OFFalse),
-    jobs(NULL), files(NULL)
+    create_if_necessary(OFFalse), was_created(OFFalse), jobs(NULL), files(NULL)
 {
     char rcsid[200];
     // print application header
@@ -82,13 +88,12 @@ MdfConsoleEngine::MdfConsoleEngine(int argc, char *argv[],
         cmd->addOption("--help",                    "-h",      "print this help text and exit", OFCommandLine::AF_Exclusive);
         cmd->addOption("--version",                            "print version information and exit", OFCommandLine::AF_Exclusive);
         OFLog::addOptions(*cmd);
-        cmd->addOption("--ignore-errors",           "-ie",     "continue with file, if modify error occurs");
-        cmd->addOption("--no-backup",               "-nb",     "don't backup files (DANGEROUS)");
     cmd->addGroup("input options:");
         cmd->addSubGroup("input file format:");
             cmd->addOption("--read-file",           "+f",      "read file format or data set (default)");
             cmd->addOption("--read-file-only",      "+fo",     "read file format only");
             cmd->addOption("--read-dataset",        "-f",      "read data set without file meta information");
+            cmd->addOption("--create-file",         "+fc",     "create file format if file does not exist");
         cmd->addSubGroup("input transfer syntax:");
             cmd->addOption("--read-xfer-auto",      "-t=",     "use TS recognition (default)");
             cmd->addOption("--read-xfer-detect",    "-td",     "ignore TS specified in the file meta header");
@@ -108,6 +113,9 @@ MdfConsoleEngine::MdfConsoleEngine(int argc, char *argv[],
 #endif
 
     cmd->addGroup("processing options:");
+        cmd->addSubGroup("backup input files:");
+            cmd->addOption("--backup",                         "backup files before modifying (default)");
+            cmd->addOption("--no-backup",           "-nb",     "don't backup files (DANGEROUS)");
         cmd->addSubGroup("insert mode:");
             cmd->addOption("--insert",              "-i",   1, "\"[t]ag-path=[v]alue\"",
                                                                "insert (or overwrite) path at position t\nwith value v", OFCommandLine::AF_NoWarning);
@@ -132,9 +140,10 @@ MdfConsoleEngine::MdfConsoleEngine(int argc, char *argv[],
             cmd->addOption("--gen-ser-uid",         "-gse",    "generate new Series Instance UID", OFCommandLine::AF_NoWarning);
             cmd->addOption("--gen-inst-uid",        "-gin",    "generate new SOP Instance UID", OFCommandLine::AF_NoWarning);
             cmd->addOption("--no-meta-uid",         "-nmu",    "do not update metaheader UIDs if related\nUIDs in the dataset are modified");
-        cmd->addSubGroup("other processing options:");
+        cmd->addSubGroup("error handling:");
+            cmd->addOption("--ignore-errors",       "-ie",     "continue with file, if modify error occurs");
             cmd->addOption("--ignore-missing-tags", "-imt",    "treat 'tag not found' as success\nwhen modifying or erasing in datasets");
-            cmd->addOption("--ignore-un-values",    "-iun",    "do not try writing any values\nto elements having VR of UN");
+            cmd->addOption("--ignore-un-values",    "-iun",    "do not try writing any values to elements\nhaving a VR of UN");
     cmd->addGroup("output options:");
         cmd->addSubGroup("output file format:");
             cmd->addOption("--write-file",          "+F",      "write file format (default)");
@@ -162,7 +171,7 @@ MdfConsoleEngine::MdfConsoleEngine(int argc, char *argv[],
 
     // evaluate commandline
     prepareCmdLineArgs(argc, argv, application_name);
-    if (app->parseCommandLine(*cmd, argc, argv, OFCommandLine::PF_ExpandWildcards))
+    if (app->parseCommandLine(*cmd, argc, argv))
     {
         /* print help text and exit */
         if (cmd->getArgCount() == 0)
@@ -219,12 +228,6 @@ void MdfConsoleEngine::parseNonJobOptions()
 {
     // catch "general" options
     OFLog::configureFromCommandLine(*cmd, *app);
-    if (cmd->findOption("--ignore-errors"))
-        ignore_errors_option = OFTrue;
-    if (cmd->findOption("--no-meta-uid"))
-        update_metaheader_uids_option = OFFalse;
-    if (cmd->findOption("--no-backup"))
-        no_backup_option = OFTrue;
 
     // input options
     cmd->beginOptionBlock();
@@ -235,6 +238,9 @@ void MdfConsoleEngine::parseNonJobOptions()
     if (cmd->findOption("--read-dataset"))
         read_mode_option = ERM_dataset;
     cmd->endOptionBlock();
+
+    if (cmd->findOption("--create-file"))
+        create_if_necessary = OFTrue;
 
     cmd->beginOptionBlock();
     if (cmd->findOption("--read-xfer-auto"))
@@ -260,45 +266,57 @@ void MdfConsoleEngine::parseNonJobOptions()
 
     cmd->beginOptionBlock();
     if (cmd->findOption("--accept-odd-length"))
-    {
         dcmAcceptOddAttributeLength.set(OFTrue);
-    }
     if (cmd->findOption("--assume-even-length"))
-    {
         dcmAcceptOddAttributeLength.set(OFFalse);
-    }
     cmd->endOptionBlock();
 
     cmd->beginOptionBlock();
     if (cmd->findOption("--enable-correction"))
-    {
         dcmEnableAutomaticInputDataCorrection.set(OFTrue);
-    }
     if (cmd->findOption("--disable-correction"))
-    {
         dcmEnableAutomaticInputDataCorrection.set(OFFalse);
-    }
     cmd->endOptionBlock();
 
 #ifdef WITH_ZLIB
     cmd->beginOptionBlock();
     if (cmd->findOption("--bitstream-deflated"))
-    {
         dcmZlibExpectRFC1950Encoding.set(OFFalse);
-    }
     if (cmd->findOption("--bitstream-zlib"))
-    {
         dcmZlibExpectRFC1950Encoding.set(OFTrue);
-    }
     cmd->endOptionBlock();
 #endif
+
+    // processing options
+    cmd->beginOptionBlock();
+    if (cmd->findOption("--backup"))
+        no_backup_option = OFFalse;
+    if (cmd->findOption("--no-backup"))
+        no_backup_option = OFTrue;
+    cmd->endOptionBlock();
+
+    if (cmd->findOption("--no-reserv-check"))
+        no_reservation_checks = OFTrue;
+
+    if (cmd->findOption("--no-meta-uid"))
+        update_metaheader_uids_option = OFFalse;
+
+    if (cmd->findOption("--ignore-errors"))
+        ignore_errors_option = OFTrue;
+    if (cmd->findOption("--ignore-missing-tags"))
+        ignore_missing_tags_option = OFTrue;
+    if (cmd->findOption("--ignore-un-values"))
+        ignore_un_modifies = OFTrue;
 
     // output options
     cmd->beginOptionBlock();
     if (cmd->findOption("--write-file"))
         output_dataset_option = OFFalse;
     if (cmd->findOption("--write-dataset"))
+    {
         output_dataset_option = OFTrue;
+        app->checkConflict("--write-dataset", "--create-file", create_if_necessary);
+    }
     cmd->endOptionBlock();
 
     cmd->beginOptionBlock();
@@ -314,15 +332,9 @@ void MdfConsoleEngine::parseNonJobOptions()
 
     cmd->beginOptionBlock();
     if (cmd->findOption("--enable-new-vr"))
-    {
-        dcmEnableUnknownVRGeneration.set(OFTrue);
-        dcmEnableUnlimitedTextVRGeneration.set(OFTrue);
-    }
+        dcmEnableGenerationOfNewVRs();
     if (cmd->findOption("--disable-new-vr"))
-    {
-        dcmEnableUnknownVRGeneration.set(OFFalse);
-        dcmEnableUnlimitedTextVRGeneration.set(OFFalse);
-    }
+        dcmDisableGenerationOfNewVRs();
     cmd->endOptionBlock();
 
     cmd->beginOptionBlock();
@@ -357,18 +369,6 @@ void MdfConsoleEngine::parseNonJobOptions()
         padenc_option = EPD_withPadding;
     }
     cmd->endOptionBlock();
-    if (cmd->findOption("--ignore-missing-tags"))
-    {
-        ignore_missing_tags_option = OFTrue;
-    }
-    if (cmd->findOption("--no-reserv-check"))
-    {
-        no_reservation_checks = OFTrue;
-    }
-    if (cmd->findOption("--ignore-un-values"))
-    {
-        ignore_un_modifies = OFTrue;
-    }
 }
 
 
@@ -464,7 +464,7 @@ int MdfConsoleEngine::executeJob(const MdfJob &job,
     else if (job.option == "mf")
         result = ds_man->modifyOrInsertFromFile(job.path, job.value /*filename*/, OFTrue, update_metaheader_uids_option, ignore_missing_tags_option, no_reservation_checks);
     else if (job.option == "ma")
-        result = ds_man->modifyAllTags(job.path, job.value, update_metaheader_uids_option, count);
+        result = ds_man->modifyAllTags(job.path, job.value, update_metaheader_uids_option, count, ignore_missing_tags_option);
     else if (job.option == "e")
         result = ds_man->deleteTag(job.path, OFFalse, ignore_missing_tags_option);
     else if (job.option == "ea")
@@ -514,6 +514,7 @@ int MdfConsoleEngine::startProvidingService()
     {
         filename = (*file_it).c_str();
         result = loadFile(filename);
+
         // if file could be loaded:
         if (result.good())
         {
@@ -528,6 +529,10 @@ int MdfConsoleEngine::startProvidingService()
             // if there were no errors or user wants to override them, save:
             if (errors == 0 || ignore_errors_option)
             {
+                if (was_created && (output_xfer_option == EXS_Unknown))
+                {
+                  output_xfer_option = EXS_LittleEndianExplicit;
+                }
                 result = ds_man->saveFile(filename, output_xfer_option,
                                           enctype_option, glenc_option,
                                           padenc_option, filepad_option,
@@ -536,7 +541,7 @@ int MdfConsoleEngine::startProvidingService()
                 {
                     OFLOG_ERROR(dcmodifyLogger, "couldn't save file: " << result.text());
                     errors++;
-                    if (!no_backup_option)
+                    if (!no_backup_option && !was_created && strcmp(filename, "-"))
                     {
                         result = restoreFile(filename);
                         if (result.bad())
@@ -547,8 +552,8 @@ int MdfConsoleEngine::startProvidingService()
                     }
                 }
             }
-            // errors occured and user doesn't want to ignore them:
-            else if (!no_backup_option)
+            // errors occurred and user doesn't want to ignore them:
+            else if (!no_backup_option && !was_created && strcmp(filename, "-"))
             {
                 result = restoreFile(filename);
                 if (result.bad())
@@ -582,31 +587,32 @@ OFCondition MdfConsoleEngine::loadFile(const char *filename)
     ds_man->setModifyUNValues(!ignore_un_modifies);
     OFLOG_INFO(dcmodifyLogger, "Processing file: " << filename);
     // load file into dataset manager
-    result = ds_man->loadFile(filename, read_mode_option, input_xfer_option);
-    if (result.good() && !no_backup_option)
+    was_created = !OFStandard::fileExists(filename);
+    result = ds_man->loadFile(filename, read_mode_option, input_xfer_option, create_if_necessary);
+    if (result.good() && !no_backup_option && !was_created && strcmp(filename, "-"))
         result = backupFile(filename);
     return result;
 }
 
 
-OFCondition MdfConsoleEngine::backupFile(const char *file_name)
+OFCondition MdfConsoleEngine::backupFile(const char *filename)
 {
-    OFCondition backup_result;
     int result;
-    OFString backup = file_name;
+    OFString backup = filename;
     backup += ".bak";
+    OFLOG_INFO(dcmodifyLogger, "Creating backup of input file: " << backup);
     // delete backup file, if it already exists
     if (OFStandard::fileExists(backup.c_str()))
     {
-        int del_result = remove(backup.c_str());
-        if (del_result != 0)
+        result = remove(backup.c_str());
+        if (result != 0)
         {
             OFLOG_ERROR(dcmodifyLogger, "couldn't delete previous backup file, unable to backup!");
             return EC_IllegalCall;
         }
     }
     // if backup file could be removed, backup original file
-    result = rename(file_name, backup.c_str());
+    result = rename(filename, backup.c_str());
     // set return value
     if (result != 0)
     {
@@ -623,6 +629,7 @@ OFCondition MdfConsoleEngine::restoreFile(const char *filename)
     int result;
     OFString backup = filename;
     backup += ".bak";
+    OFLOG_INFO(dcmodifyLogger, "Restoring original file from backup");
     // delete the (original) file that dcmodify couldn't modify
     if (OFStandard::fileExists(filename))
     {
@@ -641,9 +648,6 @@ OFCondition MdfConsoleEngine::restoreFile(const char *filename)
         OFLOG_ERROR(dcmodifyLogger, "unable to rename backup file to original filename!");
         return EC_IllegalCall;
     }
-    // successfully restored, throw out message
-    else
-        OFLOG_INFO(dcmodifyLogger, "Renamed backup file to original");
     // you only get to this point, if restoring was completely successful
     return EC_Normal;
 }
@@ -657,165 +661,3 @@ MdfConsoleEngine::~MdfConsoleEngine()
     delete jobs;
     delete ds_man;
 }
-
-
-/*
-** CVS/RCS Log:
-** $Log: mdfconen.cc,v $
-** Revision 1.38  2010-10-14 13:13:30  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.37  2010-05-28 13:19:19  joergr
-** Changed logger name from "dcmtk.dcmdata.mdfconen" to "dcmtk.apps.dcmodify".
-**
-** Revision 1.36  2010-05-21 08:53:34  joergr
-** Fixed wrong use of if statement which prevented option --insert from working.
-**
-** Revision 1.35  2010-05-20 15:53:58  joergr
-** Added support for reading the value of insert/modify statements from a file.
-** Slightly modified log messages and log levels in order to be more consistent.
-** Removed some unnecessary include directives.
-**
-** Revision 1.34  2010-02-05 09:56:58  joergr
-** Fixed issue with double locking of ofConsole.
-** Fixed inconsistent source code formatting.
-**
-** Revision 1.33  2009-11-26 13:10:56  onken
-** Added better error message to dcmodify in case write permissions for creating
-** the backup file are missing.
-**
-** Revision 1.32  2009-11-04 09:58:06  uli
-** Switched to logging mechanism provided by the "new" oflog module
-**
-** Revision 1.31  2009-09-04 13:53:09  meichel
-** Minor const iterator related changes needed to compile with VC6 with HAVE_STL
-**
-** Revision 1.30  2009-08-21 09:25:13  joergr
-** Added parameter 'writeMode' to save/write methods which allows for specifying
-** whether to write a dataset or fileformat as well as whether to update the
-** file meta information or to create a new file meta information header.
-**
-** Revision 1.29  2009-06-04 10:21:00  joergr
-** Added new flag that can be used to avoid wrong warning messages (in debug
-** mode) that an option has possibly never been checked.
-**
-** Revision 1.28  2009-04-24 12:20:42  joergr
-** Fixed minor inconsistencies regarding layout/formatting in syntax usage.
-**
-** Revision 1.27  2009-04-21 14:02:49  joergr
-** Fixed minor inconsistencies in manpage / syntax usage.
-**
-** Revision 1.26  2009-01-16 10:03:22  onken
-** Fixed dcmodify help output
-**
-** Revision 1.25  2009-01-15 16:11:55  onken
-** Reworked dcmodify to work with the new DcmPath classes for supporting
-** wildcard paths and automatic insertion of missing attributes and items.
-** Added options for private tag handling and modification of UN values and
-** for ignoring errors resulting from missing tags during modify and erase
-** operations. Further cleanups.
-**
-** Revision 1.24  2008-09-25 11:19:48  joergr
-** Added support for printing the expanded command line arguments.
-** Always output the resource identifier of the command line tool in debug mode.
-**
-** Revision 1.23  2008-03-26 17:01:40  joergr
-** Fixed various layout and formatting issues.
-**
-** Revision 1.22  2007/11/23 15:42:53  meichel
-** Removed unwanted output on console when debug flag is not set
-**
-** Revision 1.21  2006/12/06 09:31:49  onken
-** Added "--no-backup" option to prevent dcmodify from creating backup files
-**
-** Revision 1.20  2006/08/15 15:50:56  meichel
-** Updated all code in module dcmdata to correctly compile when
-**   all standard C++ classes remain in namespace std.
-**
-** Revision 1.19  2006/07/27 13:37:47  joergr
-** Changed parameter "exclusive" of method addOption() from type OFBool into an
-** integer parameter "flags". Prepended prefix "PF_" to parseLine() flags.
-** Option "--help" is no longer an exclusive option by default.
-** Made command line parameter "dcmfile-in" mandatory.
-** Print help text if no command line argument is specified. This is the default
-** behaviour of most DCMTK tools.
-**
-** Revision 1.18  2006/02/09 15:41:41  joergr
-** Fixed typo in CVS log.
-**
-** Revision 1.17  2006/02/09 15:20:28  joergr
-** Replaced OFIterator<> by OFListIterator() in order to compile if HAVE_STL
-** is defined.
-**
-** Revision 1.16  2005/12/16 13:04:01  meichel
-** Changed type to size_t to make code safe on 64bit platforms
-**
-** Revision 1.15  2005/12/08 15:40:51  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.14  2005/12/02 09:18:15  joergr
-** Added new command line option that ignores the transfer syntax specified in
-** the meta header and tries to detect the transfer syntax automatically from
-** the dataset.
-** Added new command line option that checks whether a given file starts with a
-** valid DICOM meta header.
-**
-** Revision 1.13  2005/03/09 17:58:00  joergr
-** Replaced "," between two delete statements by ";" since this confuses some
-** compilers.
-**
-** Revision 1.12  2004/11/05 17:17:23  onken
-** Added input and output options for dcmodify. minor code enhancements.
-**
-** Revision 1.11  2004/10/22 16:53:26  onken
-** - fixed ignore-errors-option
-** - major enhancements for supporting private tags
-** - removed '0 Errors' output
-** - modifications to groups 0000,0001,0002,0003,0005 and 0007 are blocked,
-**   removing tags with group 0001,0003,0005 and 0007 is still possible
-** - UID options:
-**   - generate new study, series and instance UIDs
-**   - When changing UIDs in dataset, related metaheader tags are updated
-**     automatically
-** - minor code improvements
-**
-** Revision 1.10  2004/04/19 14:45:07  onken
-** Restructured code to avoid default parameter values for "complex types" like
-** OFString. Required for Sun CC 2.0.1.
-**
-** Revision 1.9  2003/12/10 16:19:20  onken
-** Changed API of MdfDatasetManager, so that its transparent for user, whether
-** he wants to modify itemtags or tags at 1. level.
-**
-** Complete rewrite of MdfConsoleEngine. It doesn't support a batchfile any more,
-** but now a user can give different modify-options at the same time on
-** commandline. Other purifications and simplifications were made.
-**
-** Revision 1.8  2003/11/13 10:34:22  joergr
-** Made help text consistent with revised man page.
-**
-** Revision 1.7  2003/11/11 10:55:51  onken
-** - debug-mechanism doesn't use debug(..) any more
-** - comments purified
-** - headers adjustet to debug-modifications
-**
-** Revision 1.6  2003/10/13 14:51:49  onken
-** improved backup-strategy
-**
-** Revision 1.5  2003/10/13 13:28:28  meichel
-** Minor code purifications, needed for Borland C++
-**
-** Revision 1.4  2003/09/19 12:43:54  onken
-** major bug fixes, corrections for "dcmtk-coding-style", better error-handling
-**
-** Revision 1.3  2003/07/09 12:13:13  meichel
-** Included dcmodify in MSVC build system, updated headers
-**
-** Revision 1.2  2003/07/03 15:39:35  meichel
-** Fixed problems with iterators, included zlib.h if needed
-**
-** Revision 1.1  2003/06/26 09:17:18  onken
-** Added commandline-application dcmodify.
-**
-**
-*/

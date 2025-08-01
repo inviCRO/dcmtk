@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose: DcmOutputBufferStream and related classes,
  *    implements output to blocks of memory as needed in the dcmnet module.
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:41 $
- *  CVS/RCS Revision: $Revision: 1.5 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCOSTRMB_H
@@ -36,14 +29,14 @@
 /** consumer class that stores data in a buffer provided by the caller.
  *  Used for DICOM network communication.
  */
-class DcmBufferConsumer: public DcmConsumer
+class DCMTK_DCMDATA_EXPORT DcmBufferConsumer: public DcmConsumer
 {
 public:
 
   /** constructor
    *  @param buf buffer in which data is stored. Must be allocated
    *    by caller and remain valid during the lifetime of this object.
-   *  @param bufLen buffer length, must be even number > 0.
+   *  @param bufLen buffer length, must be even number (0 permitted).
    */
   DcmBufferConsumer(void *buf, offile_off_t bufLen);
 
@@ -81,7 +74,7 @@ public:
   /** processes as many bytes as possible from the given input block.
    *  @param buf pointer to memory block, must not be NULL
    *  @param buflen length of memory block
-   *  @return number of bytes actually processed. 
+   *  @return number of bytes actually processed.
    */
   virtual offile_off_t write(const void *buf, offile_off_t buflen);
 
@@ -100,6 +93,11 @@ public:
    *  @param length number of bytes in buffer returned in this parameter
    */
   virtual void flushBuffer(void *& buffer, offile_off_t& length);
+
+  /** query the number of bytes in buffer without flushing it.
+   *  @return number of bytes in buffer.
+   */
+  virtual offile_off_t filled();
 
 private:
 
@@ -126,7 +124,7 @@ private:
 /** output stream that writes into a buffer of fixed length
  *  which must be provided by the caller.
  */
-class DcmOutputBufferStream: public DcmOutputStream
+class DCMTK_DCMDATA_EXPORT DcmOutputBufferStream: public DcmOutputStream
 {
 public:
   /** constructor
@@ -148,6 +146,11 @@ public:
    */
   virtual void flushBuffer(void *& buffer, offile_off_t& length);
 
+  /** query the number of bytes in buffer without flushing it.
+   *  @return number of bytes in buffer.
+   */
+  virtual offile_off_t filled();
+
 private:
 
   /// private unimplemented copy constructor
@@ -163,26 +166,3 @@ private:
 
 
 #endif
-
-/*
- * CVS/RCS Log:
- * $Log: dcostrmb.h,v $
- * Revision 1.5  2010-10-14 13:15:41  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.4  2009-11-04 09:58:07  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.3  2007-02-19 16:06:09  meichel
- * Class DcmOutputStream and related classes are now safe for use with
- *   large files (2 GBytes or more) if supported by compiler and operating system.
- *
- * Revision 1.2  2005/12/08 16:28:25  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.1  2002/08/27 16:55:36  meichel
- * Initial release of new DICOM I/O stream classes that add support for stream
- *   compression (deflated little endian explicit VR transfer syntax)
- *
- *
- */

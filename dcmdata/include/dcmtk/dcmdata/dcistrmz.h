@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Marco Eichelberg
  *
  *  Purpose: zlib compression filter for input streams
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:41 $
- *  CVS/RCS Revision: $Revision: 1.5 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -43,12 +36,16 @@ END_EXTERN_C
  *  When true, the input stream is expected to be in deflated ZLIB format 
  *  instead of deflated bitstream format (i.e. RFC 1950 instead of RFC 1951).
  *  Default is false, i.e. DICOM compliant behavior.
+ *  @remark this flag is only available if DCMTK is compiled with
+ *  ZLIB support enabled.
  */
-extern OFGlobal<OFBool> dcmZlibExpectRFC1950Encoding;
+extern DCMTK_DCMDATA_EXPORT OFGlobal<OFBool> dcmZlibExpectRFC1950Encoding;
 
 /** zlib compression filter for input streams
+ *  @remark this class is only available if DCMTK is compiled with
+ *  ZLIB support enabled.
  */
-class DcmZLibInputFilter: public DcmInputFilter
+class DCMTK_DCMDATA_EXPORT DcmZLibInputFilter: public DcmInputFilter
 {
 public:
 
@@ -203,27 +200,3 @@ private:
 
 #endif
 #endif
-
-/*
- * CVS/RCS Log:
- * $Log: dcistrmz.h,v $
- * Revision 1.5  2010-10-14 13:15:41  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.4  2008-06-23 12:09:13  joergr
- * Fixed inconsistencies in Doxygen API documentation.
- *
- * Revision 1.3  2007/02/19 15:45:41  meichel
- * Class DcmInputStream and related classes are now safe for use with
- *   large files (2 GBytes or more) if supported by compiler and operating system.
- *
- * Revision 1.2  2005/12/08 16:28:18  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.1  2002/08/27 16:55:34  meichel
- * Initial release of new DICOM I/O stream classes that add support for stream
- *   compression (deflated little endian explicit VR transfer syntax)
- *
- *
- */
-

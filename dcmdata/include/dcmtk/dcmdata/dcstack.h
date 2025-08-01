@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2011, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: stack class
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:42 $
- *  CVS/RCS Revision: $Revision: 1.14 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCSTACK_H
@@ -31,13 +24,14 @@
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 #include "dcmtk/ofstd/oftypes.h"
+#include "dcmtk/dcmdata/dcdefine.h"
 
 class DcmObject;    // forward declaration
 
 
 /** helper class used by DcmStack.  Maintains a single stack entry.
  */
-class DcmStackNode
+class DCMTK_DCMDATA_EXPORT DcmStackNode
 {
 public:
     /** constructor.
@@ -74,7 +68,7 @@ private:
 /** this class manages a stack of pointers to DcmObject instances.
  *  The objects pointed to are never touched, e.g. deleted.
  */
-class DcmStack
+class DCMTK_DCMDATA_EXPORT DcmStack
 {
 public:
     /// default constructor, creates empty stack
@@ -128,6 +122,7 @@ public:
     DcmObject* top() const;
 
     /** returns n-th element from stack without removing it.
+     *  @param number the number of the element
      *  @return n-th element from stack
      */
     DcmObject* elem(const unsigned long number) const;
@@ -156,34 +151,3 @@ private:
 
 
 #endif  // DCSTACK_H
-
-
-/*
- * CVS/RCS Log:
- * $Log: dcstack.h,v $
- * Revision 1.14  2010-10-14 13:15:42  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.13  2010-03-01 09:08:44  uli
- * Removed some unnecessary include directives in the headers.
- *
- * Revision 1.12  2005-12-08 16:28:42  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.11  2004/04/14 11:50:21  joergr
- * Added const qualifier to parameter to keep Sun CC 2.0.1 quiet.
- *
- * Revision 1.10  2003/06/02 16:52:20  meichel
- * Cleaned up implementation of DcmStack, added doc++ comments
- *
- * Revision 1.9  2001/06/01 15:48:44  meichel
- * Updated copyright header
- *
- * Revision 1.8  2000/03/08 16:26:18  meichel
- * Updated copyright header.
- *
- * Revision 1.7  1999/03/31 09:24:47  meichel
- * Updated copyright header in module dcmdata
- *
- *
- */

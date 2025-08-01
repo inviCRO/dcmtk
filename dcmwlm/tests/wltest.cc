@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1996-2010, OFFIS e.V.
+ *  Copyright (C) 1996-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,23 +17,10 @@
  *
  *  Purpose: Worklist Database Test Program
  *
- *  Last Update:      $Author: uli $
- *  Update Date:      $Date: 2010-11-17 13:01:22 $
- *  CVS/RCS Revision: $Revision: 1.12 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CSTRING
-#define INCLUDE_CSTDARG
-#define INCLUDE_CERRNO
-#define INCLUDE_UNISTD
-#include "dcmtk/ofstd/ofstdinc.h"
 
 #include "dcmtk/dcmnet/dicom.h"
 #include "dcmtk/dcmnet/dul.h"
@@ -84,7 +71,7 @@ usage()
     exit(1);
 }
 
-void errmsg(const char* msg, ...)
+static void errmsg(const char* msg, ...)
 {
     va_list args;
 
@@ -116,7 +103,7 @@ addOverrideKey(DcmDataset& overrideKeys, char* s)
         errmsg("unknown tag: (%04x,%04x)", g, e);
         usage();
     }
-    DcmElement *elem = newDicomElement(tag);
+    DcmElement *elem = DcmItem::newDicomElement(tag);
     if (elem == NULL) {
         errmsg("cannot create element for tag: (%04x,%04x)", g, e);
         usage();
@@ -145,12 +132,6 @@ int main(int argc, char* argv[])
 {
     int i = 0;
     int j = 0;
-
-#ifdef HAVE_GUSI_H
-    /* needed for Macintosh */
-    GUSISetup(GUSIwithSIOUXSockets);
-    GUSISetup(GUSIwithInternetSockets);
-#endif
 
 #ifdef WITH_TCPWRAPPER
     // this code makes sure that the linker cannot optimize away
@@ -215,8 +196,8 @@ int main(int argc, char* argv[])
 
     for (j=i; j<argc; j++) {
         if (!OFStandard::pathExists(argv[j])) {
-            char buf[256];
-            errmsg("cannot access %s: %s", argv[j], OFStandard::strerror(errno, buf, sizeof(buf)));
+            OFString buffer = OFStandard::getLastSystemErrorCode().message();
+            errmsg("cannot access %s: %s", argv[j], buffer.c_str());
             usage();
         }
     }
@@ -362,50 +343,3 @@ queryWorklistDB(WlmDataSourceFileSystem& wdb,
 
     return OFTrue;
 }
-
-
-/*
-** CVS Log
-** $Log: wltest.cc,v $
-** Revision 1.12  2010-11-17 13:01:22  uli
-** Removed some uses of "%s" with sscanf().
-**
-** Revision 1.11  2010-11-01 13:37:32  uli
-** Fixed some compiler warnings reported by gcc with additional flags.
-**
-** Revision 1.10  2010-10-14 13:15:13  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.9  2010-06-03 10:31:24  joergr
-** Replaced calls to strerror() by new helper function OFStandard::strerror()
-** which results in using the thread safe version of strerror() if available.
-**
-** Revision 1.8  2009-11-24 10:40:01  uli
-** Switched to logging mechanism provided by the "new" oflog module.
-**
-** Revision 1.7  2007-02-19 15:37:31  meichel
-** Removed calls to DcmObject::error()
-**
-** Revision 1.6  2005/12/14 17:43:42  meichel
-** Adapted code for compilation with TCP wrappers to NetBSD
-**
-** Revision 1.5  2005/12/12 15:14:34  meichel
-** Added code needed for compilation with TCP wrappers on OpenBSD
-**
-** Revision 1.4  2005/12/08 15:48:36  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.3  2004/08/03 11:43:39  meichel
-** Headers libc.h and unistd.h are now included via ofstdinc.h
-**
-** Revision 1.2  2004/02/11 09:49:06  joergr
-** Fixed usage output formatting.
-**
-** Revision 1.1  2002/12/03 12:16:37  wilkens
-** Added files und functionality from the dcmtk/wlisctn folder to dcmtk/dcmwlm
-** so that dcmwlm can now completely replace wlistctn in the public domain part
-** of dcmtk. Pertaining to this replacement requirement, another optional return
-** key attribute was integrated into the wlm utilities.
-**
-**
-*/

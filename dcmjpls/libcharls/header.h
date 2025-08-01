@@ -1,12 +1,13 @@
-//
-// (C) Jan de Vaan 2007-2010, all rights reserved. See the accompanying "License.txt" for licensed use.
-//
+// 
+// (C) Jan de Vaan 2007-2010, all rights reserved. See the accompanying "License.txt" for licensed use. 
+// 
 
 
 #ifndef CHARLS_HEADER
 #define CHARLS_HEADER
 
-#include "dcmtk/ofstd/ofaptr.h"
+#include "dcmtk/ofstd/ofmem.h"
+#undef NEAR
 #include "streams.h"
 
 #define JPEG_SOI  0xD8
@@ -24,20 +25,29 @@
 #define JPEG_APP8 0xE8 // colorXForm
 
 
+
+// Default bin sizes for JPEG-LS statistical modeling. Can be overridden at compression time, however this is rarely done.
+const int BASIC_T1		= 3;
+const int BASIC_T2		= 7;
+const int BASIC_T3		= 21;
+
+const LONG BASIC_RESET	= 64;
+
 class JLSOutputStream;
 
 
 template<class STRATEGY>
-class JlsCodecFactory
+class JlsCodecFactory 
 {
-public:
-	OFauto_ptr<STRATEGY> GetCodec(const JlsParameters& info, const JlsCustomParameters&);
+public:	
+	OFrvalue<OFunique_ptr<STRATEGY> > GetCodec(const JlsParameters& info, const JlsCustomParameters&);
 private:
 	STRATEGY* GetCodecImpl(const JlsParameters& info);
 };
 
 JLS_ERROR CheckParameterCoherent(const JlsParameters* pparams);
 
+JlsCustomParameters ComputeDefault(LONG MAXVAL, LONG NEAR);
 
 //
 // JpegSegment

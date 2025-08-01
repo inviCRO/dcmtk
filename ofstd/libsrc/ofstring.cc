@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2010, OFFIS e.V.
+ *  Copyright (C) 1997-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: A simple string class
  *
- *  Last Update:      $Author: uli $
- *  Update Date:      $Date: 2010-10-20 07:41:37 $
- *  CVS/RCS Revision: $Revision: 1.33 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -31,20 +24,19 @@
 ** A simple string class
 ** - for OFFIS projects when an ANSI string class is not always available
 ** - based on the ANSI-C++ specifications
-** - this impementation is intended to be slow but reliable
+** - this implementation is intended to be slow but reliable
 ** - it is known to be slow but is it reliable?
 */
 
 #include "dcmtk/config/osconfig.h"     /* include OS specific configuration first */
 
-#ifndef HAVE_STD_STRING
+#ifndef HAVE_STL_STRING
 
 #include "dcmtk/ofstd/ofstring.h"
 #include "dcmtk/ofstd/ofcast.h"
 #include "dcmtk/ofstd/ofbmanip.h"
-
-#define INCLUDE_CCTYPE
-#include "dcmtk/ofstd/ofstdinc.h"
+#include "dcmtk/ofstd/oftypes.h"
+#include "dcmtk/ofstd/ofstd.h"
 
 static const char* verify_string(const char *s)
 {
@@ -95,9 +87,11 @@ OFString::OFString (const char* s)
     s = verify_string(s);
     const size_t n = strlen(s);
     reserve(n);
-    // Because we used strlen() to figure out the length we can use strcpy()
+    // Because we used strlen() to figure out the length we can use strlcpy()
     // since there won't be any '\0' bytes in the string.
-    strcpy(this->theCString, s);
+    // The amount of memory allocated is always theCapacity+1
+    // because one extra byte is always allocated for the eos zero byte.
+    OFStandard::strlcpy(this->theCString, s, this->theCapacity+1);
     this->theSize = n;
 }
 
@@ -255,6 +249,13 @@ OFString&
 OFString::assign (const char* s)
 {
     OFString str(s);
+    return this->assign(str);
+}
+
+OFString&
+OFString::assign (const char* s, const char *e)
+{
+    OFString str(s, e - s);
     return this->assign(str);
 }
 
@@ -427,11 +428,10 @@ size_t
 OFString::copy (char* s, size_t n, size_t pos) const
 {
     OFString sub(this->substr(pos, n));
-    // String length *including* the trailing EOS
-    const size_t result = sub.size() + 1;
+    const size_t result = sub.size();
 
     // The string could have NULL bytes so no strncpy()
-    OFBitmanipTemplate<char>::copyMem(this->theCString, s, result);
+    OFBitmanipTemplate<char>::copyMem(sub.theCString, s, result);
     return result;
 }
 
@@ -479,7 +479,7 @@ OFString::compare (const OFString& str) const
     // Our string could contain null bytes and thus we can't use strncmp()
     int result = memcmp(this->theCString, str.theCString, rlen);
     if (result == 0) {
-        result = (this_size - str_size);
+        result = this_size < str_size ? -1 : this_size > str_size ? 1 : 0;
     }
     return result;
 }
@@ -524,7 +524,7 @@ OFString::find (const OFString& pattern, size_t pos) const
         return OFString_npos;
     }
     for (size_t i = pos; i < this_size; i++) {
-        /* is there enought space for the pattern? */
+        /* is there enough space for the pattern? */
         if ((i + pattern_size) > this_size) {
             return OFString_npos;
         }
@@ -578,16 +578,16 @@ OFString::rfind (const OFString& pattern, size_t pos) const
     if ((this_size == 0) || (pattern_size == 0) || (this_size < pattern_size)) {
         return OFString_npos;
     }
-    int above = ((this_size - pattern_size) < pos) ? (this_size - pattern_size) : pos;
-    for (int i = above; i >= 0; i--) {
+    OFintptr_t above = ((this_size - pattern_size) < pos) ? (this_size - pattern_size) : pos;
+    for (OFintptr_t i = above; i >= 0; --i) {
         int match = 1; /* assume there is a match */
-        for (size_t j = 0; (j < pattern_size) && match; j++) {
+        for (size_t j = 0; (j < pattern_size) && match; ++j) {
             if (this->at(i + j) != pattern[j]) {
                 match = 0;
             }
         }
         if (match) {
-            return i;
+            return OFstatic_cast(size_t, i); // if i were < 0, the for-loop would've been already left.
         }
     }
     return OFString_npos;
@@ -1049,134 +1049,8 @@ OFBool operator>= (const OFString& lhs, char rhs)
     return (!(lhs < rhs));
 }
 
-#else /* HAVE_STD_STRING */
+#else /* HAVE_STL_STRING */
 
 int ofstring_cc_dummy_to_keep_linker_from_moaning = 0;
 
 #endif
-
-
-/*
-** CVS/RCS Log:
-** $Log: ofstring.cc,v $
-** Revision 1.33  2010-10-20 07:41:37  uli
-** Made sure isalpha() & friends are only called with valid arguments.
-**
-** Revision 1.32  2010-10-14 13:14:53  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.31  2010-10-08 10:52:28  uli
-** Make OFString(NULL) construct an empty string. Previously, this was the
-** default, but it was changed to match the behavior of std::string.
-** This adds a new define USE_NULL_SAFE_OFSTRING which is always defined by
-** our Makefiles. Passing NULL to OFString now also generates a warning in
-** DEBUG builds.
-**
-** Revision 1.30  2010-08-19 12:07:55  uli
-** Made OFString follow the C++ standard for std::string::assign().
-**
-** Revision 1.29  2010-06-25 09:43:23  uli
-** Don't allow OFString(NULL) because it is also forbidden for std::string.
-**
-** Revision 1.28  2010-05-03 07:50:18  joergr
-** Added type cast to integer variable in order to avoid compiler warnings
-** reported by VisualStudio 2010.
-**
-** Revision 1.27  2010-04-09 09:48:23  uli
-** Don't initialize our string twice in OFString::reserve().
-**
-** Revision 1.26  2010-01-05 14:05:34  uli
-** Made sure OFString always null-terminates its C-Strings.
-**
-** Revision 1.25  2009-09-28 14:18:36  joergr
-** Introduced new member variable that stores the current length of the string.
-** This yields in a significant performance improvement when compiled in debug
-** mode.
-** Added support for strings that contain null bytes ('\0') in order to be more
-** compliant with the standard C++ string class.
-**
-** Revision 1.24  2009-09-25 09:46:52  joergr
-** Fixed issue in assign() method with overlapping memory areas (e.g. when using
-** self-assignment of a string or copying a sub-string to itself).
-**
-** Revision 1.23  2009-08-07 14:30:32  joergr
-** Fixed incorrect implementation of find_first_not_of() and find_last_not_of().
-**
-** Revision 1.22  2006/08/14 16:42:46  meichel
-** Updated all code in module ofstd to correctly compile if the standard
-**   namespace has not included into the global one with a "using" directive.
-**
-** Revision 1.21  2005/12/08 15:49:01  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.20  2003/07/09 13:58:04  meichel
-** Adapted type casts to new-style typecast operators defined in ofcast.h
-**
-** Revision 1.19  2003/07/04 13:31:52  meichel
-** Fixed issues with compiling with HAVE_STD_STRING
-**
-** Revision 1.18  2003/05/14 13:22:29  joergr
-** Fixed bug in OFString::find_first_of().
-**
-** Revision 1.17  2003/04/17 15:55:17  joergr
-** Enhanced performance of find routines.
-**
-** Revision 1.16  2002/11/27 11:23:11  meichel
-** Adapted module ofstd to use of new header file ofstdinc.h
-**
-** Revision 1.15  2001/12/04 16:48:18  meichel
-** Completed doc++ documentation, fixed bug in OFString::copy.
-**
-** Revision 1.14  2001/11/26 16:43:20  joergr
-** Fixed bug in OFString constructor.
-**
-** Revision 1.13  2001/06/01 15:51:39  meichel
-** Updated copyright header
-**
-** Revision 1.12  2000/04/14 15:21:33  meichel
-** Minor change to make OFString thread safe.
-**
-** Revision 1.11  2000/03/08 16:36:06  meichel
-** Updated copyright header.
-**
-** Revision 1.10  2000/02/02 14:30:17  joergr
-** Replaced 'delete' statements by 'delete[]' for objects created with 'new[]'.
-**
-** Revision 1.9  1999/09/09 14:22:38  thiel
-** bug in rfind: patternsize greater than string
-**
-** Revision 1.8  1998/11/27 12:43:54  joergr
-** Added copyright message to source files and changed CVS header.
-**
-** Revision 1.7  1998/06/29 12:09:26  meichel
-** Removed some name clashes (e.g. local variable with same
-**   name as class member) to improve maintainability.
-**   Applied some code purifications proposed by the gcc 2.8.1 -Weffc++ option.
-**
-** Revision 1.6  1997/10/06 11:31:13  hewett
-** Fixed OFString::operator<< handling of leading whitespace.  Leading
-** whitespace is now skipped.
-**
-** Revision 1.5  1997/10/01 11:53:57  hewett
-** Fixed segmentation fault for OFString's find_ methods when current
-** string is empty.
-**
-** Revision 1.4  1997/09/11 15:39:18  hewett
-** Fixed OFString bug associated with the assign method
-** when n == OFString_npos.  Since OFString_npos is represented
-** by -1 the assign method  was reserving zero space for the string.
-** This case is now explicitly handled.
-**
-** Revision 1.3  1997/09/01 10:00:20  hewett
-** Added absent $ terminator to RCS/CVS Revision keyword in header.
-**
-** Revision 1.2  1997/07/07 14:05:33  hewett
-** Renamed the constant OFnpos to OFString_npos to look more like
-** the real ANSI constant string::npos.
-**
-** Revision 1.1  1997/07/07 11:52:22  meichel
-** Added string class OFString to ofstd library.
-** This class implements a subset of the ANSI C++ "string" class.
-**
-**
-*/

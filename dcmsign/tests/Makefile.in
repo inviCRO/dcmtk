@@ -15,6 +15,10 @@ include $(configdir)/@common_makefile@
 
 all:
 
+check:
+
+check-exhaustive:
+
 install:
 
 clean:

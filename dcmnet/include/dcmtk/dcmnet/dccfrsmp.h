@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2017, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -19,13 +19,6 @@
  *    class DcmRoleSelectionItem
  *    class DcmRoleSelectionMap
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:22 $
- *  CVS/RCS Revision: $Revision: 1.4 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef DCCFRSMP_H
@@ -34,7 +27,7 @@
 #include "dcmtk/config/osconfig.h"
 #include "dcmtk/ofstd/oflist.h"   /* for class OFList<> */
 #include "dcmtk/ofstd/ofcond.h"   /* for class OFCondition */
-#include "dcmtk/dcmnet/dcmsmap.h"  /* for class DcmSimpleMap<> */
+#include "dcmtk/ofstd/ofmap.h"    /* for class OFMap */
 #include "dcmtk/dcmnet/dccfuidh.h" /* for class DcmUIDHandler */
 #include "dcmtk/dcmnet/assoc.h"    /* for T_ASC_SC_ROLE */
 
@@ -43,7 +36,7 @@ class DcmPresentationContextMap;
 /** this helper class is a role selection list entry.
  *  Not intended for use by the end user.
  */
-class DcmRoleSelectionItem
+class DCMTK_DCMNET_EXPORT DcmRoleSelectionItem
 {
 public:
   /** constructor
@@ -59,6 +52,9 @@ public:
  
   /// destructor
   ~DcmRoleSelectionItem();
+
+  /// assignment operator
+  DcmRoleSelectionItem& operator=(const DcmRoleSelectionItem& arg);
 
   /** checks if the given argument matches the abstract syntax UID
    *  maintained by this object
@@ -97,9 +93,6 @@ public:
 
 private:
 
-  /// private undefined copy assignment operator
-  DcmRoleSelectionItem& operator=(const DcmRoleSelectionItem& arg);
-
   /// SCP/SCU role
   T_ASC_SC_ROLE role_;
 
@@ -116,7 +109,7 @@ typedef OFList<DcmRoleSelectionItem> DcmRoleSelectionList;
 /** this helper class maintains a map of role selection lists.
  *  Not intended for use by the end user.
  */
-class DcmRoleSelectionMap
+class DCMTK_DCMNET_EXPORT DcmRoleSelectionMap
 {
 public:
   /// constructor
@@ -124,6 +117,16 @@ public:
 
   /// destructor
   ~DcmRoleSelectionMap();
+
+  /// Copy constructor, creates deep copy
+  DcmRoleSelectionMap(const DcmRoleSelectionMap& arg);
+
+  /// Copy assignment operator, creates deep copy
+  DcmRoleSelectionMap& operator=(const DcmRoleSelectionMap& arg);
+
+  /** Resets DcmRoleSelectionMap and frees any allocated memory
+   */
+  void clear();
 
   /** add new entry to list within map.
    *  If key is new, new list is created. Otherwise value
@@ -137,6 +140,15 @@ public:
     const char *key,
     const char *abstractSyntaxUID,
     T_ASC_SC_ROLE role);
+
+  /** add empty list within map.
+   *  If key is new, new list is created. Otherwise the request
+   *  is ignored (no error).
+   *  @param key map key
+   *  @return EC_Normal if successful, an error code otherwise
+   */
+  OFCondition addEmpty(
+    const char *key);
 
   /** checks if the key is known
    *  @param key key name, must not be NULL
@@ -164,36 +176,10 @@ public:
   const DcmRoleSelectionList *getRoleSelectionList(const char *key) const;
 
 private:
-  /// private undefined copy constructor
-  DcmRoleSelectionMap(const DcmRoleSelectionMap& arg);
-
-  /// private undefined copy assignment operator
-  DcmRoleSelectionMap& operator=(const DcmRoleSelectionMap& arg);
 
   /// map of role selection lists
-  DcmSimpleMap<DcmRoleSelectionList *> map_;
+  OFMap<OFString, DcmRoleSelectionList *> map_;
 
 };
 
 #endif
-
-/*
- * CVS/RCS Log
- * $Log: dccfrsmp.h,v $
- * Revision 1.4  2010-10-14 13:17:22  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.3  2005/12/08 16:02:13  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.2  2003/06/18 08:16:16  meichel
- * Added comparison operators to keep MSVC5 compiler happy
- *
- * Revision 1.1  2003/06/10 14:27:33  meichel
- * Initial release of class DcmAssociationConfiguration and support
- *   classes. This class maintains a list of association negotiation
- *   profiles that can be addressed by symbolic keys. The profiles may
- *   be read from a configuration file.
- *
- *
- */

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1997-2010, OFFIS e.V.
+ *  Copyright (C) 1997-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -18,13 +18,6 @@
  *  Purpose:
  *    classes: OFConfigFile
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:15:50 $
- *  CVS/RCS Revision: $Revision: 1.8 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 #ifndef OFCONFIG_H
@@ -34,9 +27,6 @@
 #include "dcmtk/ofstd/ofstring.h"
 #include "dcmtk/ofstd/ofstack.h"
 #include "dcmtk/ofstd/ofstream.h"
-
-#define INCLUDE_CSTDIO
-#include "dcmtk/ofstd/ofstdinc.h"
 
 /*
  *  Short description of configuration file structure:
@@ -76,7 +66,7 @@ typedef OFConfigFileNode *OFPConfigFileNode;
  *  and the links that comprise the configuration file tree structure.
  *  Internal use only.
  */
-class OFConfigFileNode
+class DCMTK_OFSTD_EXPORT OFConfigFileNode
 {
 public:
   /** constructor.
@@ -191,7 +181,7 @@ typedef OFConfigFileNode *OFConfigFileNodePtr;
 /** structure used by class OFConfigFile to store a cursor pointing
  *  to the currently selected section and entry in the config data
  */
-class OFConfigFileCursor
+class DCMTK_OFSTD_EXPORT OFConfigFileCursor
 {
 public:
   /** default constructor
@@ -339,7 +329,7 @@ private:
  *  config file and offers methods allowing to browse the
  *  configuration data
  */
-class OFConfigFile
+class DCMTK_OFSTD_EXPORT OFConfigFile
 {
 public:
 
@@ -556,38 +546,3 @@ private:
 };
 
 #endif
-
-/*
- *  $Log: ofconfig.h,v $
- *  Revision 1.8  2010-10-14 13:15:50  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.7  2010-04-26 12:22:30  uli
- *  Fixed a some minor doxygen warnings.
- *
- *  Revision 1.6  2008-04-16 09:37:27  meichel
- *  class OFConfigFile now supports an ordered mode where multiple
- *    configuration files can be loaded and can replace entries of other.
- *    Also added function to print content of configuration in reloadable format.
- *
- *  Revision 1.5  2008-04-15 15:46:30  meichel
- *  class OFConfigFile now supports flexible tree depths and configurable
- *    comment characters and can, therefore, fully replace the equivalent
- *    code in module dcmprint.
- *
- *  Revision 1.4  2005/12/08 16:05:51  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.3  2003/06/12 13:15:59  joergr
- *  Fixed inconsistent API documentation reported by Doxygen.
- *
- *  Revision 1.2  2003/06/04 12:31:44  meichel
- *  Added dummy comparison operators, needed by MSVC5 with STL
- *
- *  Revision 1.1  2003/04/29 10:14:16  meichel
- *  Moved configuration file parser from module dcmpstat to ofstd and renamed
- *    class to OFConfigFile. Cleaned up implementation (no more friend declarations).
- *
- *
- */
-

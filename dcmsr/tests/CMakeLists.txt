@@ -1,8 +1,20 @@
-# declare directories containing used libraries
-LINK_DIRECTORIES(${dcmsr_BINARY_DIR} ${ofstd_BINARY_DIR} ${oflog_BINARY_DIR} ${dcmdata_BINARY_DIR} ${ZLIB_LIBDIR} ${LIBXML_LIBDIR})
-
 # declare executables
-ADD_EXECUTABLE(mkreport mkreport)
+DCMTK_ADD_EXECUTABLE(mkreport mkreport.cc)
+DCMTK_ADD_EXECUTABLE(dcmsr_tests
+  tests.cc
+  tsrcmr.cc
+  tsrcodvl.cc
+  tsrdoc.cc
+  tsrdoctr.cc
+  tsrlist.cc
+  tsrnumvl.cc
+  tsrtpl.cc
+  tsrtree.cc
+)
 
 # make sure executables are linked to the corresponding libraries
-TARGET_LINK_LIBRARIES(mkreport dcmsr dcmdata oflog ofstd ${ZLIB_LIBS} ${LIBXML_LIBS} ${WIN32_STD_LIBRARIES} ${THREAD_LIBS})
+DCMTK_TARGET_LINK_MODULES(mkreport dcmsr dcmimage dcmimgle dcmdata oflog ofstd)
+DCMTK_TARGET_LINK_MODULES(dcmsr_tests cmr dcmsr dcmimage dcmimgle dcmdata oflog ofstd)
+
+# This macro parses tests.cc and registers all tests
+DCMTK_ADD_TESTS(dcmsr)

@@ -6,19 +6,19 @@
 \page dcmcjpeg dcmcjpeg: Encode DICOM file to JPEG transfer syntax
 \endif
 
-\section synopsis SYNOPSIS
+\section dcmcjpeg_synopsis SYNOPSIS
 
 \verbatim
 dcmcjpeg [options] dcmfile-in dcmfile-out
 \endverbatim
 
-\section description DESCRIPTION
+\section dcmcjpeg_description DESCRIPTION
 
 The \b dcmcjpeg utility reads an uncompressed DICOM image (\e dcmfile-in),
 performs a JPEG compression (i. e. conversion to an encapsulated DICOM transfer
 syntax) and writes the converted image to an output file (\e dcmfile-out).
 
-\section parameters PARAMETERS
+\section dcmcjpeg_parameters PARAMETERS
 
 \verbatim
 dcmfile-in   DICOM input filename to be converted
@@ -26,9 +26,9 @@ dcmfile-in   DICOM input filename to be converted
 dcmfile-out  DICOM output filename
 \endverbatim
 
-\section options OPTIONS
+\section dcmcjpeg_options OPTIONS
 
-\subsection general_options general options
+\subsection dcmcjpeg_general_options general options
 \verbatim
   -h    --help
           print this help text and exit
@@ -56,7 +56,7 @@ dcmfile-out  DICOM output filename
           use config file f for the logger
 \endverbatim
 
-\subsection input_options input options
+\subsection dcmcjpeg_input_options input options
 \verbatim
 input file format:
 
@@ -102,7 +102,7 @@ compatibility (ignored by +tl):
   # (only pseudo lossless encoder)
 \endverbatim
 
-\subsection JPEG_encoding_options JPEG encoding options
+\subsection dcmcjpeg_JPEG_encoding_options JPEG encoding options
 \verbatim
 JPEG process:
 
@@ -148,7 +148,7 @@ lossless JPEG codec selection:
   +tl   --true-lossless
           true lossless codec (default)
 
-  # This option selects an encoder, that guarantees truely lossless
+  # This option selects an encoder, that guarantees truly lossless
   # image compression. See NOTES for further information.
 
   +pl   --pseudo-lossless
@@ -218,7 +218,7 @@ compressed bits per sample (always +ba with +tl):
   +bs   --bits-force-16
           force 16 bits/sample (lossless only)
 
-compression color space conversion (overriden by +tl):
+compression color space conversion (overridden by +tl):
 
   +cy   --color-ybr
           use YCbCr for color images if lossy (default)
@@ -281,47 +281,79 @@ decompression color space conversion
 
   # Never convert color space during decompression.
 
-standard YCbCr component subsampling (not with +tl):
+decompr. workaround options for incorrect encodings (if input is compressed):
 
-  +s4   --sample-444
-          4:4:4 sampling with YBR_FULL (default)
+  +w6   --workaround-pred6
+          enable workaround for JPEG lossless images
+          with overflow in predictor 6
 
-  # This option disables color component subsampling for compression in
-  # the YCbCr color space. The DICOM photometric interpretation is
-  # encoded as YBR_FULL.
+  # DICOM images with 16 bits/pixel have been observed "in the wild"
+  # that are compressed with lossless JPEG and need special handling
+  # because the encoder produced an 16-bit integer overflow in predictor
+  # 6, which needs to be compensated (reproduced) during decompression.
+  # This flag enables a correct decompression of such faulty images, but
+  # at the same time will cause an incorrect decompression of correctly
+  # compressed images. Use with care.
+
+  +wi   --workaround-incpl
+          enable workaround for incomplete JPEG data
+
+  # This option causes dcmjpeg to ignore incomplete JPEG data
+  # at the end of a compressed fragment and to start decompressing
+  # the next frame from the next fragment (if any). This permits
+  # images with incomplete JPEG data to be decoded.
+
+  +wc   --workaround-cornell
+          enable workaround for 16-bit JPEG lossless
+          Cornell images with Huffman table overflow
+
+  # One of the first open-source implementations of lossless JPEG
+  # compression, the "Cornell" library, has a well-known bug that leads
+  # to invalid values in the Huffmann table when images with 16 bit/sample
+  # are compressed. This flag enables a workaround that permits such
+  # images to be decoded correctly.
+
+YCbCr component subsampling (lossy JPEG only):
 
   +s2   --sample-422
-          4:2:2 subsampling with YBR_FULL_422
+          4:2:2 subsampling with YBR_FULL_422 (default)
 
   # This option enables a 4:2:2 color component subsampling for
   # compression in the YCbCr color space. The DICOM photometric
-  # interpretation is encoded as YBR_FULL.
+  # interpretation is encoded as YBR_FULL_422.
 
 non-standard YCbCr component subsampling (not with +tl):
+
+  +s4   --nonstd-444
+          4:4:4 sampling with YBR_FULL
+
+  # This option disables color component subsampling for compression in
+  # the YCbCr color space. The DICOM photometric interpretation is
+  # encoded as YBR_FULL, which violates DICOM rules for lossy JPEG.
 
   +n2   --nonstd-422-full
           4:2:2 subsampling with YBR_FULL
 
   # This option enables a 4:2:2 color component subsampling for
   # compression in the YCbCr color space. The DICOM photometric
-  # interpretation is encoded as YBR_FULL which violates DICOM rules.
+  # interpretation is encoded as YBR_FULL, which violates DICOM rules.
 
   +n1   --nonstd-411-full
           4:1:1 subsampling with YBR_FULL
 
   # This option enables a 4:1:1 color component subsampling for
   # compression in the YCbCr color space. The DICOM photometric
-  # interpretation is encoded as YBR_FULL which violates DICOM rules.
+  # interpretation is encoded as YBR_FULL, which violates DICOM rules.
 
   +np   --nonstd-411
           4:1:1 subsampling with YBR_FULL_422
 
   # This option enables a 4:1:1 color component subsampling for
   # compression in the YCbCr color space. The DICOM photometric
-  # interpretation is encoded as YBR_FULL_422 which violates DICOM rules.
+  # interpretation is encoded as YBR_FULL_422, which violates DICOM rules.
 \endverbatim
 
-\subsection enc_pix_data_encoding_opt encapsulated pixel data encoding options:
+\subsection dcmcjpeg_enc_pix_data_encoding_opt encapsulated pixel data encoding options:
 \verbatim
 encapsulated pixel data fragmentation:
 
@@ -376,14 +408,14 @@ VOI windowing for monochrome images (not with +tl):
           compute VOI window using min-max algorithm
 
   # Compute and apply a window center and width that covers the
-  # range from the smallest to the largest occuring pixel value.
+  # range from the smallest to the largest occurring pixel value.
 
   +Wn   --min-max-window-n
           compute VOI window using min-max algorithm,
           ignoring extreme values
 
   # Compute and apply a window center and width that covers the
-  # range from the second smallest to the second largest occuring
+  # range from the second smallest to the second largest occurring
   # pixel value. This is useful if the background is set to an
   # artificial black (padding value) or if white overlays are burned
   # into the image data which should not be considered for the window
@@ -417,7 +449,7 @@ pixel scaling for monochrome images (--no-windowing; ignored by +tl):
   # Monochrome image pixel values are always scaled to make use of the
   # pixel range available with the selected JPEG process as good as
   # possible. This option selects a scaling based on the minimum and
-  # maximum pixel value occuring in the image.  This often leads to
+  # maximum pixel value occurring in the image.  This often leads to
   # significantly better image quality, but may cause different
   # compressed images within one series to have different values for
   # rescale slope and intercept, which is a problem if a presentation
@@ -484,7 +516,7 @@ SOP Instance UID:
   # Never assigns a new SOP instance UID.
 \endverbatim
 
-\subsection output_options output options
+\subsection dcmcjpeg_output_options output options
 \verbatim
 post-1993 value representations:
 
@@ -526,14 +558,15 @@ data set trailing padding:
           and items on multiple of i bytes
 \endverbatim
 
-\section notes NOTES
+\section dcmcjpeg_notes NOTES
 
-The \b dcmcjpeg utility compresses DICOM images of all SOP classes.  Special
-handling has been implemented for CT images (where the modality transformation
-is required to create Hounsfield units) and the XA/RF/Biplane SOP classes
-(where the modality transformation has "inversed" semantics).  However,
-\b dcmcjpeg does not attempt to ensure that the compressed image still complies
-with all restrictions of the object's IOD.
+The \b dcmcjpeg utility compresses DICOM images of all SOP classes.  It
+processes all Pixel Data (7fe0,0010) elements in the dataset, i.e. compression
+is also performed on an icon image.  Special handling has been implemented for
+CT images (where the modality transformation is required to create Hounsfield
+units) and the XA/RF/Biplane SOP classes (where the modality transformation has
+"inversed" semantics).  However, \b dcmcjpeg does not attempt to ensure that the
+compressed image still complies with all restrictions of the object's IOD.
 
 A few examples:
 
@@ -546,17 +579,17 @@ A few examples:
 
 The user is responsible for making sure that the compressed images he creates
 are compliant with the DICOM standard.  If in question, the \b dcmcjpeg utility
-allows to convert an image to secondary capture - this SOP class does not pose
-restrictions as the ones mentioned above.
+allows one to convert an image to secondary capture - this SOP class does not
+pose restrictions as the ones mentioned above.
 
-With version DCMTK 3.5.4 a new encoder for truely lossless JPEG compression was
+With version DCMTK 3.5.4 a new encoder for truly lossless JPEG compression was
 added (\e --true-lossless).  Compared to the old (\e --pseudo-lossless) encoder,
 that creates slightly lossy images caused from internal color space conversions,
 windowing etc., there are a some issues to consider:
 
 \li Only source images with Bits Allocated 8 or 16 are supported
 \li Options for color space conversions, windowing or pixel scaling are
-    ignored or overriden
+    ignored or overridden
 \li Photometric Interpretations YBR_FULL_422, YBR_PARTIAL_422, YBR_PARTIAL_420,
     YBR_ICT, YBR_RCT are not supported
 \li The encoder changes automatically Planar Configuration from 1 to 0 if
@@ -573,7 +606,7 @@ also be distinguished by the Derivation Description in the resulting DICOM
 image, which contains the term "Lossless JPEG compression" for the new and
 "Pseudo-Lossless JPEG compression" for the old encoder.
 
-\section transfer_syntaxes TRANSFER SYNTAXES
+\section dcmcjpeg_transfer_syntaxes TRANSFER SYNTAXES
 
 \b dcmcjpeg supports the following transfer syntaxes for input
 (\e dcmfile-in):
@@ -605,7 +638,7 @@ JPEGProcess14TransferSyntax                    1.2.840.10008.1.2.4.57
 JPEGProcess14SV1TransferSyntax                 1.2.840.10008.1.2.4.70
 \endverbatim
 
-\section logging LOGGING
+\section dcmcjpeg_logging LOGGING
 
 The level of logging output of the various command line tools and underlying
 libraries can be specified by the user.  By default, only errors and warnings
@@ -622,9 +655,9 @@ rotation), to syslog (Unix) or the event log (Windows) option \e --log-config
 can be used.  This configuration file also allows for directing only certain
 messages to a particular output stream and for filtering certain messages
 based on the module or application where they are generated.  An example
-configuration file is provided in <em>\<etcdir\>/logger.cfg</em>).
+configuration file is provided in <em>\<etcdir\>/logger.cfg</em>.
 
-\section command_line COMMAND LINE
+\section dcmcjpeg_command_line COMMAND LINE
 
 All command line tools use the following notation for parameters: square
 brackets enclose optional values (0-1), three trailing dots indicate that
@@ -633,7 +666,7 @@ multiple values are allowed (1-n), a combination of both means 0 to n values.
 Command line options are distinguished from parameters by a leading '+' or '-'
 sign, respectively.  Usually, order and position of command line options are
 arbitrary (i.e. they can appear anywhere).  However, if options are mutually
-exclusive the rightmost appearance is used.  This behaviour conforms to the
+exclusive the rightmost appearance is used.  This behavior conforms to the
 standard evaluation rules of common Unix shells.
 
 In addition, one or more command files can be specified using an '@' sign as a
@@ -642,11 +675,11 @@ is replaced by the content of the corresponding text file (multiple
 whitespaces are treated as a single separator unless they appear between two
 quotation marks) prior to any further evaluation.  Please note that a command
 file cannot contain another command file.  This simple but effective approach
-allows to summarize common combinations of options/parameters and avoids
+allows one to summarize common combinations of options/parameters and avoids
 longish and confusing command lines (an example is provided in file
 <em>\<datadir\>/dumppat.txt</em>).
 
-\section environment ENVIRONMENT
+\section dcmcjpeg_environment ENVIRONMENT
 
 The \b dcmcjpeg utility will attempt to load DICOM data dictionaries specified
 in the \e DCMDICTPATH environment variable.  By default, i.e. if the
@@ -654,7 +687,7 @@ in the \e DCMDICTPATH environment variable.  By default, i.e. if the
 <em>\<datadir\>/dicom.dic</em> will be loaded unless the dictionary is built
 into the application (default for Windows).
 
-The default behaviour should be preferred and the \e DCMDICTPATH environment
+The default behavior should be preferred and the \e DCMDICTPATH environment
 variable only used when alternative data dictionaries are required.  The
 \e DCMDICTPATH environment variable has the same format as the Unix shell
 \e PATH variable in that a colon (":") separates entries.  On Windows systems,
@@ -662,12 +695,12 @@ a semicolon (";") is used as a separator.  The data dictionary code will
 attempt to load each file specified in the \e DCMDICTPATH environment variable.
 It is an error if no data dictionary can be loaded.
 
-\section see_also SEE ALSO
+\section dcmcjpeg_see_also SEE ALSO
 
 <b>dcmdjpeg</b>(1)
 
-\section copyright COPYRIGHT
+\section dcmcjpeg_copyright COPYRIGHT
 
-Copyright (C) 2001-2010 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany.
+Copyright (C) 2001-2022 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany.
 
 */

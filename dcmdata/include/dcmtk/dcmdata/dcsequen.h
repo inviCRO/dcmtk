@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2020, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: Interface of class DcmSequenceOfItems
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-11-05 09:34:11 $
- *  CVS/RCS Revision: $Revision: 1.58 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -38,25 +31,28 @@
 #include "dcmtk/dcmdata/dclist.h"
 #include "dcmtk/dcmdata/dcstack.h"
 
+// forward declarations
+class DcmJsonFormat;
+
 /** class representing a DICOM Sequence of Items (SQ).
  *  This class is derived from class DcmElement (and not from DcmObject) despite the fact
  *  that sequences have no value field as such, they maintain a list of items. However,
  *  all APIs in class DcmItem and class DcmDataset accept DcmElements.
  *  This is ugly and causes some DcmElement API methods to be useless with DcmSequence.
  */
-class DcmSequenceOfItems : public DcmElement
+class DCMTK_DCMDATA_EXPORT DcmSequenceOfItems : public DcmElement
 {
 public:
 
-    /** constructor
+    // Make friend with DcmItem which requires access to protected
+    // constructor allowing construction using an explicit value length.
+    friend class DcmItem;
+
+    /** constructor.
+     *  Create new element from given tag.
      *  @param tag attribute tag
-     *  @param len length of the attribute value
-     *  @param readAsUN flag indicating whether the sequence should be
-     *  read (interpreted) as a UN element with Implicit VR Little Endian encoding
      */
-    DcmSequenceOfItems(const DcmTag &tag,
-                       const Uint32 len = 0,
-                       OFBool readAsUN = OFFalse);
+    DcmSequenceOfItems(const DcmTag &tag);
 
     /** copy constructor
      *  @param oldSeq element to be copied
@@ -68,8 +64,31 @@ public:
 
     /** copy assignment operator
      *  @param obj element to be copied
+     *  @return reference to this object
      */
     DcmSequenceOfItems &operator=(const DcmSequenceOfItems &obj);
+
+    /** comparison operator that compares the normalized value of this object
+     *  with a given object of the same type. The tag of the element is also
+     *  considered as the first component that is compared, followed by the
+     *  object types (VR, i.e. DCMTK'S EVR) and the comparison of all value
+     *  components of the object, preferably in the order declared in the
+     *  object (if applicable). For sequences that means that all
+     *  contained items are compared element by element, so this may be
+     *  an expensive operation!
+     *  @param  rhs the right hand side of the comparison
+     *  @return 0 if the object values are equal.
+     *          -1 if this element has fewer components than the rhs element.
+     *          Also -1 if the value of the first component that does not match
+     *          is lower in this object than in rhs. Also returned if rhs
+     *          cannot be casted to this object type or both objects are of
+     *          different VR (i.e. the DcmEVR returned by the element's ident()
+     *          call are different).
+     *          1 if either this element has more components than the rhs element, or
+     *          if the first component that does not match is greater in this object than
+     *          in rhs object.
+     */
+    virtual int compare(const DcmElement& rhs) const;
 
     /// returns current status flag
     inline OFCondition error() const { return errorFlag; }
@@ -119,7 +138,7 @@ public:
      *  @param pixelFileName not used (used in certain sub-classes of this class)
      *  @param pixelCounter not used (used in certain sub-classes of this class)
      */
-    virtual void print(STD_NAMESPACE ostream&out,
+    virtual void print(STD_NAMESPACE ostream &out,
                        const size_t flags = 0,
                        const int level = 0,
                        const char *pixelFileName = NULL,
@@ -127,10 +146,9 @@ public:
 
     /** check whether stored value conforms to the VR and to the specified VM
      *  @param card cardinality (number of items) to be checked for.
-     *    (valid values: "1", "1-2", "1-3", "1-8", "1-99", "1-n", "2", "2-n", "2-2n",
-     *                   "3", "3-n", "3-3n", "4", "6", "9", "16", "32"),
-     *     parameter used to specify the value multiplicity for non-sequence attributes
-     *  @param oldFormat parameter not used for this VR (only for DA, TM, PN)
+     *    (See DcmElement::checkVM() for a list of valid values.)
+     *     Parameter used to specify the value multiplicity for non-sequence attributes.
+     *  @param oldFormat parameter not used for this VR (only for DA, TM)
      *  @return status of the check, EC_Normal if value is correct, an error code otherwise
      */
     virtual OFCondition checkValue(const OFString &card = "1-n",
@@ -139,7 +157,18 @@ public:
     /** get value multiplicity
      *  @return always returns 1 (according to the DICOM standard)
      */
-    virtual unsigned long getVM() { return 1L; }
+    virtual unsigned long getVM();
+
+    /** get number of values (items) stored in this sequence.
+     *  The result is the same as card() unless overwritten in a derived class.
+     *  @return number of items in this sequence
+     */
+    virtual unsigned long getNumberOfValues();
+
+    /** get cardinality of this sequence
+     *  @return number of items in this sequence
+     */
+    virtual unsigned long card() const;
 
     /** This function takes care of group length and padding elements
      *  in the current element list according to what is specified in
@@ -178,21 +207,7 @@ public:
                              const Uint32 subPadlen = 0,
                              Uint32 instanceLength = 0);
 
-    /** calculate the length of this DICOM element when encoded with the
-     *  given transfer syntax and the given encoding type for sequences.
-     *  For elements, the length includes the length of the tag, length field,
-     *  VR field and the value itself, for items and sequences it returns
-     *  the length of the complete item or sequence including delimitation tags
-     *  if applicable.
-     *  If length encodig is set to be explicit and the total sequence size is
-     *  larger than the available 32-bit length field, then undefined length
-     *  is returned. If "dcmWriteOversizedSeqsAndItemsUndefined" is disabled,
-     *  also the internal DcmObject errorFlag is set to EC_SeqOrItemContentOverflow
-     *  in case the sequence content (excluding tag header etc.) is already too
-     *  large.
-     *  @param xfer transfer syntax for length calculation
-     *  @param enctype sequence encoding type for length calculation
-     *  @return length of DICOM element
+    /** @copydoc DcmObject::calcElementLength()
      */
     virtual Uint32 calcElementLength(const E_TransferSyntax xfer,
                                      const E_EncodingType enctype);
@@ -200,7 +215,7 @@ public:
     /** calculate the value length (without attribute tag, VR and length field)
      *  of this DICOM element when encoded with the given transfer syntax and
      *  the given encoding type for sequences.
-     *  If length encodig is set to be explicit and the total sequence size is
+     *  If length encoding is set to be explicit and the total sequence size is
      *  larger than the available 32-bit length field, then undefined length
      *  is returned. If "dcmWriteOversizedSeqsAndItemsImplicit" is disabled,
      *  also the internal DcmObject errorFlag is set to
@@ -265,8 +280,16 @@ public:
      *  @param flags optional flag used to customize the output (see DCMTypes::XF_xxx)
      *  @return status, EC_Normal if successful, an error code otherwise
      */
-    virtual OFCondition writeXML(STD_NAMESPACE ostream&out,
+    virtual OFCondition writeXML(STD_NAMESPACE ostream &out,
                                  const size_t flags = 0);
+
+    /** write object in JSON format
+     *  @param out output stream to which the JSON document is written
+     *  @param format used to format and customize the output
+     *  @return status, EC_Normal if successful, an error code otherwise
+     */
+    virtual OFCondition writeJson(STD_NAMESPACE ostream &out,
+                                  DcmJsonFormat &format);
 
     /** special write method for creation of digital signatures
      *  @param outStream DICOM output stream
@@ -290,9 +313,14 @@ public:
      */
     virtual OFBool containsUnknownVR() const;
 
-    /** check if this object contains non-ASCII characters at any nesting level
+    /** check if this object contains non-ASCII characters at any nesting level. Please note
+     *  that this check is pretty simple and only works for single-byte character sets that
+     *  do include the 7-bit ASCII codes, e.g. for the ISO 8859 family. In other words: All
+     *  character codes below 128 are considered to be ASCII codes and all others are
+     *  considered to be non-ASCII.
      *  @param checkAllStrings if true, also check elements with string values not affected
-     *    by SpecificCharacterSet (0008,0005), default: only check PN, LO, LT, SH, ST, UT
+     *    by SpecificCharacterSet (0008,0005). By default, only check PN, LO, LT, SH, ST,
+     *    UC and UT.
      *  @return true if object contains non-ASCII characters, false otherwise
      */
     virtual OFBool containsExtendedCharacters(const OFBool checkAllStrings = OFFalse);
@@ -300,15 +328,18 @@ public:
     /** check if this object is affected by SpecificCharacterSet at any nesting level.
      *  In detail, it is checked whether this object contains any data elements that
      *  according to their VR are affected by the SpecificCharacterSet (0008,0005)
-     *  element. This is true for the following VRs: PN, LO, LT, SH, ST and UT
+     *  element. This is true for the following VRs: PN, LO, LT, SH, ST, UC and UT
      *  @return true if object is affected by SpecificCharacterSet, false otherwise
      */
     virtual OFBool isAffectedBySpecificCharacterSet() const;
 
-    /** get cardinality of this sequence
-     *  @return number of items in this sequence
+    /** convert all element values that are contained in this item and that are affected
+     *  by SpecificCharacterSet from the currently selected source character set to the
+     *  currently selected destination character set
+     *  @param converter character set converter to be used to convert the element values
+     *  @return status, EC_Normal if successful, an error code otherwise
      */
-    virtual unsigned long card();
+    virtual OFCondition convertCharacterSet(DcmSpecificCharacterSet &converter);
 
     /** insert the given item at the start of the item list maintained by this sequence.
      *  Ownership of the item, which must be allocated on the heap, is transferred to the sequence.
@@ -322,7 +353,8 @@ public:
      *  @param item pointer to DcmItem instance allocated on the heap, must not be NULL.
      *  @param where index of the item after or before which the new item is to be inserted.
      *    Value must be < card() or equal to DCM_EndOfListIndex.
-     *  @param before indicates whether the new item should be inserted before or after the item identified by "where"
+     *  @param before indicates whether the new item should be inserted before or after the item
+     *    identified by "where"
      *  @return EC_Normal if successful, an error code otherwise
      */
     virtual OFCondition insert(DcmItem *item,
@@ -475,6 +507,22 @@ public:
 
 protected:
 
+    /** constructor. Create new element from given tag and length.
+     *  Only reachable from friend classes since construction with
+     *  length different from 0 leads to a state with length being set but
+     *  the element's value still being uninitialized. This can lead to crashes
+     *  when the value is read or written. Thus the method calling this
+     *  constructor with length > 0 must ensure that the element's value is
+     *  explicitly initialized, too.
+     *  @param tag attribute tag
+     *  @param len length of the attribute value
+     *  @param readAsUN flag indicating whether the sequence should be
+     *  read (interpreted) as a UN element with Implicit VR Little Endian encoding
+     */
+    DcmSequenceOfItems(const DcmTag &tag,
+                       const Uint32 len,
+                       OFBool readAsUN = OFFalse);
+
     /** This function reads tag and length information from inStream and
      *  returns this information to the caller. When reading information,
      *  the transfer syntax which was passed is accounted for. If the
@@ -578,239 +626,3 @@ private:
 
 
 #endif // DCSEQUEN_H
-
-
-/*
-** CVS/RCS Log:
-** $Log: dcsequen.h,v $
-** Revision 1.58  2010-11-05 09:34:11  joergr
-** Added support for checking the value multiplicity "9" (see Supplement 131).
-**
-** Revision 1.57  2010-10-14 13:15:42  joergr
-** Updated copyright header. Added reference to COPYRIGHT file.
-**
-** Revision 1.56  2010-04-23 15:28:02  joergr
-** Specify an appropriate default value for the "vm" parameter of checkValue().
-**
-** Revision 1.55  2010-04-23 14:27:30  joergr
-** Added new method to all VR classes which checks whether the stored value
-** conforms to the VR definition and to the specified VM.
-**
-** Revision 1.54  2010-03-01 09:08:44  uli
-** Removed some unnecessary include directives in the headers.
-**
-** Revision 1.53  2010-02-22 11:39:54  uli
-** Remove some unneeded includes.
-**
-** Revision 1.52  2009-08-07 14:40:39  joergr
-** Enhanced isEmpty() method by checking whether the data element value consists
-** of non-significant characters only.
-**
-** Revision 1.51  2009-03-25 10:22:09  joergr
-** Added new method isEmpty() to DICOM object, item and sequence class.
-**
-** Revision 1.50  2009-03-05 14:07:56  onken
-** Fixed typo.
-**
-** Revision 1.49  2009-03-05 13:35:48  onken
-** Added checks for sequence and item lengths which prevents overflow in length
-** field, if total length of contained items (or sequences) exceeds
-** 32-bit length field. Also introduced new flag (default: enabled)
-** for writing in explicit length mode, which allows for automatically
-** switching encoding of only that very sequence/item to undefined
-** length coding (thus permitting to actually write the file).
-**
-** Revision 1.48  2009-02-04 17:52:17  joergr
-** Fixes various type mismatches reported by MSVC introduced with OFFile class.
-**
-** Revision 1.47  2008-12-12 11:44:40  onken
-** Moved path access functions to separate classes
-**
-** Revision 1.46  2008-12-05 13:28:14  onken
-** Splitted findOrCreatePath() function API for also offering a simple API
-** for non-wildcard searches.
-**
-** Revision 1.45  2008-12-04 16:55:14  onken
-** Changed findOrCreatePath() to also support wildcard as item numbers.
-**
-** Revision 1.44  2008-10-15 12:31:20  onken
-** Added findOrCreatePath() functions which allow for finding or creating a
-** hierarchy of sequences, items and attributes according to a given "path"
-** string.
-**
-** Revision 1.43  2008-07-17 11:19:49  onken
-** Updated copyFrom() documentation.
-**
-** Revision 1.42  2008-07-17 10:36:56  onken
-** *** empty log message ***
-**
-** Revision 1.41  2008-07-17 10:30:23  onken
-** Implemented copyFrom() method for complete DcmObject class hierarchy, which
-** permits setting an instance's value from an existing object. Implemented
-** assignment operator where necessary.
-**
-** Revision 1.40  2008-06-23 12:09:13  joergr
-** Fixed inconsistencies in Doxygen API documentation.
-**
-** Revision 1.39  2007/11/29 14:30:19  meichel
-** Write methods now handle large raw data elements (such as pixel data)
-**   without loading everything into memory. This allows very large images to
-**   be sent over a network connection, or to be copied without ever being
-**   fully in memory.
-**
-** Revision 1.38  2007/06/29 14:17:49  meichel
-** Code clean-up: Most member variables in module dcmdata are now private,
-**   not protected anymore.
-**
-** Revision 1.37  2007/02/19 15:04:34  meichel
-** Removed searchErrors() methods that are not used anywhere and added
-**   error() methods only in the DcmObject subclasses where really used.
-**
-** Revision 1.36  2006/12/15 14:18:07  joergr
-** Added new method that checks whether a DICOM object or element is affected
-** by SpecificCharacterSet (0008,0005).
-**
-** Revision 1.35  2006/12/13 13:58:15  joergr
-** Added new optional parameter "checkAllStrings" to method containsExtended
-** Characters().
-**
-** Revision 1.34  2006/08/15 15:49:56  meichel
-** Updated all code in module dcmdata to correctly compile when
-**   all standard C++ classes remain in namespace std.
-**
-** Revision 1.33  2006/05/30 15:00:57  joergr
-** Added missing method containsExtendedCharacters().
-**
-** Revision 1.32  2005/12/08 16:28:41  meichel
-** Changed include path schema for all DCMTK header files
-**
-** Revision 1.31  2005/05/10 15:27:14  meichel
-** Added support for reading UN elements with undefined length according
-**   to CP 246. The global flag dcmEnableCP246Support allows to revert to the
-**   prior behaviour in which UN elements with undefined length were parsed
-**   like a normal explicit VR SQ element.
-**
-** Revision 1.30  2004/07/01 12:28:25  meichel
-** Introduced virtual clone method for DcmObject and derived classes.
-**
-** Revision 1.29  2003/08/08 13:29:13  joergr
-** Added new method insertAtCurrentPos() which allows for a much more efficient
-** insertion (avoids re-searching for the correct position).
-**
-** Revision 1.28  2002/12/06 12:49:13  joergr
-** Enhanced "print()" function by re-working the implementation and replacing
-** the boolean "showFullData" parameter by a more general integer flag.
-** Added doc++ documentation.
-** Made source code formatting more consistent with other modules/files.
-**
-** Revision 1.27  2002/08/27 16:55:39  meichel
-** Initial release of new DICOM I/O stream classes that add support for stream
-**   compression (deflated little endian explicit VR transfer syntax)
-**
-** Revision 1.26  2002/04/25 09:43:56  joergr
-** Added support for XML output of DICOM objects.
-**
-** Revision 1.25  2001/11/19 15:23:10  meichel
-** Cleaned up signature code to avoid some gcc warnings.
-**
-** Revision 1.24  2001/11/16 15:54:39  meichel
-** Adapted digital signature code to final text of supplement 41.
-**
-** Revision 1.23  2001/09/25 17:19:28  meichel
-** Adapted dcmdata to class OFCondition
-**
-** Revision 1.22  2001/06/01 15:48:43  meichel
-** Updated copyright header
-**
-** Revision 1.21  2000/11/07 16:56:09  meichel
-** Initial release of dcmsign module for DICOM Digital Signatures
-**
-** Revision 1.20  2000/04/14 15:31:33  meichel
-** Removed default value from output stream passed to print() method.
-**   Required for use in multi-thread environments.
-**
-** Revision 1.19  2000/03/08 16:26:17  meichel
-** Updated copyright header.
-**
-** Revision 1.18  2000/03/03 14:05:25  meichel
-** Implemented library support for redirecting error messages into memory
-**   instead of printing them to stdout/stderr for GUI applications.
-**
-** Revision 1.17  2000/02/10 10:50:53  joergr
-** Added new feature to dcmdump (enhanced print method of dcmdata): write
-** pixel data/item value fields to raw files.
-**
-** Revision 1.16  1999/03/31 09:24:46  meichel
-** Updated copyright header in module dcmdata
-**
-** Revision 1.15  1998/11/12 16:47:44  meichel
-** Implemented operator= for all classes derived from DcmObject.
-**
-** Revision 1.14  1998/07/15 15:48:52  joergr
-** Removed several compiler warnings reported by gcc 2.8.1 with
-** additional options, e.g. missing copy constructors and assignment
-** operators, initialization of member variables in the body of a
-** constructor instead of the member initialization list, hiding of
-** methods by use of identical names, uninitialized member variables,
-** missing const declaration of char pointers. Replaced tabs by spaces.
-**
-** Revision 1.13  1997/07/21 08:25:10  andreas
-** - Replace all boolean types (BOOLEAN, CTNBOOLEAN, DICOM_BOOL, BOOL)
-**   with one unique boolean type OFBool.
-**
-** Revision 1.12  1997/07/07 07:42:05  andreas
-** - Changed parameter type DcmTag & to DcmTagKey & in all search functions
-**   in DcmItem, DcmSequenceOfItems, DcmDirectoryRecord and DcmObject
-**
-** Revision 1.11  1997/05/27 13:48:29  andreas
-** - Add method canWriteXfer to class DcmObject and all derived classes.
-**   This method checks whether it is possible to convert the original
-**   transfer syntax to an new transfer syntax. The check is used in the
-**   dcmconv utility to prohibit the change of a compressed transfer
-**   syntax to a uncompressed.
-**
-** Revision 1.10  1997/05/16 08:23:48  andreas
-** - Revised handling of GroupLength elements and support of
-**   DataSetTrailingPadding elements. The enumeratio E_GrpLenEncoding
-**   got additional enumeration values (for a description see dctypes.h).
-**   addGroupLength and removeGroupLength methods are replaced by
-**   computeGroupLengthAndPadding. To support Padding, the parameters of
-**   element and sequence write functions changed.
-** - Added a new method calcElementLength to calculate the length of an
-**   element, item or sequence. For elements it returns the length of
-**   tag, length field, vr field, and value length, for item and
-**   sequences it returns the length of the whole item. sequence including
-**   the Delimitation tag (if appropriate).  It can never return
-**   UndefinedLength.
-**
-** Revision 1.9  1997/04/24 12:09:02  hewett
-** Fixed DICOMDIR generation bug affecting ordering of
-** patient/study/series/image records (item insertion into a sequence
-** did produce the expected ordering).
-**
-** Revision 1.8  1996/08/05 08:45:28  andreas
-** new print routine with additional parameters:
-**         - print into files
-**         - fix output length for elements
-** corrected error in search routine with parameter ESM_fromStackTop
-**
-** Revision 1.7  1996/07/17 12:38:59  andreas
-** new nextObject to iterate a DicomDataset, DicomFileFormat, Item, ...
-**
-** Revision 1.6  1996/01/29 13:38:14  andreas
-** - new put method for every VR to put value as a string
-** - better and unique print methods
-**
-** Revision 1.5  1996/01/24 09:34:56  andreas
-** Support for 64 bit long
-**
-** Revision 1.4  1996/01/09 11:06:16  andreas
-** New Support for Visual C++
-** Correct problems with inconsistent const declarations
-**
-** Revision 1.3  1996/01/05 13:22:59  andreas
-** - changed to support new streaming facilities
-** - more cleanups
-** - merged read / write methods for block and file transfer
-**
-*/

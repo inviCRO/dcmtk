@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2001-2010, OFFIS e.V.
+ *  Copyright (C) 2001-2020, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -16,13 +16,6 @@
  *  Author:  Marco Eichelberg, Norbert Olges
  *
  *  Purpose: abstract codec class for JPEG decoders.
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:17:16 $
- *  CVS/RCS Revision: $Revision: 1.8 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -50,7 +43,7 @@ class DJDecoder;
  *  This class only supports decompression, it neither implements
  *  encoding nor transcoding.
  */
-class DJCodecDecoder : public DcmCodec
+class DCMTK_DCMJPEG_EXPORT DJCodecDecoder : public DcmCodec
 {
 public:
 
@@ -68,6 +61,10 @@ public:
    *  @param cp codec parameters for this codec
    *  @param objStack stack pointing to the location of the pixel data
    *    element in the current dataset.
+   *  @param removeOldRep boolean flag that should be set to false before this method call
+   *    and will be set to true if the codec modifies the DICOM dataset such
+   *    that the pixel data of the original representation may not be usable
+   *    anymore.
    *  @return EC_Normal if successful, an error code otherwise.
    */
   virtual OFCondition decode(
@@ -75,7 +72,8 @@ public:
     DcmPixelSequence * pixSeq,
     DcmPolymorphOBOW& uncompressedPixelData,
     const DcmCodecParameter * cp,
-    const DcmStack& objStack) const;
+    const DcmStack & objStack,
+    OFBool& removeOldRep) const;
 
   /** decompresses a single frame from the given pixel sequence and
    *  stores the result in the given buffer.
@@ -125,6 +123,10 @@ public:
    *  @param cp codec parameters for this codec
    *  @param objStack stack pointing to the location of the pixel data
    *    element in the current dataset.
+   *  @param removeOldRep boolean flag that should be set to false before this method call
+   *    and will be set to true if the codec modifies the DICOM dataset such
+   *    that the pixel data of the original representation may not be usable
+   *    anymore.
    *  @return EC_Normal if successful, an error code otherwise.
    */
   virtual OFCondition encode(
@@ -133,7 +135,8 @@ public:
     const DcmRepresentationParameter * toRepParam,
     DcmPixelSequence * & pixSeq,
     const DcmCodecParameter *cp,
-    DcmStack & objStack) const;
+    DcmStack & objStack,
+    OFBool& removeOldRep) const;
 
   /** transcodes (re-compresses) the given compressed DICOM image and stores
    *  the result in the given toPixSeq element.
@@ -147,6 +150,10 @@ public:
    *  @param cp codec parameters for this codec
    *  @param objStack stack pointing to the location of the pixel data
    *    element in the current dataset.
+   *  @param removeOldRep boolean flag that should be set to false before this method call
+   *    and will be set to true if the codec modifies the DICOM dataset such
+   *    that the pixel data of the original representation may not be usable
+   *    anymore.
    *  @return EC_Normal if successful, an error code otherwise.
    */
   virtual OFCondition encode(
@@ -156,7 +163,8 @@ public:
     const DcmRepresentationParameter * toRepParam,
     DcmPixelSequence * & toPixSeq,
     const DcmCodecParameter * cp,
-    DcmStack & objStack) const;
+    DcmStack & objStack,
+    OFBool& removeOldRep) const;
 
   /** checks if this codec is able to convert from the
    *  given current transfer syntax to the given new
@@ -194,6 +202,12 @@ public:
    *  @return supported transfer syntax
    */
   virtual E_TransferSyntax supportedTransferSyntax() const = 0;
+
+  /** returns true if the transfer syntax supported by this
+   *  codec is lossless.
+   *  @return lossless flag
+   */
+  virtual OFBool isLosslessProcess() const = 0;
 
 private:
 
@@ -271,42 +285,3 @@ private:
 };
 
 #endif
-
-/*
- * CVS/RCS Log
- * $Log: djcodecd.h,v $
- * Revision 1.8  2010-10-14 13:17:16  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.7  2009-11-17 16:46:01  joergr
- * Added new method that allows for determining the color model of the
- * decompressed image.
- *
- * Revision 1.6  2008-05-29 10:48:44  meichel
- * Implemented new method DcmPixelData::getUncompressedFrame
- *   that permits frame-wise access to compressed and uncompressed
- *   objects without ever loading the complete object into main memory.
- *   For this new method to work with compressed images, all classes derived from
- *   DcmCodec need to implement a new method decodeFrame(). For now, only
- *   dummy implementations returning an error code have been defined.
- *
- * Revision 1.5  2005/12/08 16:59:11  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.4  2004/08/24 14:57:08  meichel
- * Updated compression helper methods. Image type is not set to SECONDARY
- *   any more, support for the purpose of reference code sequence added.
- *
- * Revision 1.3  2003/07/04 13:26:22  meichel
- * Replaced forward declarations for OFString with explicit includes,
- *   needed when compiling with HAVE_STD_STRING
- *
- * Revision 1.2  2002/05/24 14:58:03  meichel
- * Moved helper methods that are useful for different compression techniques
- *   from module dcmjpeg to module dcmdata
- *
- * Revision 1.1  2001/11/13 15:56:16  meichel
- * Initial release of module dcmjpeg
- *
- *
- */

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2000-2010, OFFIS e.V.
+ *  Copyright (C) 2000-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -11,19 +11,12 @@
  *    D-26121 Oldenburg, Germany
  *
  *
- *  Module:  dcmsr
+ *  Module: dcmsr
  *
- *  Author:  Joerg Riesmeier
+ *  Author: Joerg Riesmeier
  *
  *  Purpose:
  *    classes: DSRByReferenceTreeNode
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:41 $
- *  CVS/RCS Revision: $Revision: 1.21 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -34,22 +27,38 @@
 #include "dcmtk/dcmsr/dsrreftn.h"
 #include "dcmtk/dcmsr/dsrxmld.h"
 
+#include "dcmtk/dcmdata/dcdeftag.h"
+#include "dcmtk/dcmdata/dcvrul.h"
+
 
 DSRByReferenceTreeNode::DSRByReferenceTreeNode(const E_RelationshipType relationshipType)
- : DSRDocumentTreeNode(relationshipType, VT_byReference),
-   ValidReference(OFFalse),
-   ReferencedContentItem(),
-   ReferencedNodeID(0)
+  : DSRDocumentTreeNode(relationshipType, VT_byReference),
+    ValidReference(OFFalse),
+    ReferencedContentItem(),
+    ReferencedNodeID(0),
+    TargetValueType(VT_invalid)
 {
 }
 
 
 DSRByReferenceTreeNode::DSRByReferenceTreeNode(const E_RelationshipType relationshipType,
-                                               const size_t referencedNodeID)
- : DSRDocumentTreeNode(relationshipType, VT_byReference),
-   ValidReference(OFFalse),
-   ReferencedContentItem(),
-   ReferencedNodeID(referencedNodeID)
+                                               const size_t referencedNodeID,
+                                               const E_ValueType targetValueType)
+  : DSRDocumentTreeNode(relationshipType, VT_byReference),
+    ValidReference(OFFalse),
+    ReferencedContentItem(),
+    ReferencedNodeID(referencedNodeID),
+    TargetValueType(targetValueType)
+{
+}
+
+
+DSRByReferenceTreeNode::DSRByReferenceTreeNode(const DSRByReferenceTreeNode &node)
+  : DSRDocumentTreeNode(node),
+    ValidReference(OFFalse),
+    ReferencedContentItem(node.ReferencedContentItem),
+    ReferencedNodeID(0),
+    TargetValueType(VT_invalid)
 {
 }
 
@@ -59,26 +68,93 @@ DSRByReferenceTreeNode::~DSRByReferenceTreeNode()
 }
 
 
+OFBool DSRByReferenceTreeNode::operator==(const DSRDocumentTreeNode &node) const
+{
+    /* call comparison operator of base class (includes check of value type) */
+    OFBool result = DSRDocumentTreeNode::operator==(node);
+    if (result)
+    {
+        /* it's safe to cast the type since the value type has already been checked */
+        const DSRByReferenceTreeNode &byRefNode = OFstatic_cast(const DSRByReferenceTreeNode &, node);
+        if (ValidReference && byRefNode.ValidReference)
+        {
+            /* check referenced node ID only */
+            result = (ReferencedNodeID == byRefNode.ReferencedNodeID);
+        } else {
+            /* check whether both references are invalid */
+            result = (ValidReference == byRefNode.ValidReference);
+        }
+    }
+    return result;
+}
+
+
+OFBool DSRByReferenceTreeNode::operator!=(const DSRDocumentTreeNode &node) const
+{
+    /* call comparison operator of base class (includes check of value type) */
+    OFBool result = DSRDocumentTreeNode::operator!=(node);
+    if (!result)
+    {
+        /* it's safe to cast the type since the value type has already been checked */
+        const DSRByReferenceTreeNode &byRefNode = OFstatic_cast(const DSRByReferenceTreeNode &, node);
+        if (ValidReference && byRefNode.ValidReference)
+        {
+            /* check referenced node ID only */
+            result = (ReferencedNodeID != byRefNode.ReferencedNodeID);
+        } else {
+            /* check whether either of the references is invalid */
+            result = (ValidReference != byRefNode.ValidReference);
+        }
+    }
+    return result;
+}
+
+
+DSRByReferenceTreeNode *DSRByReferenceTreeNode::clone() const
+{
+    return new DSRByReferenceTreeNode(*this);
+}
+
+
 void DSRByReferenceTreeNode::clear()
 {
     DSRDocumentTreeNode::clear();
     ValidReference = OFFalse;
     ReferencedContentItem.clear();
     ReferencedNodeID = 0;
+    TargetValueType = VT_invalid;
 }
 
 
 OFBool DSRByReferenceTreeNode::isValid() const
 {
     /* ConceptNameCodeSequence not allowed */
-    return DSRDocumentTreeNode::isValid() && getConceptName().isEmpty() && ValidReference;
+    return DSRDocumentTreeNode::isValid() && getConceptName().isEmpty() && hasValidValue();
+}
+
+
+OFBool DSRByReferenceTreeNode::hasValidValue() const
+{
+    return ValidReference;
 }
 
 
 OFCondition DSRByReferenceTreeNode::print(STD_NAMESPACE ostream &stream,
-                                          const size_t /*flags*/) const
+                                          const size_t flags) const
 {
-    stream << relationshipTypeToReadableName(getRelationshipType()) << " " << ReferencedContentItem;
+    DCMSR_PRINT_ANSI_ESCAPE_CODE(DCMSR_ANSI_ESCAPE_CODE_RELATIONSHIP_TYPE)
+    stream << relationshipTypeToReadableName(getRelationshipType()) << " ";
+    DCMSR_PRINT_ANSI_ESCAPE_CODE(DCMSR_ANSI_ESCAPE_CODE_ITEM_VALUE)
+    if (ReferencedContentItem.empty())
+        stream << "?";
+    else
+        stream << ReferencedContentItem;
+    /* print node ID (might be useful for debugging purposes) */
+    if (flags & PF_printNodeID)
+    {
+        DCMSR_PRINT_ANSI_ESCAPE_CODE(DCMSR_ANSI_ESCAPE_CODE_RESET)
+        stream << " = id:" << ReferencedNodeID;
+    }
     return EC_Normal;
 }
 
@@ -96,12 +172,42 @@ OFCondition DSRByReferenceTreeNode::writeXML(STD_NAMESPACE ostream &stream,
 }
 
 
-OFCondition DSRByReferenceTreeNode::readContentItem(DcmItem &dataset)
+void DSRByReferenceTreeNode::invalidateReference()
+{
+    ValidReference = OFFalse;
+}
+
+
+OFBool DSRByReferenceTreeNode::updateReference(const size_t referencedNodeID,
+                                               const E_ValueType targetValueType)
+{
+    ReferencedNodeID = referencedNodeID;
+    TargetValueType = targetValueType;
+    /* check whether the given reference is valid */
+    ValidReference = (ReferencedNodeID > 0);
+    return ValidReference;
+}
+
+
+OFBool DSRByReferenceTreeNode::updateReference(const OFString &referencedContentItem)
+{
+
+    ReferencedContentItem = referencedContentItem;
+    /* tbd: check for valid reference could be more strict */
+    ValidReference = checkForValidReference(ReferencedContentItem);
+    return ValidReference;
+}
+
+
+// protected methods
+
+OFCondition DSRByReferenceTreeNode::readContentItem(DcmItem &dataset,
+                                                    const size_t /*flags*/)
 {
     DcmUnsignedLong delem(DCM_ReferencedContentItemIdentifier);
     /* clear before reading */
     ReferencedContentItem.clear();
-    ReferencedNodeID = 0;
+    updateReference(0, VT_invalid);
     /* read ReferencedContentItemIdentifier */
     OFCondition result = getAndCheckElementFromDataset(dataset, delem, "1-n", "1C", "by-reference relationship");
     if (result.good())
@@ -126,7 +232,7 @@ OFCondition DSRByReferenceTreeNode::writeContentItem(DcmItem &dataset) const
 {
     OFCondition result = SR_EC_InvalidValue;
     /* only write references with valid format */
-    if (checkForValidUIDFormat(ReferencedContentItem))
+    if (checkForValidReference(ReferencedContentItem))
     {
         result = EC_Normal;
         DcmUnsignedLong delem(DCM_ReferencedContentItemIdentifier);
@@ -139,9 +245,9 @@ OFCondition DSRByReferenceTreeNode::writeContentItem(DcmItem &dataset) const
             posEnd = ReferencedContentItem.find('.', posStart);
             /* is last segment? */
             if (posEnd == OFString_npos)
-                delem.putUint32(DSRTypes::stringToNumber(ReferencedContentItem.substr(posStart).c_str()), i);
+                delem.putUint32(OFstatic_cast(Uint32, DSRTypes::stringToNumber(ReferencedContentItem.substr(posStart).c_str())), i);
             else {
-                delem.putUint32(DSRTypes::stringToNumber(ReferencedContentItem.substr(posStart, posEnd - posStart).c_str()), i);
+                delem.putUint32(OFstatic_cast(Uint32, DSRTypes::stringToNumber(ReferencedContentItem.substr(posStart, posEnd - posStart).c_str())), i);
                 posStart = posEnd + 1;
             }
             i++;
@@ -154,7 +260,8 @@ OFCondition DSRByReferenceTreeNode::writeContentItem(DcmItem &dataset) const
 
 
 OFCondition DSRByReferenceTreeNode::readXMLContentItem(const DSRXMLDocument &doc,
-                                                       DSRXMLCursor cursor)
+                                                       DSRXMLCursor cursor,
+                                                       const size_t /*flags*/)
 {
     OFCondition result = SR_EC_CorruptedXMLStructure;
     if (cursor.valid())
@@ -185,99 +292,54 @@ OFCondition DSRByReferenceTreeNode::renderHTMLContentItem(STD_NAMESPACE ostream 
 }
 
 
-OFCondition DSRByReferenceTreeNode::setConceptName(const DSRCodedEntryValue & /*conceptName*/)
+OFCondition DSRByReferenceTreeNode::setConceptName(const DSRCodedEntryValue & /*conceptName*/,
+                                                   const OFBool /*check*/)
 {
     /* invalid: no concept name allowed */
     return EC_IllegalCall;
 }
 
 
-OFCondition DSRByReferenceTreeNode::setObservationDateTime(const OFString & /*observationDateTime*/)
+OFCondition DSRByReferenceTreeNode::setObservationDateTime(const OFString & /*observationDateTime*/,
+                                                           const OFBool /*check*/)
 {
-    /* invalid: no observation date and time allowed */
+    /* invalid: no observation date/time allowed */
+    return EC_IllegalCall;
+}
+
+
+OFCondition DSRByReferenceTreeNode::setObservationDateTime(const DcmElement & /*delem*/,
+                                                           const unsigned long /*pos*/,
+                                                           const OFBool /*check*/)
+{
+    /* invalid: no observation date/time allowed */
+    return EC_IllegalCall;
+}
+
+
+OFCondition DSRByReferenceTreeNode::setObservationDateTime(DcmItem & /*dataset*/,
+                                                           const DcmTagKey & /*tagKey*/,
+                                                           const unsigned long /*pos*/,
+                                                           const OFBool /*check*/)
+{
+    /* invalid: no observation date/time allowed */
+    return EC_IllegalCall;
+}
+
+
+OFCondition DSRByReferenceTreeNode::setObservationUID(const OFString & /*observationUID*/,
+                                                      const OFBool /*check*/)
+{
+    /* invalid: no observation unique identifier allowed */
     return EC_IllegalCall;
 }
 
 
 OFCondition DSRByReferenceTreeNode::setTemplateIdentification(const OFString & /*templateIdentifier*/,
-                                                              const OFString & /*mappingResource*/)
+                                                              const OFString & /*mappingResource*/,
+                                                              const OFString & /*mappingResourceUID*/,
+                                                              const OFBool /*check*/)
 {
     /* invalid: no template identification allowed */
     return EC_IllegalCall;
 }
-
-
-/*
- *  CVS/RCS Log:
- *  $Log: dsrreftn.cc,v $
- *  Revision 1.21  2010-10-14 13:14:41  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.20  2010-09-29 15:16:50  joergr
- *  Enhanced checking and reporting of standard violations in write() methods.
- *
- *  Revision 1.19  2010-09-29 08:32:26  joergr
- *  Used more specific "moduleName" for getAndCheckElementFromDataset() and
- *  checkElementValue().
- *
- *  Revision 1.18  2009-10-13 14:57:51  uli
- *  Switched to logging mechanism provided by the "new" oflog module.
- *
- *  Revision 1.17  2007-11-15 16:43:43  joergr
- *  Fixed coding style to be more consistent.
- *
- *  Revision 1.16  2006/08/15 16:40:03  meichel
- *  Updated the code in module dcmsr to correctly compile when
- *    all standard C++ classes remain in namespace std.
- *
- *  Revision 1.15  2005/12/08 15:48:03  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.14  2004/01/05 14:37:00  joergr
- *  Renamed XML attribute "ref_id" to "ref".
- *
- *  Revision 1.13  2003/12/01 15:47:28  joergr
- *  Changed XML encoding of by-reference relationships if flag
- *  XF_valueTypeAsAttribute is set.
- *
- *  Revision 1.12  2003/10/30 17:59:37  joergr
- *  Added full support for the ContentTemplateSequence (read/write, get/set
- *  template identification). Template constraints are not checked yet.
- *
- *  Revision 1.11  2003/09/15 14:13:42  joergr
- *  Introduced new class to facilitate checking of SR IOD relationship content
- *  constraints. Replaced old implementation distributed over numerous classes.
- *
- *  Revision 1.10  2003/08/07 17:29:13  joergr
- *  Removed libxml dependency from header files. Simplifies linking (MSVC).
- *
- *  Revision 1.9  2003/08/07 13:42:22  joergr
- *  Added readXML functionality.
- *
- *  Revision 1.8  2003/06/04 14:26:54  meichel
- *  Simplified include structure to avoid preprocessor limitation
- *    (max 32 #if levels) on MSVC5 with STL.
- *
- *  Revision 1.7  2001/10/10 15:29:59  joergr
- *  Additonal adjustments for new OFCondition class.
- *
- *  Revision 1.6  2001/10/02 12:07:10  joergr
- *  Adapted module "dcmsr" to the new class OFCondition. Introduced module
- *  specific error codes.
- *
- *  Revision 1.5  2001/09/26 13:04:23  meichel
- *  Adapted dcmsr to class OFCondition
- *
- *  Revision 1.4  2001/06/01 15:51:09  meichel
- *  Updated copyright header
- *
- *  Revision 1.3  2000/11/07 18:33:31  joergr
- *  Enhanced support for by-reference relationships.
- *
- *  Revision 1.2  2000/11/01 16:37:02  joergr
- *  Added support for conversion to XML. Optimized HTML rendering.
- *
- *  Revision 1.1  2000/10/26 14:39:58  joergr
- *  Added support for "Comprehensive SR".
- *
- */

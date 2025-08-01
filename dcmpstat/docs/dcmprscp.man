@@ -6,13 +6,13 @@
 \page dcmprscp dcmprscp: DICOM basic grayscale print management SCP
 \endif
 
-\section synopsis SYNOPSIS
+\section dcmprscp_synopsis SYNOPSIS
 
 \verbatim
 dcmprscp [options]
 \endverbatim
 
-\section description DESCRIPTION
+\section dcmprscp_description DESCRIPTION
 
 The \b dcmprscp utility implements the DICOM Basic Grayscale Print Management
 Service Class as SCP. It also supports the optional Presentation LUT SOP
@@ -22,13 +22,13 @@ The \b dcmprscp utility accepts print jobs from a remote Print SCU.  It does
 not create real hardcopies but stores print jobs in the local DICOMscope
 database as a set of Stored Print objects (one per page) and Hardcopy
 Grayscale images (one per film box N-SET).  The DICOMscope application allows
-to load a Stored Print object created by \b dcmprscp and to render a screen
+one to load a Stored Print object created by \b dcmprscp and to render a screen
 preview of the hardcopy.  The \b dcmprscp utility reads the characteristics of
 the printer to be emulated from the configuration file.
 
-\section options OPTIONS
+\section dcmprscp_options OPTIONS
 
-\subsection general_options general options
+\subsection dcmprscp_general_options general options
 \verbatim
   -h   --help
          print this help text and exit
@@ -62,7 +62,7 @@ the printer to be emulated from the configuration file.
          # compatibility only
 \endverbatim
 
-\subsection processing_options processing options
+\subsection dcmprscp_processing_options processing options
 \verbatim
   -c  --config  [f]ilename: string
         process using settings from configuration file
@@ -74,7 +74,7 @@ the printer to be emulated from the configuration file.
         dump all DIMSE messages
 \endverbatim
 
-\section logging LOGGING
+\section dcmprscp_logging LOGGING
 
 The level of logging output of the various command line tools and underlying
 libraries can be specified by the user.  By default, only errors and warnings
@@ -91,9 +91,9 @@ rotation), to syslog (Unix) or the event log (Windows) option \e --log-config
 can be used.  This configuration file also allows for directing only certain
 messages to a particular output stream and for filtering certain messages
 based on the module or application where they are generated.  An example
-configuration file is provided in <em>\<etcdir\>/logger.cfg</em>).
+configuration file is provided in <em>\<etcdir\>/logger.cfg</em>.
 
-\section command_line COMMAND LINE
+\section dcmprscp_command_line COMMAND LINE
 
 All command line tools use the following notation for parameters: square
 brackets enclose optional values (0-1), three trailing dots indicate that
@@ -102,7 +102,7 @@ multiple values are allowed (1-n), a combination of both means 0 to n values.
 Command line options are distinguished from parameters by a leading '+' or '-'
 sign, respectively.  Usually, order and position of command line options are
 arbitrary (i.e. they can appear anywhere).  However, if options are mutually
-exclusive the rightmost appearance is used.  This behaviour conforms to the
+exclusive the rightmost appearance is used.  This behavior conforms to the
 standard evaluation rules of common Unix shells.
 
 In addition, one or more command files can be specified using an '@' sign as a
@@ -111,11 +111,11 @@ is replaced by the content of the corresponding text file (multiple
 whitespaces are treated as a single separator unless they appear between two
 quotation marks) prior to any further evaluation.  Please note that a command
 file cannot contain another command file.  This simple but effective approach
-allows to summarize common combinations of options/parameters and avoids
+allows one to summarize common combinations of options/parameters and avoids
 longish and confusing command lines (an example is provided in file
 <em>\<datadir\>/dumppat.txt</em>).
 
-\section environment ENVIRONMENT
+\section dcmprscp_environment ENVIRONMENT
 
 The \b dcmprscp utility will attempt to load DICOM data dictionaries specified
 in the \e DCMDICTPATH environment variable.  By default, i.e. if the
@@ -123,7 +123,7 @@ in the \e DCMDICTPATH environment variable.  By default, i.e. if the
 <em>\<datadir\>/dicom.dic</em> will be loaded unless the dictionary is built
 into the application (default for Windows).
 
-The default behaviour should be preferred and the \e DCMDICTPATH environment
+The default behavior should be preferred and the \e DCMDICTPATH environment
 variable only used when alternative data dictionaries are required.  The
 \e DCMDICTPATH environment variable has the same format as the Unix shell
 \e PATH variable in that a colon (":") separates entries.  On Windows systems,
@@ -131,16 +131,16 @@ a semicolon (";") is used as a separator.  The data dictionary code will
 attempt to load each file specified in the \e DCMDICTPATH environment variable.
 It is an error if no data dictionary can be loaded.
 
-\section files FILES
+\section dcmprscp_files FILES
 
 <em>\<etcdir\>/dcmpstat.cfg</em>, <em>\<etcdir\>/printers.cfg</em> - sample configuration files
 
-\section see_also SEE ALSO
+\section dcmprscp_see_also SEE ALSO
 
 <b>dcmprscu</b>(1)
 
-\section copyright COPYRIGHT
+\section dcmprscp_copyright COPYRIGHT
 
-Copyright (C) 1999-2010 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany.
+Copyright (C) 1999-2022 by OFFIS e.V., Escherweg 2, 26121 Oldenburg, Germany.
 
 */

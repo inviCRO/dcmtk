@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1994-2010, OFFIS e.V.
+ *  Copyright (C) 1994-2021, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,35 +17,21 @@
  *
  *  Purpose: Implementation of class DcmDirectoryRecord
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-11-05 13:11:16 $
- *  CVS/RCS Revision: $Revision: 1.78 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 
-#define INCLUDE_CSTDLIB
-#define INCLUDE_CSTDIO
-#define INCLUDE_CSTRING
-#define INCLUDE_CERRNO
-#define INCLUDE_CCTYPE
-#define INCLUDE_LIBC
-#define INCLUDE_UNISTD
-#include "dcmtk/ofstd/ofstdinc.h"
-
 #include "dcmtk/ofstd/ofstream.h"
 #include "dcmtk/ofstd/ofcast.h"
+#include "dcmtk/ofstd/ofstd.h"
 
 #include "dcmtk/dcmdata/dcdirrec.h"
 #include "dcmtk/dcmdata/dctk.h"
 #include "dcmtk/dcmdata/dcxfer.h"
 #include "dcmtk/dcmdata/dcvr.h"
 #include "dcmtk/dcmdata/dcvrus.h"
+#include "dcmtk/dcmdata/dcspchrs.h"
 
 #ifdef HAVE_UNIX_H
 #if defined(macintosh) && defined (HAVE_WINSOCK_H)
@@ -105,18 +91,24 @@ static const char *DRTypeNames[] =
     "MEASUREMENT",
     "IMPLANT",
     "IMPLANT GROUP",
-    "IMPLANT ASSY"
+    "IMPLANT ASSY",
+    "PLAN",
+    "SURFACE SCAN",
+    "TRACT",
+    "ASSESSMENT",
+    "RADIOTHERAPY",
+    "ANNOTATION"
 };
 
-static const short DIM_OF_DRTypeNames = (sizeof(DRTypeNames) / sizeof(DRTypeNames[0]));
+static const short DIM_OF_DRTypeNames = OFstatic_cast(short, (sizeof(DRTypeNames) / sizeof(DRTypeNames[0])));
 
 
 // ********************************
 
 
 DcmDirectoryRecord::DcmDirectoryRecord()
-  : DcmItem(ItemTag),
-    recordsOriginFile(NULL),
+  : DcmItem(DCM_ItemTag),
+    recordsOriginFile(),
     lowerLevelList(new DcmSequenceOfItems(DCM_DirectoryRecordSequence)),
     DirRecordType(ERT_Private),
     referencedMRDR(NULL),
@@ -132,7 +124,7 @@ DcmDirectoryRecord::DcmDirectoryRecord()
 DcmDirectoryRecord::DcmDirectoryRecord(const DcmTag &tag,
                                        const Uint32 len)
   : DcmItem(tag, len),
-    recordsOriginFile(NULL),
+    recordsOriginFile(),
     lowerLevelList(new DcmSequenceOfItems(DCM_DirectoryRecordSequence)),
     DirRecordType(ERT_Private),
     referencedMRDR(NULL),
@@ -147,9 +139,10 @@ DcmDirectoryRecord::DcmDirectoryRecord(const DcmTag &tag,
 
 DcmDirectoryRecord::DcmDirectoryRecord(const E_DirRecType recordType,
                                        const char *referencedFileID,
-                                       const char *sourceFilename)
-  : DcmItem(ItemTag),
-    recordsOriginFile(NULL),
+                                       const OFFilename &sourceFilename,
+                                       DcmFileFormat *fileFormat)
+  : DcmItem(DCM_ItemTag),
+    recordsOriginFile(),
     lowerLevelList(new DcmSequenceOfItems(DCM_DirectoryRecordSequence)),
     DirRecordType(recordType),
     referencedMRDR(NULL),
@@ -159,7 +152,7 @@ DcmDirectoryRecord::DcmDirectoryRecord(const E_DirRecType recordType,
     setRecordsOriginFile(sourceFilename);
 
     if (DirRecordType != ERT_root)
-        errorFlag = fillElementsAndReadSOP(referencedFileID, sourceFilename);
+        errorFlag = fillElementsAndReadSOP(referencedFileID, sourceFilename, fileFormat);
 }
 
 
@@ -168,9 +161,10 @@ DcmDirectoryRecord::DcmDirectoryRecord(const E_DirRecType recordType,
 
 DcmDirectoryRecord::DcmDirectoryRecord(const char *recordTypeName,
                                        const char *referencedFileID,
-                                       const char *sourceFilename)
-  : DcmItem(ItemTag),
-    recordsOriginFile(NULL),
+                                       const OFFilename &sourceFilename,
+                                       DcmFileFormat *fileFormat)
+  : DcmItem(DCM_ItemTag),
+    recordsOriginFile(),
     lowerLevelList(new DcmSequenceOfItems(DCM_DirectoryRecordSequence)),
     DirRecordType(ERT_Private),
     referencedMRDR(NULL),
@@ -181,7 +175,7 @@ DcmDirectoryRecord::DcmDirectoryRecord(const char *recordTypeName,
     setRecordsOriginFile(sourceFilename);
 
     if (DirRecordType != ERT_root)
-        errorFlag = fillElementsAndReadSOP(referencedFileID, sourceFilename);
+        errorFlag = fillElementsAndReadSOP(referencedFileID, sourceFilename, fileFormat);
 }
 
 
@@ -193,7 +187,7 @@ DcmDirectoryRecord::DcmDirectoryRecord(const DcmDirectoryRecord &old)
     recordsOriginFile(old.recordsOriginFile),
     lowerLevelList(new DcmSequenceOfItems(*old.lowerLevelList)),
     DirRecordType(old.DirRecordType),
-    referencedMRDR(old.referencedMRDR),
+    referencedMRDR(old.referencedMRDR),  // copies a pointer!
     numberOfReferences(old.numberOfReferences),
     offsetInFile(old.offsetInFile)
 {
@@ -205,19 +199,19 @@ DcmDirectoryRecord::DcmDirectoryRecord(const DcmDirectoryRecord &old)
 
 DcmDirectoryRecord& DcmDirectoryRecord::operator=(const DcmDirectoryRecord& obj)
 {
-  if (this != &obj)
-  {
-    // copy parent's member variables
-    DcmItem::operator=(obj);
-    // copy DcmDirectoryRecords' member variables
-    recordsOriginFile = obj.recordsOriginFile;
-    lowerLevelList = new DcmSequenceOfItems(*obj.lowerLevelList);
-    DirRecordType = obj.DirRecordType;
-    referencedMRDR = obj.referencedMRDR;
-    numberOfReferences = obj.numberOfReferences;
-    offsetInFile = obj.offsetInFile;
-  }
-  return *this;
+    if (this != &obj)
+    {
+        // copy parent's member variables
+        DcmItem::operator=(obj);
+        // copy DcmDirectoryRecords' member variables
+        recordsOriginFile = obj.recordsOriginFile;
+        lowerLevelList = new DcmSequenceOfItems(*obj.lowerLevelList);
+        DirRecordType = obj.DirRecordType;
+        referencedMRDR = obj.referencedMRDR;  // copies a pointer!
+        numberOfReferences = obj.numberOfReferences;
+        offsetInFile = obj.offsetInFile;
+    }
+    return *this;
 }
 
 
@@ -226,12 +220,12 @@ DcmDirectoryRecord& DcmDirectoryRecord::operator=(const DcmDirectoryRecord& obj)
 
 OFCondition DcmDirectoryRecord::copyFrom(const DcmObject& rhs)
 {
-  if (this != &rhs)
-  {
-    if (rhs.ident() != ident()) return EC_IllegalCall;
-    *this = OFstatic_cast(const DcmDirectoryRecord &, rhs);
-  }
-  return EC_Normal;
+    if (this != &rhs)
+    {
+        if (rhs.ident() != ident()) return EC_IllegalCall;
+        *this = OFstatic_cast(const DcmDirectoryRecord &, rhs);
+    }
+    return EC_Normal;
 }
 
 
@@ -241,7 +235,6 @@ OFCondition DcmDirectoryRecord::copyFrom(const DcmObject& rhs)
 DcmDirectoryRecord::~DcmDirectoryRecord()
 {
     delete lowerLevelList;
-    delete[] recordsOriginFile;
 }
 
 
@@ -260,7 +253,7 @@ E_DirRecType DcmDirectoryRecord::recordNameToType(const char *recordTypeName)
         if (i < DIM_OF_DRTypeNames && strcmp(DRTypeNames[i], recordTypeName) == 0)
             recType = OFstatic_cast(E_DirRecType, i);
         else if (strcmp(recordTypeName,"STRUCT REPORT") == 0)
-            recType = ERT_SRDocument; // we recognise the old name as well
+            recType = ERT_SRDocument; // we recognize the old name as well
         DCMDATA_TRACE("DcmDirectoryRecord::recordNameToType() input char*=\"" << recordTypeName
             << "\" output enum=" << recType);
     }
@@ -272,7 +265,8 @@ E_DirRecType DcmDirectoryRecord::recordNameToType(const char *recordTypeName)
 
 
 char *DcmDirectoryRecord::buildFileName(const char *origName,
-                                        char *destName)
+                                        char *destName,
+                                        size_t len) const
 {
     const char *from = origName;
     char *to = destName;
@@ -300,16 +294,18 @@ char *DcmDirectoryRecord::buildFileName(const char *origName,
     {
         fclose(f);
     } else {
-        char* newname = new char[strlen(destName) + 2];
-        strcpy(newname, destName);
-        strcat(newname, ".");
+        size_t buflen = strlen(destName) + 2;
+        char* newname = new char[buflen];
+        OFStandard::strlcpy(newname, destName, buflen);
+        OFStandard::strlcat(newname, ".", buflen);
         if ((f = fopen(newname, "rb")) != NULL)
         {
             fclose(f);
-            strcpy(destName, newname);
+            OFStandard::strlcpy(destName, newname, len);
         } else {
-            /* we cannot find the file.  let the caller deal with this */
+            /* we cannot find the file. let the caller deal with this */
         }
+        delete[] newname;
     }
     return destName;
 }
@@ -343,7 +339,7 @@ OFCondition DcmDirectoryRecord::checkHierarchy(const E_DirRecType upperRecord,
                     break;
             }
             break;
-        case ERT_FilmBox:
+        case ERT_FilmBox:  // retired
             switch (lowerRecord)
             {
                 case ERT_ImageBox:
@@ -355,7 +351,7 @@ OFCondition DcmDirectoryRecord::checkHierarchy(const E_DirRecType upperRecord,
                     break;
             }
             break;
-        case ERT_FilmSession:
+        case ERT_FilmSession:  // retired
             switch (lowerRecord)
             {
                 case ERT_FilmBox:
@@ -371,7 +367,7 @@ OFCondition DcmDirectoryRecord::checkHierarchy(const E_DirRecType upperRecord,
             switch (lowerRecord)
             {
                 case ERT_Study:
-                case ERT_HL7StrucDoc:
+                case ERT_HL7StrucDoc:  // retired
                 case ERT_Private:
                     l_error = EC_Normal;
                     break;
@@ -380,7 +376,7 @@ OFCondition DcmDirectoryRecord::checkHierarchy(const E_DirRecType upperRecord,
                     break;
             }
             break;
-        case ERT_PrintQueue:
+        case ERT_PrintQueue:  // retired
             switch (lowerRecord)
             {
                 case ERT_FilmSession:
@@ -392,7 +388,7 @@ OFCondition DcmDirectoryRecord::checkHierarchy(const E_DirRecType upperRecord,
                     break;
             }
             break;
-        case ERT_Results:
+        case ERT_Results:  // retired
             switch (lowerRecord)
             {
                 case ERT_Interpretation:
@@ -430,6 +426,12 @@ OFCondition DcmDirectoryRecord::checkHierarchy(const E_DirRecType upperRecord,
                 case ERT_Stereometric:
                 case ERT_Surface:
                 case ERT_Measurement:
+                case ERT_Plan:
+                case ERT_SurfaceScan:
+                case ERT_Tract:
+                case ERT_Assessment:
+                case ERT_Radiotherapy:
+                case ERT_Annotation:
                 case ERT_Private:
                     l_error = EC_Normal;
                     break;
@@ -454,7 +456,7 @@ OFCondition DcmDirectoryRecord::checkHierarchy(const E_DirRecType upperRecord,
                     break;
             }
             break;
-        case ERT_Topic:
+        case ERT_Topic:  // retired
             switch (lowerRecord)
             {
                 case ERT_Curve:
@@ -486,7 +488,7 @@ OFCondition DcmDirectoryRecord::checkHierarchy(const E_DirRecType upperRecord,
                     break;
             }
             break;
-        case ERT_Mrdr:
+        case ERT_Mrdr:  // retired
             l_error = EC_IllegalCall;
             break;
         case ERT_Curve:
@@ -515,13 +517,19 @@ OFCondition DcmDirectoryRecord::checkHierarchy(const E_DirRecType upperRecord,
         case ERT_ValueMap:
         case ERT_HangingProtocol:
         case ERT_Stereometric:
-        case ERT_HL7StrucDoc:
+        case ERT_HL7StrucDoc:  // retired
         case ERT_Palette:
         case ERT_Surface:
         case ERT_Measurement:
         case ERT_Implant:
         case ERT_ImplantGroup:
         case ERT_ImplantAssy:
+        case ERT_Plan:
+        case ERT_SurfaceScan:
+        case ERT_Tract:
+        case ERT_Assessment:
+        case ERT_Radiotherapy:
+        case ERT_Annotation:
         case ERT_Private:
             switch (lowerRecord)
             {
@@ -577,11 +585,8 @@ E_DirRecType DcmDirectoryRecord::lookForRecordType()
                 recType->getString(recName);
                 localType = recordNameToType(recName);
 
-                DCMDATA_TRACE("DcmDirectoryRecord::lookForRecordType() RecordType Element ("
-                    << STD_NAMESPACE hex << STD_NAMESPACE setfill('0')
-                    << STD_NAMESPACE setw(4) << recType->getGTag() << ","
-                    << STD_NAMESPACE setw(4) << recType->getETag()
-                    << ") Type = " << DRTypeNames[DirRecordType]);
+                DCMDATA_TRACE("DcmDirectoryRecord::lookForRecordType() RecordType Element "
+                    << recType->getTag() << " Type = " << DRTypeNames[DirRecordType]);
             }
         }
     }
@@ -594,14 +599,14 @@ E_DirRecType DcmDirectoryRecord::lookForRecordType()
 static void hostToDicomFilename(char *fname)
 {
     /*
-    ** Massage filename into dicom format.
-    ** Elmiminate any invalid characters.
+    ** Massage filename into DICOM format.
+    ** Eliminate any invalid characters.
     ** Most commonly there is a '.' at the end of a filename.
     */
-    int len = strlen(fname);
+    size_t len = strlen(fname);
     int k = 0;
-    char c = '\0';
-    for (int i = 0; i < len; i++)
+    unsigned char c = '\0';
+    for (size_t i = 0; i < len; ++i)
     {
         c = OFstatic_cast(unsigned char, fname[i]);
         /* the PATH_SEPARATOR depends on the OS (see <osconfig.h>) */
@@ -621,8 +626,9 @@ OFCondition DcmDirectoryRecord::setReferencedFileID(const char *referencedFileID
 {
     OFCondition l_error = EC_Normal;
 
-    char* newFname = new char[strlen(referencedFileID) + 1];
-    strcpy(newFname, referencedFileID);
+    size_t bufsize = strlen(referencedFileID) + 1;
+    char* newFname = new char[bufsize];
+    OFStandard::strlcpy(newFname, referencedFileID, bufsize);
     hostToDicomFilename(newFname);
 
     DcmTag refFileTag(DCM_ReferencedFileID);
@@ -683,10 +689,9 @@ DcmDirectoryRecord *DcmDirectoryRecord::lookForReferencedMRDR()
 #ifdef DEBUG
                 Uint32 l_uint = 0;
                 offElem->getUint32(l_uint);
-                DCMDATA_TRACE("DcmDirectoryRecord::lookForReferencedMRDR() MRDR Offset Element ("
+                DCMDATA_TRACE("DcmDirectoryRecord::lookForReferencedMRDR() MRDR Offset Element "
+                    << offElem->getTag() << " offs=0x"
                     << STD_NAMESPACE hex << STD_NAMESPACE setfill('0')
-                    << STD_NAMESPACE setw(4) << offElem->getGTag() << ","
-                    << STD_NAMESPACE setw(4) << offElem->getETag() << ") offs=0x"
                     << STD_NAMESPACE setw(8) << l_uint
                     << " p=" << OFstatic_cast(void *, offElem)
                     << " n=" << OFstatic_cast(void *, localMRDR));
@@ -736,7 +741,7 @@ OFCondition DcmDirectoryRecord::setRecordInUseFlag(const Uint16 newFlag)
 
 Uint16 DcmDirectoryRecord::lookForRecordInUseFlag()
 {
-    Uint16 localFlag = Uint16(0xffff);     // default value: Record is in use
+    Uint16 localFlag = Uint16(0xffff);     // default value: record is in use
     if (!elementList->empty())
     {
         DcmStack stack;
@@ -878,11 +883,17 @@ Uint32 DcmDirectoryRecord::decreaseRefNum()
 //
 
 OFCondition DcmDirectoryRecord::fillElementsAndReadSOP(const char *referencedFileID,
-                                                       const char *sourceFileName)
+                                                       const OFFilename &sourceFileName,
+                                                       DcmFileFormat *fileFormat)
 {
     OFCondition l_error = EC_Normal;
-    char *fileName = NULL;
+    OFFilename fileName;
     DcmFileFormat *refFile = NULL;
+    /* This variable is only set if we created our own DcmFileFormat instance */
+    DcmFileFormat *ownFile = NULL;
+
+    if (fileFormat != NULL && sourceFileName.isEmpty())
+        return EC_IllegalCall;
 
     OFBool directFromFile = OFFalse;
     OFBool indirectViaMRDR = OFFalse;
@@ -896,25 +907,37 @@ OFCondition DcmDirectoryRecord::fillElementsAndReadSOP(const char *referencedFil
 
     if (referencedFileID != NULL && *referencedFileID != '\0')
     {
-        if (!sourceFileName)
+        if (sourceFileName.isEmpty())
         {
-            fileName = new char[strlen(referencedFileID) + 2];
-            buildFileName(referencedFileID, fileName);
+            /* create a new source filename */
+            size_t bufsize = strlen(referencedFileID) + 2;
+            char *newname = new char[bufsize];
+            buildFileName(referencedFileID, newname, bufsize);
+            fileName.set(newname);
+            delete[] newname;
         } else {
-            fileName = new char[strlen(sourceFileName)+1];
-            strcpy(fileName, sourceFileName);
+            /* just copy the source filename */
+            fileName = sourceFileName;
         }
 
         if (DirRecordType != ERT_Mrdr)
         {
-            refFile = new DcmFileFormat();
-            l_error = refFile->loadFile(fileName);
-            if (l_error.bad())
+            if (fileFormat)
             {
-              DCMDATA_ERROR("DcmDirectoryRecord::readSOPandFileElements(): DicomFile \""
-                  << fileName << "\" not found");
-              directFromFile = OFFalse;
-              indirectViaMRDR = OFFalse;
+                DCMDATA_TRACE("DcmDirectoryRecord::fillElementsAndReadSOP(): Using existing file format for \"" << fileName << "\".");
+                refFile = fileFormat;
+            } else {
+                DCMDATA_TRACE("DcmDirectoryRecord::fillElementsAndReadSOP(): Load file \"" << fileName << "\" because our caller didn't do so.");
+                ownFile = new DcmFileFormat();
+                l_error = ownFile->loadFile(fileName);
+                refFile = ownFile;
+                if (l_error.bad())
+                {
+                  DCMDATA_ERROR("DcmDirectoryRecord::fillElementsAndReadSOP(): DicomFile \""
+                      << fileName << "\" not found");
+                  directFromFile = OFFalse;
+                  indirectViaMRDR = OFFalse;
+                }
             }
         }
     } else {
@@ -1027,8 +1050,7 @@ OFCondition DcmDirectoryRecord::fillElementsAndReadSOP(const char *referencedFil
         delete remove(refFileXferTag);
     }
 
-    delete refFile;
-    delete[] fileName;
+    delete ownFile;
 
     return l_error;
 }
@@ -1060,8 +1082,9 @@ OFCondition DcmDirectoryRecord::purgeReferencedFile()
         const char *fileName = lookForReferencedFileID();
         if (fileName != NULL)
         {
-            localFileName = new char[strlen(fileName) + 2];
-            buildFileName(fileName, localFileName);
+            size_t buflen = strlen(fileName) + 2;
+            localFileName = new char[buflen];
+            buildFileName(fileName, localFileName, buflen);
             setReferencedFileID(NULL);
         }
 
@@ -1072,10 +1095,8 @@ OFCondition DcmDirectoryRecord::purgeReferencedFile()
         {                                 // filename exists
             if (unlink(localFileName) != 0)
             {
-                char buf[256];
-                const char *text = OFStandard::strerror(errno, buf, sizeof(buf));
-                if (text == NULL) text = "(unknown error code)";
-                errorFlag = makeOFCondition(OFM_dcmdata, 19, OF_error, text);
+                OFString buffer = OFStandard::getLastSystemErrorCode().message();
+                errorFlag = makeOFCondition(OFM_dcmdata, 19, OF_error, buffer.c_str());
             }
             delete[] localFileName;
         } else {                          // no referenced file exists
@@ -1102,7 +1123,71 @@ DcmEVR DcmDirectoryRecord::ident() const
 // ********************************
 
 
-void DcmDirectoryRecord::print(STD_NAMESPACE ostream&out,
+OFCondition DcmDirectoryRecord::convertCharacterSet(const OFString &fromCharset,
+                                                    const OFString &toCharset,
+                                                    const size_t flags,
+                                                    const OFBool updateCharset)
+{
+    // call the method of the base class; this method is only needed to avoid a compiler warning
+    return DcmItem::convertCharacterSet(fromCharset, toCharset, flags, updateCharset);
+}
+
+
+OFCondition DcmDirectoryRecord::convertCharacterSet(const OFString &toCharset,
+                                                    const size_t flags,
+                                                    const OFBool ignoreCharset)
+{
+    // call the method of the base class; this method is only needed to avoid a compiler warning
+    return DcmItem::convertCharacterSet(toCharset, flags, ignoreCharset);
+}
+
+
+OFCondition DcmDirectoryRecord::convertCharacterSet(DcmSpecificCharacterSet &converter)
+{
+    DCMDATA_DEBUG("DcmDirectoryRecord::convertCharacterSet() processing directory record with offset "
+        << getFileOffset());
+    // handle special case of DICOMDIR: the Specific Character Set (0008,0005)
+    // can be specified individually for each directory record (i.e. item)
+    OFCondition status = EC_Normal;
+    OFString fromCharset;
+    const OFString toCharset = converter.getDestinationCharacterSet();
+    // determine value of Specific Character Set (0008,0005) if present in this item
+    if (findAndGetOFStringArray(DCM_SpecificCharacterSet, fromCharset, OFFalse /*searchIntoSub*/).good() &&
+        (fromCharset != converter.getSourceCharacterSet()))
+    {
+        DcmSpecificCharacterSet newConverter;
+        // create a new character set converter
+        DCMDATA_DEBUG("DcmDirectoryRecord::convertCharacterSet() creating a new character set converter for '"
+            << fromCharset << "'" << (fromCharset.empty() ? " (ASCII)" : "") << " to '"
+            << toCharset << "'" << (toCharset.empty() ? " (ASCII)" : ""));
+        // select source and destination character set, use same transliteration mode
+        status = newConverter.selectCharacterSet(fromCharset, toCharset);
+        if (status.good())
+        {
+            const unsigned cflags = converter.getConversionFlags();
+            if (cflags > 0)
+                status = newConverter.setConversionFlags(cflags);
+            if (status.good())
+            {
+                // convert all affected element values in the item with the new converter
+                status = DcmItem::convertCharacterSet(newConverter);
+                // update the Specific Character Set (0008,0005) element
+                updateSpecificCharacterSet(status, newConverter);
+            }
+        }
+    } else {
+        // no Specific Character Set attribute or the same character set,
+        // so proceed with the given converter
+        status = DcmItem::convertCharacterSet(converter);
+    }
+    return status;
+}
+
+
+// ********************************
+
+
+void DcmDirectoryRecord::print(STD_NAMESPACE ostream &out,
                                const size_t flags,
                                const int level,
                                const char *pixelFileName,
@@ -1139,7 +1224,7 @@ void DcmDirectoryRecord::print(STD_NAMESPACE ostream&out,
         OFSTRINGSTREAM_FREESTR(tmpString)
         /* print record comment line */
         if (flags & DCMTypes::PF_useANSIEscapeCodes)
-            out << ANSI_ESCAPE_CODE_INFO;
+            out << DCMDATA_ANSI_ESCAPE_CODE_INFO;
         printNestingLevel(out, flags, level);
         out << "#  offset=$" << getFileOffset();
         if (referencedMRDR != NULL)
@@ -1149,6 +1234,8 @@ void DcmDirectoryRecord::print(STD_NAMESPACE ostream&out,
         const char *refFile = getReferencedFileName();
         if (refFile != NULL)
             out << "  refFileID=\"" << refFile << "\"";
+        if (flags & DCMTypes::PF_useANSIEscapeCodes)
+            out << DCMDATA_ANSI_ESCAPE_CODE_RESET;
         out << OFendl;
         /* print item content */
         if (!elementList->empty())
@@ -1163,7 +1250,7 @@ void DcmDirectoryRecord::print(STD_NAMESPACE ostream&out,
         if (lowerLevelList->card() > 0)
             lowerLevelList->print(out, flags, level + 1);
         /* print record end line */
-        DcmTag delimItemTag(DCM_ItemDelimitationItem);
+        DcmTag delimItemTag(DCM_ItemDelimitationItemTag);
         if (getLengthField() == DCM_UndefinedLength)
             printInfoLine(out, flags, level, "\"ItemDelimitationItem\"", &delimItemTag);
         else
@@ -1175,36 +1262,46 @@ void DcmDirectoryRecord::print(STD_NAMESPACE ostream&out,
 // ********************************
 
 
-OFCondition DcmDirectoryRecord::writeXML(STD_NAMESPACE ostream&out,
+OFCondition DcmDirectoryRecord::writeXML(STD_NAMESPACE ostream &out,
                                          const size_t flags)
 {
-    /* XML start tag for "item" */
-    out << "<item";
-    /* cardinality (number of attributes) = 1..n */
-    out << " card=\"" << card() << "\"";
-    /* value length in bytes = 0..max (if not undefined) */
-    if (getLengthField() != DCM_UndefinedLength)
-        out << " len=\"" << getLengthField() << "\"";
-    /* byte offset of the record */
-    out << " offset=\"" << getFileOffset() << "\"";
-    out << ">" << OFendl;
-    /* write item content */
-    if (!elementList->empty())
+    OFCondition l_error = EC_Normal;
+    if (flags & DCMTypes::XF_useNativeModel)
     {
-        /* write content of all children */
-        DcmObject *dO;
-        elementList->seek(ELP_first);
-        do {
-            dO = elementList->get();
-            dO->writeXML(out, flags);
-        } while (elementList->seek(ELP_next));
+        /* in Native DICOM Model, there is no concept of a DICOMDIR */
+        l_error = makeOFCondition(OFM_dcmdata, EC_CODE_CannotConvertToXML, OF_error,
+            "Cannot convert Directory Record to Native DICOM Model");
+    } else {
+        /* XML start tag for "item" */
+        out << "<item";
+        /* cardinality (number of attributes) = 1..n */
+        out << " card=\"" << card() << "\"";
+        /* value length in bytes = 0..max (if not undefined) */
+        if (getLengthField() != DCM_UndefinedLength)
+            out << " len=\"" << getLengthField() << "\"";
+        /* byte offset of the record */
+        out << " offset=\"" << getFileOffset() << "\"";
+        out << ">" << OFendl;
+        /* write item content */
+        if (!elementList->empty())
+        {
+            /* write content of all children */
+            DcmObject *dO;
+            elementList->seek(ELP_first);
+            do {
+                dO = elementList->get();
+                l_error = dO->writeXML(out, flags);
+            } while (l_error.good() && elementList->seek(ELP_next));
+        }
+        if (l_error.good())
+        {
+            if (lowerLevelList->card() > 0)
+                lowerLevelList->writeXML(out, flags);
+            /* XML end tag for "item" */
+            out << "</item>" << OFendl;
+        }
     }
-    if (lowerLevelList->card() > 0)
-        lowerLevelList->writeXML(out, flags);
-    /* XML end tag for "item" */
-    out << "</item>" << OFendl;
-    /* always report success */
-    return EC_Normal;
+    return l_error;
 }
 
 
@@ -1254,7 +1351,7 @@ OFCondition DcmDirectoryRecord::verify(const OFBool autocorrect)
     OFCondition err2 = EC_Normal;
     errorFlag = EC_Normal;
     if (autocorrect == OFTrue && DirRecordType != ERT_root)
-        errorFlag = fillElementsAndReadSOP(getReferencedFileName(), NULL);
+        errorFlag = fillElementsAndReadSOP(getReferencedFileName(), "");
 
     err1 = DcmItem::verify(autocorrect);
     err2 = lowerLevelList->verify(autocorrect);
@@ -1307,13 +1404,14 @@ DcmDirectoryRecord* DcmDirectoryRecord::getReferencedMRDR()
 
 
 OFCondition DcmDirectoryRecord::assignToSOPFile(const char *referencedFileID,
-                                                const char *sourceFileName)
+                                                const OFFilename &sourceFileName)
 {
     errorFlag = EC_Normal;
 
     if (DirRecordType != ERT_root)
     {
-        DCMDATA_DEBUG("DcmDirectoryRecord::assignToSOPFile() old Referenced File ID was " << getReferencedFileName());
+        DCMDATA_DEBUG("DcmDirectoryRecord::assignToSOPFile() old Referenced File ID was "
+            << getReferencedFileName());
         DCMDATA_DEBUG("new Referenced File ID is " << referencedFileID);
 
         // update against the old reference counter
@@ -1339,7 +1437,8 @@ OFCondition DcmDirectoryRecord::assignToMRDR(DcmDirectoryRecord *mrdr)
         && mrdr != referencedMRDR              // old MRDR != new MRDR
       )
     {
-        DCMDATA_DEBUG("DcmDirectoryRecord::assignToMRDR() old Referenced File ID was " << getReferencedFileName());
+        DCMDATA_DEBUG("DcmDirectoryRecord::assignToMRDR() old Referenced File ID was "
+            << getReferencedFileName());
         DCMDATA_DEBUG("new Referenced File ID is " << mrdr->lookForReferencedFileID());
 
         // set internal pointer to mrdr and update against the old value
@@ -1351,7 +1450,7 @@ OFCondition DcmDirectoryRecord::assignToMRDR(DcmDirectoryRecord *mrdr)
         referencedMRDR->increaseRefNum();
 
         // set length of Referenced File ID to zero and fill data elements
-        errorFlag = fillElementsAndReadSOP(NULL, NULL);
+        errorFlag = fillElementsAndReadSOP(NULL, "");
     } else
         errorFlag = EC_IllegalCall;
 
@@ -1362,7 +1461,7 @@ OFCondition DcmDirectoryRecord::assignToMRDR(DcmDirectoryRecord *mrdr)
 // ********************************
 
 
-unsigned long DcmDirectoryRecord::cardSub()
+unsigned long DcmDirectoryRecord::cardSub() const
 {
     return lowerLevelList->card();
 }
@@ -1517,210 +1616,12 @@ OFCondition DcmDirectoryRecord::clearSub()
 }
 
 
-void DcmDirectoryRecord::setRecordsOriginFile(const char *fname)
+void DcmDirectoryRecord::setRecordsOriginFile(const OFFilename &fname)
 {
-    if (recordsOriginFile != NULL)
-        delete[] recordsOriginFile;
-    if (fname != NULL)
-    {
-        recordsOriginFile = new char[strlen(fname) + 1];
-        strcpy(recordsOriginFile, fname);
-    } else
-        recordsOriginFile = NULL;
+    recordsOriginFile = fname;
 }
 
-const char* DcmDirectoryRecord::getRecordsOriginFile()
+const OFFilename &DcmDirectoryRecord::getRecordsOriginFile()
 {
     return recordsOriginFile;
 }
-
-
-/*
- * CVS/RCS Log:
- * $Log: dcdirrec.cc,v $
- * Revision 1.78  2010-11-05 13:11:16  joergr
- * Added support for new directory record types IMPLANT, IMPLANT GROUP and
- * IMPLANT ASSY from Supplement 131 (Implant Templates).
- *
- * Revision 1.77  2010-10-29 10:57:21  joergr
- * Added support for colored output to the print() method.
- *
- * Revision 1.76  2010-10-20 16:44:16  joergr
- * Use type cast macros (e.g. OFstatic_cast) where appropriate.
- *
- * Revision 1.75  2010-10-20 07:41:35  uli
- * Made sure isalpha() & friends are only called with valid arguments.
- *
- * Revision 1.74  2010-10-14 13:14:07  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.73  2010-10-01 10:21:05  uli
- * Fixed most compiler warnings from -Wall -Wextra -pedantic in dcmdata.
- *
- * Revision 1.72  2010-10-01 08:06:19  joergr
- * Added new directory record type MEASUREMENT from Supplement 144.
- *
- * Revision 1.71  2010-09-30 16:43:21  joergr
- * Added new directory record types HL7 STRUC DOC, PALETTE and SURFACE.
- *
- * Revision 1.70  2010-06-03 10:28:41  joergr
- * Replaced calls to strerror() by new helper function OFStandard::strerror()
- * which results in using the thread safe version of strerror() if available.
- *
- * Revision 1.69  2009-12-04 17:10:31  joergr
- * Slightly modified some log messages.
- *
- * Revision 1.68  2009-11-13 13:11:20  joergr
- * Fixed minor issues in log output.
- *
- * Revision 1.67  2009-11-04 09:58:09  uli
- * Switched to logging mechanism provided by the "new" oflog module
- *
- * Revision 1.66  2009-05-15 09:15:11  joergr
- * Made output of directory record in "tree mode" more consistent with the rest
- * of the textual dump (print flag = PF_showTreeStructure).
- *
- * Revision 1.65  2009-02-04 18:02:11  joergr
- * Fixed wrong CVS log entry.
- *
- * Revision 1.64  2009-02-04 17:59:57  joergr
- * Fixed various type mismatches reported by MSVC introduced with OFFile class.
- *
- * Revision 1.63  2008-07-17 10:31:31  onken
- * Implemented copyFrom() method for complete DcmObject class hierarchy, which
- * permits setting an instance's value from an existing object. Implemented
- * assignment operator where necessary.
- *
- * Revision 1.62  2008-06-03 13:41:40  meichel
- * DcmDirectoryRecord::getFileOffset() is now const and public.
- *
- * Revision 1.61  2008-04-30 12:38:42  meichel
- * Fixed compile errors due to changes in attribute tag names
- *
- * Revision 1.60  2007/06/29 14:17:49  meichel
- * Code clean-up: Most member variables in module dcmdata are now private,
- *   not protected anymore.
- *
- * Revision 1.59  2007/02/19 15:04:15  meichel
- * Removed searchErrors() methods that are not used anywhere and added
- *   error() methods only in the DcmObject subclasses where really used.
- *
- * Revision 1.58  2006/08/15 15:49:54  meichel
- * Updated all code in module dcmdata to correctly compile when
- *   all standard C++ classes remain in namespace std.
- *
- * Revision 1.57  2006/07/27 13:10:18  joergr
- * Added support for DICOMDIR record type "STEREOMETRIC" (CP 628).
- * Renamed ERT_StructReport to ERT_SRDocument.
- *
- * Revision 1.56  2006/05/11 17:48:28  joergr
- * Fixed wrong CVS log entry.
- *
- * Revision 1.55  2006/05/11 08:47:56  joergr
- * Added "offset" attribute to DICOMDIR record items.
- *
- * Revision 1.54  2005/12/08 15:41:07  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.53  2005/11/28 15:53:13  meichel
- * Renamed macros in dcdebug.h
- *
- * Revision 1.52  2005/11/07 16:59:26  meichel
- * Cleaned up some copy constructors in the DcmObject hierarchy.
- *
- * Revision 1.51  2005/10/27 13:33:08  joergr
- * Added support for Encapsulated Document, Real World Value Mapping and
- * Hanging Protocol objects to DICOMDIR tools.
- *
- * Revision 1.50  2004/08/03 11:41:09  meichel
- * Headers libc.h and unistd.h are now included via ofstdinc.h
- *
- * Revision 1.49  2004/02/13 17:36:54  joergr
- * Added support for new directory records RAW DATA and SPECTROSCOPY introduced
- * with CP 343.
- *
- * Revision 1.48  2004/02/13 14:12:38  joergr
- * Added support for new directory records REGISTRATION and FIDUCIAL introduced
- * with supplement 73 (Spatial Registration Storage SOP Classes).
- *
- * Revision 1.47  2004/01/16 13:50:53  joergr
- * Removed acknowledgements with e-mail addresses from CVS log.
- *
- * Revision 1.46  2003/08/08 14:17:26  joergr
- * Added two new methods insertSubAtCurrentPos() and nextSub() which allow for
- * a much more efficient insertion (avoids re-searching for correct position).
- * Adapted type casts to new-style typecast operators defined in ofcast.h.
- * Translated most German comments.
- *
- * Revision 1.45  2003/03/21 13:08:04  meichel
- * Minor code purifications for warnings reported by MSVC in Level 4
- *
- * Revision 1.44  2002/12/06 12:55:43  joergr
- * Enhanced "print()" function by re-working the implementation and replacing
- * the boolean "showFullData" parameter by a more general integer flag.
- * Made source code formatting more consistent with other modules/files.
- * Replaced some German comments by English translations.
- *
- * Revision 1.43  2002/11/27 12:06:45  meichel
- * Adapted module dcmdata to use of new header file ofstdinc.h
- *
- * Revision 1.42  2002/10/10 16:39:25  joergr
- * Fixed bug that prevented old frozen draft SR documents from being recognized
- * in DICOMDIR files.
- *
- * Revision 1.41  2002/08/27 16:55:45  meichel
- * Initial release of new DICOM I/O stream classes that add support for stream
- *   compression (deflated little endian explicit VR transfer syntax)
- *
- * Revision 1.40  2002/08/21 10:14:20  meichel
- * Adapted code to new loadFile and saveFile methods, thus removing direct
- *   use of the DICOM stream classes.
- *
- * Revision 1.39  2002/04/16 13:43:16  joergr
- * Added configurable support for C++ ANSI standard includes (e.g. streams).
- *
- * Revision 1.38  2001/09/25 17:19:48  meichel
- * Adapted dcmdata to class OFCondition
- *
- * Revision 1.37  2001/06/20 14:58:38  joergr
- * Added support for new SOP class Key Object Selection Document (suppl. 59).
- *
- * Revision 1.36  2001/06/01 15:49:02  meichel
- * Updated copyright header
- *
- * Revision 1.35  2000/12/14 12:48:07  joergr
- * Updated for 2000 edition of the DICOM standard (added: SR, PR, WV, SP, RT).
- *
- * Revision 1.34  2000/04/14 15:55:04  meichel
- * Dcmdata library code now consistently uses ofConsole for error output.
- *
- * Revision 1.33  2000/03/08 16:26:34  meichel
- * Updated copyright header.
- *
- * Revision 1.32  2000/03/03 14:05:32  meichel
- * Implemented library support for redirecting error messages into memory
- *   instead of printing them to stdout/stderr for GUI applications.
- *
- * Revision 1.31  2000/02/23 15:11:50  meichel
- * Corrected macro for Borland C++ Builder 4 workaround.
- *
- * Revision 1.30  2000/02/10 10:52:18  joergr
- * Added new feature to dcmdump (enhanced print method of dcmdata): write
- * pixel data/item value fields to raw files.
- *
- * Revision 1.29  2000/02/03 11:49:07  meichel
- * Updated dcmgpdir to new directory record structure in letter ballot text
- *   of Structured Report.
- *
- * Revision 1.28  2000/02/02 14:32:50  joergr
- * Replaced 'delete' statements by 'delete[]' for objects created with 'new[]'.
- *
- * Revision 1.27  2000/02/01 10:12:05  meichel
- * Avoiding to include <stdlib.h> as extern "C" on Borland C++ Builder 4,
- *   workaround for bug in compiler header files.
- *
- * Revision 1.26  1999/03/31 09:25:25  meichel
- * Updated copyright header in module dcmdata
- *
- *
- */

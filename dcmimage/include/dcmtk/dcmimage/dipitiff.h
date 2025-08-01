@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 2001-2010, OFFIS e.V.
+ *  Copyright (C) 2001-2018, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose: Implements TIFF interface for plugable image formats
  *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:16:29 $
- *  CVS/RCS Revision: $Revision: 1.7 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
- *
  */
 
 
@@ -37,6 +30,8 @@
 #include "dcmtk/ofstd/ofstring.h"
 
 #include "dcmtk/dcmimgle/diplugin.h"
+
+#include "dcmtk/dcmimage/dicdefin.h"
 
 
 /*------------------------*
@@ -53,6 +48,8 @@ class DiImage;
 /** describes the different types of compression supported by
  *  the TIFF plugin.  Enumeration depends on capabilities
  *  of underlying TIFF library (libtiff).
+ *  @remark this enum is only available if DCMTK is compiled with
+ *  TIFF (libtiff) support enabled.
  */
 enum DiTIFFCompression
 {
@@ -67,6 +64,8 @@ enum DiTIFFCompression
 };
 
 /** describes the optional predictor used with TIFF LZW compression
+ *  @remark this enum is only available if DCMTK is compiled with
+ *  TIFF (libtiff) support enabled.
  */
 enum DiTIFFLZWPredictor
 {
@@ -86,8 +85,10 @@ enum DiTIFFLZWPredictor
  *---------------------*/
 
 /** Implementation of a TIFF plugin for the dcmimgle/dcmimage library
+ *  @remark This class is only available if DCMTK is compiled with
+ *  TIFF (libtiff) support enabled.
  */
-class DiTIFFPlugin
+class DCMTK_DCMIMAGE_EXPORT DiTIFFPlugin
   : public DiPluginFormat
 {
 
@@ -149,33 +150,3 @@ class DiTIFFPlugin
 
 #endif
 #endif
-
-
-/*
- *
- * CVS/RCS Log:
- * $Log: dipitiff.h,v $
- * Revision 1.7  2010-10-14 13:16:29  joergr
- * Updated copyright header. Added reference to COPYRIGHT file.
- *
- * Revision 1.6  2010-03-01 09:08:46  uli
- * Removed some unnecessary include directives in the headers.
- *
- * Revision 1.5  2005-12-08 16:01:43  meichel
- * Changed include path schema for all DCMTK header files
- *
- * Revision 1.4  2003/12/17 18:18:08  joergr
- * Removed leading underscore characters from preprocessor symbols (reserved
- * symbols).
- *
- * Revision 1.3  2002/09/19 08:34:53  joergr
- * Added static method getLibraryVersionString().
- *
- * Revision 1.2  2001/12/06 10:10:59  meichel
- * Removed references to tiffconf.h which does not exist on all installations
- *
- * Revision 1.1  2001/11/30 16:47:56  meichel
- * Added TIFF export option to dcm2pnm and dcmj2pnm
- *
- *
- */

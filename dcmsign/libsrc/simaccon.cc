@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (C) 1998-2010, OFFIS e.V.
+ *  Copyright (C) 1998-2019, OFFIS e.V.
  *  All rights reserved.  See COPYRIGHT file for details.
  *
  *  This software and supporting documentation were developed by
@@ -17,13 +17,6 @@
  *
  *  Purpose:
  *    classes: SiMACConstructor
- *
- *  Last Update:      $Author: joergr $
- *  Update Date:      $Date: 2010-10-14 13:14:38 $
- *  CVS/RCS Revision: $Revision: 1.12 $
- *  Status:           $State: Exp $
- *
- *  CVS/RCS Log at end of file
  *
  */
 
@@ -68,7 +61,16 @@ OFCondition SiMACConstructor::flushBuffer(SiMAC& mac)
   stream.flushBuffer(bufptr, bufLen);
   if (bufLen > 0)
   {
-    if (dumpFile) fwrite(bufptr, 1, (size_t)bufLen, dumpFile);
+    if (dumpFile)
+    {
+      if (fwrite(bufptr, 1, OFstatic_cast(size_t, bufLen), dumpFile) != OFstatic_cast(size_t, bufLen))
+      {
+        // We are apparently unable to write the byte stream to a dump file.
+        // This does not prevent us, however, from creating a valid digital signature.
+        // Therefore, issue a warning but continue.
+        DCMSIGN_WARN("Write error while dumping byte stream to file");
+      }
+    }
     result = mac.digest((unsigned char *)bufptr, (unsigned long)bufLen);
   }
   return result;
@@ -187,64 +189,67 @@ OFCondition SiMACConstructor::encodeDataset(
           result = tagListOut.putTagVal(element->getTag(), tagListOut.getVM());
         }
       }
+      else
+      {
+        // the element is unsignable, but either the user or the active
+        // signature profile have requested its inclusion in the signature.
+        if (tagListIn)
+        {
+          // print a warning
+          DcmTag tag(element->getTag()); // we need to create a temporary copy of the tag
+          DCMSIGN_INFO("List of attributes to be signed contains unsignable element " << tag << " " << tag.getTagName() );
+          result = SI_EC_AttributeNotSignable;
+        }
+      }
     }
   }
 
   /* done, flush stream buffer */
-  result = flushBuffer(mac);
+  if (result.good()) result = flushBuffer(mac);
   item.transferEnd();
   return result;
 }
 
+
+OFCondition SiMACConstructor::encodeDatasetForVerification(
+  DcmItem& item,
+  SiMAC& mac,
+  E_TransferSyntax oxfer,
+  DcmAttributeTag *tagListIn)
+{
+  if (! item.canWriteXfer(oxfer, EXS_Unknown)) return SI_EC_WrongTransferSyntax;
+
+  OFCondition result = EC_Normal;
+  item.transferInit();
+  unsigned long numElements = item.card();
+  DcmElement *element;
+  for (unsigned long i=0; i < numElements; i++)
+  {
+    element = item.getElement(i);
+    if (result.good() && (inTagList(element, tagListIn)))
+    {
+      if (element->isSignable())
+      {
+        // element is signable, we should encode it
+        result = encodeElement(element, mac, oxfer);
+      }
+      else
+      {
+        // print a warning
+        DcmTag tag(element->getTag()); // we need to create a temporary copy of the tag
+        DCMSIGN_INFO("  Signature contains unsignable element " << tag << " " << tag.getTagName() );
+        result = SI_EC_VerificationFailed_AttributeNotSignable;
+      }
+    }
+  }
+
+  /* done, flush stream buffer */
+  if (result.good()) result = flushBuffer(mac);
+  item.transferEnd();
+  return result;
+}
 #else /* WITH_OPENSSL */
 
 int simaccon_cc_dummy_to_keep_linker_from_moaning = 0;
 
 #endif
-
-/*
- *  $Log: simaccon.cc,v $
- *  Revision 1.12  2010-10-14 13:14:38  joergr
- *  Updated copyright header. Added reference to COPYRIGHT file.
- *
- *  Revision 1.11  2010-10-04 13:23:07  joergr
- *  Added explicit type cast in order to keep VisualStudio 2008 quiet.
- *
- *  Revision 1.10  2007-11-29 14:42:21  meichel
- *  Write methods now handle large raw data elements (such as pixel data)
- *    without loading everything into memory. This allows very large images to
- *    be sent over a network connection, or to be copied without ever being
- *    fully in memory.
- *
- *  Revision 1.9  2007/02/19 16:53:45  meichel
- *  Class DcmOutputStream and related classes are now safe for use with
- *    large files (2 GBytes or more) if supported by compiler and operating system.
- *
- *  Revision 1.8  2005/12/08 15:47:24  meichel
- *  Changed include path schema for all DCMTK header files
- *
- *  Revision 1.7  2002/12/16 12:57:51  meichel
- *  Minor modification to shut up linker on MacOS X when compiling
- *    without OpenSSL support
- *
- *  Revision 1.6  2002/08/27 17:21:01  meichel
- *  Initial release of new DICOM I/O stream classes that add support for stream
- *    compression (deflated little endian explicit VR transfer syntax)
- *
- *  Revision 1.5  2001/11/16 15:50:54  meichel
- *  Adapted digital signature code to final text of supplement 41.
- *
- *  Revision 1.4  2001/09/26 14:30:25  meichel
- *  Adapted dcmsign to class OFCondition
- *
- *  Revision 1.3  2001/06/01 15:50:54  meichel
- *  Updated copyright header
- *
- *  Revision 1.2  2000/11/07 18:07:08  joergr
- *  Minor code purifications to keep Sun CC 2.0.1 quiet.
- *
- *  Revision 1.1  2000/11/07 16:49:05  meichel
- *  Initial release of dcmsign module for DICOM Digital Signatures
- *
- *
- */

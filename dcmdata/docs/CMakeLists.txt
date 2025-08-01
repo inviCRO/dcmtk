@@ -1,2 +1,2 @@
 # declare installation files
-INSTALL_FILES(${INSTALL_DOCDIR} FILES datadict.txt)
+install(FILES datadict.txt DESTINATION "${CMAKE_INSTALL_DOCDIR}" COMPONENT doc)
