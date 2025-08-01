@@ -3,13 +3,13 @@
 ** It was generated automatically by:
 **
 **   User: jpieszala
-**   Host: BOSL298
-**   Date: 2024-01-24 18:00:16
-**   Prog: mkdeftag
+**   Host: localhost
+**   Date: 2025-08-01 14:14:25
+**   Prog: C:\dev\dcmtk_vq\BUILD\bin\Debug\mkdeftag.exe
 **
-**   From: C:\dev\dcmtk_vq\dcmdata\data\dicom.dic
-**         C:\dev\dcmtk_vq\dcmdata\data\private.dic
-**         c:\dev\vivoquant\extern\dicom-ns.dic
+**   From: C:/dev/dcmtk_vq/dcmdata/data/dicom.dic
+**         C:/dev/dcmtk_vq/dcmdata/data/private.dic
+**         C:\v/extern/dicom-ns.dic
 **
 */
 
@@ -18,12 +18,12 @@
 
 #include "dcmtk/dcmdata/dctagkey.h"
 
-#define DCM_DICT_DEFTAG_BUILD_DATE "2024-01-24 18:00:16"
+#define DCM_DICT_DEFTAG_BUILD_DATE "2025-08-01 14:14:25"
 
 
 /*
 ** Fixed Tags in ascending (gggg,eeee) order.
-** Number of entries: 5198
+** Number of entries: 5201
 ** Tags with a repeating component (repeating tags) are listed later.
 */
 #define DCM_CommandGroupLength                   DcmTagKey(0x0000, 0x0000)
@@ -5219,6 +5219,9 @@
 #define DCM_RETIRED_CoefficientsSDVN             DcmTagKey(0x7fe0, 0x0020)
 #define DCM_RETIRED_CoefficientsSDHN             DcmTagKey(0x7fe0, 0x0030)
 #define DCM_RETIRED_CoefficientsSDDN             DcmTagKey(0x7fe0, 0x0040)
+#define DCM___repository                         DcmTagKey(0x7ff3, 0x0001)
+#define DCM___repository_url                     DcmTagKey(0x7ff3, 0x0003)
+#define DCM___project                            DcmTagKey(0x7ff3, 0x0005)
 #define DCM_DigitalSignaturesSequence            DcmTagKey(0xfffa, 0xfffa)
 #define DCM_DataSetTrailingPadding               DcmTagKey(0xfffc, 0xfffc)
 #define DCM_Item                                 DcmTagKey(0xfffe, 0xe000)

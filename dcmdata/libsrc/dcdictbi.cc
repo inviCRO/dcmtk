@@ -32098,6 +32098,18 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       EVR_US, "Unknown", 1, -1, "PrivateTag",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "TOSHIBA_MEC_1.0" }
+    , { 0x7ff3, 0x0001, 0x7ff3, 0x0001,
+        EVR_LO, "__repository", 1, 1, "PrivateTag",
+        DcmDictRange_Unspecified, DcmDictRange_Unspecified,
+        "VivoQuant" }
+    , { 0x7ff3, 0x0003, 0x7ff3, 0x0003,
+        EVR_LO, "__repository_url", 1, 1, "PrivateTag",
+        DcmDictRange_Unspecified, DcmDictRange_Unspecified,
+        "VivoQuant" }
+    , { 0x7ff3, 0x0005, 0x7ff3, 0x0005,
+        EVR_LO, "__project", 1, 1, "PrivateTag",
+        DcmDictRange_Unspecified, DcmDictRange_Unspecified,
+        "VivoQuant" }
 #endif
   , { 0xfffa, 0xfffa, 0xfffa, 0xfffa,
       EVR_SQ, "DigitalSignaturesSequence", 1, 1, "DICOM",
