@@ -31972,6 +31972,22 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       EVR_DS, "Philips_ActivityConcentrationScaleFactor", 1, 1, "PrivateTag",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "Philips PET Private Group" }
+    , { 0x7777, 0x0001, 0x7777, 0x0001,
+        EVR_LO, "IPACS_Repository", 1, 1, "PrivateTag",
+        DcmDictRange_Unspecified, DcmDictRange_Unspecified,
+        "VivoQuant" }
+    , { 0x7777, 0x0003, 0x7777, 0x0003,
+        EVR_LO, "IPACS_RepositoryUrl", 1, 1, "PrivateTag",
+        DcmDictRange_Unspecified, DcmDictRange_Unspecified,
+        "VivoQuant" }
+    , { 0x7777, 0x0005, 0x7777, 0x0005,
+        EVR_LO, "IPACS_Project", 1, 1, "PrivateTag",
+        DcmDictRange_Unspecified, DcmDictRange_Unspecified,
+        "VivoQuant" }
+    , { 0x7777, 0x0010, 0x7777, 0x0010,
+        EVR_LO, "VivoQuant_PrivateCreator", 1, 1, "PrivateTag",
+        DcmDictRange_Unspecified, DcmDictRange_Unspecified,
+        "VivoQuant" }
 #endif
   , { 0x7fe0, 0x0001, 0x7fe0, 0x0001,
       EVR_OV, "ExtendedOffsetTable", 1, 1, "DICOM",
@@ -32098,18 +32114,6 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       EVR_US, "Unknown", 1, -1, "PrivateTag",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "TOSHIBA_MEC_1.0" }
-    , { 0x7ff3, 0x0001, 0x7ff3, 0x0001,
-        EVR_LO, "__repository", 1, 1, "PrivateTag",
-        DcmDictRange_Unspecified, DcmDictRange_Unspecified,
-        "VivoQuant" }
-    , { 0x7ff3, 0x0003, 0x7ff3, 0x0003,
-        EVR_LO, "__repository_url", 1, 1, "PrivateTag",
-        DcmDictRange_Unspecified, DcmDictRange_Unspecified,
-        "VivoQuant" }
-    , { 0x7ff3, 0x0005, 0x7ff3, 0x0005,
-        EVR_LO, "__project", 1, 1, "PrivateTag",
-        DcmDictRange_Unspecified, DcmDictRange_Unspecified,
-        "VivoQuant" }
 #endif
   , { 0xfffa, 0xfffa, 0xfffa, 0xfffa,
       EVR_SQ, "DigitalSignaturesSequence", 1, 1, "DICOM",

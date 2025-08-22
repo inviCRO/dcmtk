@@ -4,8 +4,8 @@
 **
 **   User: jpieszala
 **   Host: localhost
-**   Date: 2025-08-01 14:14:25
-**   Prog: C:\dev\dcmtk_vq\BUILD\bin\Debug\mkdeftag.exe
+**   Date: 2025-08-21 21:40:37
+**   Prog: mkdeftag.exe
 **
 **   From: C:/dev/dcmtk_vq/dcmdata/data/dicom.dic
 **         C:/dev/dcmtk_vq/dcmdata/data/private.dic
@@ -18,12 +18,12 @@
 
 #include "dcmtk/dcmdata/dctagkey.h"
 
-#define DCM_DICT_DEFTAG_BUILD_DATE "2025-08-01 14:14:25"
+#define DCM_DICT_DEFTAG_BUILD_DATE "2025-08-21 21:40:37"
 
 
 /*
 ** Fixed Tags in ascending (gggg,eeee) order.
-** Number of entries: 5201
+** Number of entries: 5202
 ** Tags with a repeating component (repeating tags) are listed later.
 */
 #define DCM_CommandGroupLength                   DcmTagKey(0x0000, 0x0000)
@@ -5211,6 +5211,10 @@
 #define DCM_Philips_Private02                    DcmTagKey(0x7053, 0x1002)
 #define DCM_Philips_OriginalImageFilename        DcmTagKey(0x7053, 0x1003)
 #define DCM_Philips_ActivityConcentrationScaleFactor DcmTagKey(0x7053, 0x1009)
+#define DCM_IPACS_Repository                     DcmTagKey(0x7777, 0x0001)
+#define DCM_IPACS_RepositoryUrl                  DcmTagKey(0x7777, 0x0003)
+#define DCM_IPACS_Project                        DcmTagKey(0x7777, 0x0005)
+#define DCM_VivoQuant_PrivateCreator             DcmTagKey(0x7777, 0x0010)
 #define DCM_ExtendedOffsetTable                  DcmTagKey(0x7fe0, 0x0001)
 #define DCM_ExtendedOffsetTableLengths           DcmTagKey(0x7fe0, 0x0002)
 #define DCM_FloatPixelData                       DcmTagKey(0x7fe0, 0x0008)
@@ -5219,9 +5223,6 @@
 #define DCM_RETIRED_CoefficientsSDVN             DcmTagKey(0x7fe0, 0x0020)
 #define DCM_RETIRED_CoefficientsSDHN             DcmTagKey(0x7fe0, 0x0030)
 #define DCM_RETIRED_CoefficientsSDDN             DcmTagKey(0x7fe0, 0x0040)
-#define DCM___repository                         DcmTagKey(0x7ff3, 0x0001)
-#define DCM___repository_url                     DcmTagKey(0x7ff3, 0x0003)
-#define DCM___project                            DcmTagKey(0x7ff3, 0x0005)
 #define DCM_DigitalSignaturesSequence            DcmTagKey(0xfffa, 0xfffa)
 #define DCM_DataSetTrailingPadding               DcmTagKey(0xfffc, 0xfffc)
 #define DCM_Item                                 DcmTagKey(0xfffe, 0xe000)
