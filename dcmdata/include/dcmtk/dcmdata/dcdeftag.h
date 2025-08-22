@@ -4,7 +4,7 @@
 **
 **   User: jpieszala
 **   Host: localhost
-**   Date: 2025-08-21 21:40:37
+**   Date: 2025-08-21 22:33:50
 **   Prog: mkdeftag.exe
 **
 **   From: C:/dev/dcmtk_vq/dcmdata/data/dicom.dic
@@ -18,7 +18,7 @@
 
 #include "dcmtk/dcmdata/dctagkey.h"
 
-#define DCM_DICT_DEFTAG_BUILD_DATE "2025-08-21 21:40:37"
+#define DCM_DICT_DEFTAG_BUILD_DATE "2025-08-21 22:33:50"
 
 
 /*
@@ -5211,10 +5211,10 @@
 #define DCM_Philips_Private02                    DcmTagKey(0x7053, 0x1002)
 #define DCM_Philips_OriginalImageFilename        DcmTagKey(0x7053, 0x1003)
 #define DCM_Philips_ActivityConcentrationScaleFactor DcmTagKey(0x7053, 0x1009)
-#define DCM_IPACS_Repository                     DcmTagKey(0x7777, 0x0001)
-#define DCM_IPACS_RepositoryUrl                  DcmTagKey(0x7777, 0x0003)
-#define DCM_IPACS_Project                        DcmTagKey(0x7777, 0x0005)
 #define DCM_VivoQuant_PrivateCreator             DcmTagKey(0x7777, 0x0010)
+#define DCM_IPACS_Repository                     DcmTagKey(0x7777, 0x1001)
+#define DCM_IPACS_RepositoryUrl                  DcmTagKey(0x7777, 0x1003)
+#define DCM_IPACS_Project                        DcmTagKey(0x7777, 0x1005)
 #define DCM_ExtendedOffsetTable                  DcmTagKey(0x7fe0, 0x0001)
 #define DCM_ExtendedOffsetTableLengths           DcmTagKey(0x7fe0, 0x0002)
 #define DCM_FloatPixelData                       DcmTagKey(0x7fe0, 0x0008)

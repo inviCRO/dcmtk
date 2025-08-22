@@ -31972,15 +31972,15 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
       EVR_DS, "Philips_ActivityConcentrationScaleFactor", 1, 1, "PrivateTag",
       DcmDictRange_Unspecified, DcmDictRange_Unspecified,
       "Philips PET Private Group" }
-    , { 0x7777, 0x0001, 0x7777, 0x0001,
+    , { 0x7777, 0x1001, 0x7777, 0x1001,
         EVR_LO, "IPACS_Repository", 1, 1, "PrivateTag",
         DcmDictRange_Unspecified, DcmDictRange_Unspecified,
         "VivoQuant" }
-    , { 0x7777, 0x0003, 0x7777, 0x0003,
+    , { 0x7777, 0x1003, 0x7777, 0x1003,
         EVR_LO, "IPACS_RepositoryUrl", 1, 1, "PrivateTag",
         DcmDictRange_Unspecified, DcmDictRange_Unspecified,
         "VivoQuant" }
-    , { 0x7777, 0x0005, 0x7777, 0x0005,
+    , { 0x7777, 0x1005, 0x7777, 0x1005,
         EVR_LO, "IPACS_Project", 1, 1, "PrivateTag",
         DcmDictRange_Unspecified, DcmDictRange_Unspecified,
         "VivoQuant" }
