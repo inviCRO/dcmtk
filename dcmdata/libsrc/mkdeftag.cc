@@ -197,7 +197,7 @@ int main(int argc, char* argv[])
             || strcmp(creator, "SCIVIS-1") == 0 
             || strcmp(creator, "Philips PET Private Group") == 0 
             || strcmp(creator, "SIEMENS MR HEADER") == 0
-            || strcmp(creator, "Invicro") == 0) //JKP just leaving to show experimental invicro tag possibility
+            || strcmp(creator, "VivoQuant") == 0) //JKP just leaving to show experimental invicro tag possibility
             // exclude private tags
         {
             e = new DcmDictEntry(*(*iter));
