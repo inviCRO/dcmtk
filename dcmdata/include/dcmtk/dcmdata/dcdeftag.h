@@ -3,13 +3,13 @@
 ** It was generated automatically by:
 **
 **   User: jpieszala
-**   Host: BOSL298
-**   Date: 2024-01-24 18:00:16
-**   Prog: mkdeftag
+**   Host: localhost
+**   Date: 2025-08-21 22:33:50
+**   Prog: mkdeftag.exe
 **
-**   From: C:\dev\dcmtk_vq\dcmdata\data\dicom.dic
-**         C:\dev\dcmtk_vq\dcmdata\data\private.dic
-**         c:\dev\vivoquant\extern\dicom-ns.dic
+**   From: C:/dev/dcmtk_vq/dcmdata/data/dicom.dic
+**         C:/dev/dcmtk_vq/dcmdata/data/private.dic
+**         C:\v/extern/dicom-ns.dic
 **
 */
 
@@ -18,12 +18,12 @@
 
 #include "dcmtk/dcmdata/dctagkey.h"
 
-#define DCM_DICT_DEFTAG_BUILD_DATE "2024-01-24 18:00:16"
+#define DCM_DICT_DEFTAG_BUILD_DATE "2025-08-21 22:33:50"
 
 
 /*
 ** Fixed Tags in ascending (gggg,eeee) order.
-** Number of entries: 5198
+** Number of entries: 5202
 ** Tags with a repeating component (repeating tags) are listed later.
 */
 #define DCM_CommandGroupLength                   DcmTagKey(0x0000, 0x0000)
@@ -5211,6 +5211,10 @@
 #define DCM_Philips_Private02                    DcmTagKey(0x7053, 0x1002)
 #define DCM_Philips_OriginalImageFilename        DcmTagKey(0x7053, 0x1003)
 #define DCM_Philips_ActivityConcentrationScaleFactor DcmTagKey(0x7053, 0x1009)
+#define DCM_VivoQuant_PrivateCreator             DcmTagKey(0x7777, 0x0010)
+#define DCM_IPACS_Repository                     DcmTagKey(0x7777, 0x1001)
+#define DCM_IPACS_RepositoryUrl                  DcmTagKey(0x7777, 0x1003)
+#define DCM_IPACS_Project                        DcmTagKey(0x7777, 0x1005)
 #define DCM_ExtendedOffsetTable                  DcmTagKey(0x7fe0, 0x0001)
 #define DCM_ExtendedOffsetTableLengths           DcmTagKey(0x7fe0, 0x0002)
 #define DCM_FloatPixelData                       DcmTagKey(0x7fe0, 0x0008)
