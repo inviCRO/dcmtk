@@ -31981,15 +31981,15 @@ static const DBI_SimpleEntry simpleBuiltinDict[] = {
         DcmDictRange_Unspecified, DcmDictRange_Unspecified,
         "VivoQuant" }
     , { 0x7777, 0x0010, 0x7777, 0x00F1,
-        EVR_LO, "VQ_Custom_1", 1, 1, "PrivateTag",
+        EVR_LO, "VQ_Custom1", 1, 1, "PrivateTag",
         DcmDictRange_Unspecified, DcmDictRange_Unspecified,
         "VivoQuant" }
     , { 0x7777, 0x0010, 0x7777, 0x00F3,
-        EVR_LO, "VQ_Custom_1", 1, 1, "PrivateTag",
+        EVR_LO, "VQ_Custom2", 1, 1, "PrivateTag",
         DcmDictRange_Unspecified, DcmDictRange_Unspecified,
         "VivoQuant" }
     , { 0x7777, 0x0010, 0x7777, 0x00F5,
-        EVR_LO, "VQ_Custom_1", 1, 1, "PrivateTag",
+        EVR_LO, "VQ_Custom3", 1, 1, "PrivateTag",
         DcmDictRange_Unspecified, DcmDictRange_Unspecified,
         "VivoQuant" }
     , { 0x7777, 0x0010, 0x7777, 0x0010,
